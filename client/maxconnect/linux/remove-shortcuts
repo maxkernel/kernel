@@ -1,0 +1,10 @@
+#!/bin/sh
+
+rm -f $1/maxconnect
+rm -f /usr/bin/maxconnect
+rm -f /usr/bin/max-runwizard
+rm -f /usr/bin/max-servicewizard
+rm -f /usr/bin/max-deploywizard
+rm -f /usr/bin/max-admin
+rm -f /usr/bin/max-bundle
+

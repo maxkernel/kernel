@@ -1,0 +1,3 @@
+#!/bin/sh
+java -classpath maxconnect.jar:jsch-0.1.42.jar org.senseta.MaxConnect "$1"
+

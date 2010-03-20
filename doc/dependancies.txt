@@ -1,0 +1,43 @@
+===== NOW =======
+linux-rt
+acpid
+build-essentials
+gdb
+openssh-server
+pkg-config
+binutils-dev
+libglib2.0-dev
+libgnet-dev
+libconfuse-dev
+libmatheval1-dev
+libmicrohttpd-dev
+libjpeg-dev
+libffi-dev
+libv4l-dev
+libdc1394-22-dev
+zlib1g-dev
+libtar-dev
+sqlite
+libsqlite-dev
+sun-java6-jdk
+lua5.1
+liblua5.1-dev
+liblua5.1-socket-dev
+zip
+unzip
+
+==== OPENCV =====
+libcv-dev libhighgui-dev libavcodec-dev libavformat-dev libavutil-dev libavutil49
+
+
+===== SOMETIME BETWEEN NOW AND LATER =====
+libode-dev
+libmjpegtools-dev
+liblivemedia-dev
+
+
+==== LATER ======
+libdbus-1-dev
+libdbus-glib-1-dev
+apcalc-dev
+

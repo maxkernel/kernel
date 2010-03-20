@@ -1,0 +1,15 @@
+#!/bin/sh
+
+INSTALL=.
+
+case "$0" in
+	/usr/bin/max-runwizard) cmd=run;;
+	/usr/bin/max-servicewizard) cmd=service;;
+	/usr/bin/max-deploywizard) cmd=deploy;;
+	/usr/bin/max-admin) cmd=admin;;
+	/usr/bin/max-bundle)  cmd=bundle;;
+esac
+
+cd $INSTALL
+java -classpath maxconnect.jar:jsch-0.1.42.jar org.senseta.MaxConnect "$cmd"
+

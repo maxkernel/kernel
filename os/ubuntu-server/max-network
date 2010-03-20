@@ -1,0 +1,48 @@
+#!/bin/bash
+
+INSTALL=
+
+if [ $UID != 0 ];
+then
+	echo "Must be root! (try 'sudo max-network')"
+	exit 0
+fi
+
+if [ ! $1 ] || [ ! $2 ];
+then
+	echo "Usage: max-network [wireless-ssid] [hex key]"
+	echo "* Changes the wireless network max connects to on startup"
+	echo "If the key is a string, prepend with 's:'"
+	echo "If the network has no key, use 'off'"
+	exit 0
+fi
+
+. $INSTALL/config
+echo -n "Changing network from '$ESSID' to '$1'...  "
+
+
+#make sure config script has entries
+T1=`grep "^ESSID=" $INSTALL/config`
+T2=`grep "^KEY=" $INSTALL/config`
+
+if [ -z $T1 ]; then
+	echo "ESSID=" >>$INSTALL/config
+fi
+
+if [ -z $T2 ]; then
+	echo "KEY=" >>$INSTALL/config
+fi
+
+
+#change entry in config script
+F=`tempfile`
+cat $INSTALL/config | sed "s|\(^ESSID=\)\(.*\)$|\1$1|" | sed "s|\(^KEY=\)\(.*\)$|\1$2|" >$F
+cat $F >$INSTALL/config
+rm -f $F
+
+echo "Done."
+
+#restart init.d script
+echo "Restarting MaxOS."
+/etc/init.d/maxos restart
+

@@ -1,0 +1,10 @@
+
+
+all:
+	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" 1>&2 && false )
+	cat max-autostart.tmpl | sed "s|\(^INSTALL=\)\(.*\)$$|\1$(INSTALL)|" >max-autostart
+	chmod +x max-autostart
+
+clean:
+	rm -f max-autostart
+

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ -z "`which max-syscall`" -o -z "`which max-log`" ]; then
+	echo "Utility 'max-log' AND 'max-syscall' must be installed!"
+	exit 1
+fi
+
+echo "System Log:"
+max-log
+
+echo "Registered System Calls:"
+max-syscall "syscall_list"
+
+echo "Loaded Modules:"
+max-syscall "module_list"
+

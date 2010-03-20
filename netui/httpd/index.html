@@ -1,0 +1,68 @@
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<title id="title">Max Dashboard</title>
+		
+		<!-- *** CSS *** -->
+		<link rel="stylesheet" type="text/css" href="resources/css/ext-all.css" />
+		<link rel="stylesheet" type="text/css" href="ux/css/Spinner.css" />
+		<style type="text/css">
+			#header {
+				background: #1E4176;
+			}
+			#header h1 {
+				font-size: 16px;
+				color: #fff;
+				font-weight: bold;
+				padding: 5px 10px;
+			}
+			
+			
+			.x-tree-node div.menu-rt {
+				background: #eee;
+				margin-top: 1px;
+				border-top: 1px solid #ddd;
+				border-bottom: 1px solid #ccc;
+				padding-top: 2px;
+				padding-bottom: 1px;
+			}
+			.menu-rt .x-tree-node-icon {
+				display: none;
+			}
+			.menu-rt a span {
+				font-weight: bold;
+				color: #222;
+			}
+		</style>
+		
+		<!-- *** Javascript *** -->
+		<script type="text/javascript" src="adapter/ext/ext-base.js"></script>
+		<script type="text/javascript" src="ext-all-debug.js"></script>
+		<script type="text/javascript" src="ux/Spinner.js"></script>
+		<script type="text/javascript" src="ux/SpinnerField.js"></script>
+		
+		<!-- Client Javascript -->
+		<script type="text/javascript" src="pages.js"></script>
+		<script type="text/javascript" src="calibrate.js"></script>
+		<script type="text/javascript" src="index.js"></script>
+		<script type="text/javascript">
+			var showpage = function(page)
+			{
+				contentpane.getLayout().setActiveItem(pages[page]);
+			}
+			
+			Ext.BLANK_IMAGE_URL = 'resources/images/default/s.gif';
+			Ext.onReady(function(){
+				Ext.QuickTips.init();
+				
+				var viewport = new Ext.Viewport({
+					layout: 'border',
+					items: [titlebar, menupane, contentpane]
+				});
+				viewport.doLayout();
+			});
+			
+		</script>
+	</head>
+	<body></body>
+</html>

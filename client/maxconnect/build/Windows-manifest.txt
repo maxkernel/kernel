@@ -1,0 +1,17 @@
+/home/dklofas/projects/maxkernel/src/client/maxconnect/jsch-0.1.42.jar F397A39B-3300-5863-347A-B046A5DE5050 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/maxconnect.png 0C05DCF4-1F81-EDE5-5905-BFB05A51EF08 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/maxconnect.jar 892EA842-B604-B119-4CBD-9293C72ECCB7 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/deploy.png 9F6C705C-DE0B-6C51-C550-FDC1AF86612E zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/service.png ECA86D12-684D-3204-432F-E6415444B904 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/admin.png D0B8A8E0-858F-72E1-AD71-2DE9490BB253 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/run.png 805C577A-B33E-84A3-DEFB-6CA85F260712 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/bundle.png 526871AF-C8C0-2944-C2AD-FD285384D00A zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/maxconnect.png D375F4FC-F553-0295-61A8-B53BEFD9B31B zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/run.ico 78536E43-6FA9-4A10-90A8-03112DBC2744 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/admin.ico DAA52ABB-8306-42F4-8D44-44D8C7C39BD8 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/bundle.ico 610302ED-9E1E-4E57-A8CB-42525D3840A2 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/deploy.ico 1120CB02-E8AD-4DE8-80A3-96A581FBA989 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/maxconnect.ico 28435D13-9305-49AB-89EE-A771DCB3BB91 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/icons/service.ico F3A5E90B-BBA5-4395-A23C-5EFB122DEA64 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/ant.jar 1A0AB1EF-A911-3070-B8A8-C45D80DA6D17 zlib
+/home/dklofas/projects/maxkernel/src/client/maxconnect/maxconnect.exe 61BCEF1F-656A-09E7-4382-45288A5AD568 zlib

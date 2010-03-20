@@ -1,0 +1,17 @@
+OBJECTS		= client.o
+
+TARGET		= max-client
+LIBS		= 
+CFLAGS		= -pipe -ggdb3 -Wall -I. -DINSTALL="\"$(INSTALL)\""
+
+all: $(OBJECTS)
+	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" 1>&2 && false )
+	$(CC) -o $(TARGET) $(OBJECTS) $(LIBS)
+	rm -f $(OBJECTS)
+
+clean:
+	rm -f $(TARGET)
+
+%.o: %.c
+	$(CC) -c $(CFLAGS) $*.c -o $*.o
+

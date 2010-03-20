@@ -1,0 +1,13 @@
+TYPE=application
+
+NAME="SimpleRC"
+VERSION=1.0
+AUTHOR="Andrew Klofas <aklofas@senseta.com>"
+PROVIDER="Senseta"
+DESCRIPTION="A bare bones remote control application for a Max Rover"
+
+FILES=(remotecontrol.lua dashboard)
+
+START="lua remotecontrol.lua"
+GROUND="./dashboard {ip}"
+

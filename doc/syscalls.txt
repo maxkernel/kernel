@@ -1,0 +1,16 @@
+
+
+== MaxPOD ==================
+motor( -1 ... 1 )
+motoroff()
+alloff()
+turn( -5pi/36 ... 5pi/36 )
+turnfront( -5pi/36 ... 5pi/36 ) // +/-25 degrees (0.4363 rad)
+turnrear( -5pi/36 ... 5pi/36 ) // +/-25 degrees (0.4363 rad)
+pan( -3pi/2 ... pi/2 )
+tilt( -pi/4 ... pi/2 )
+
+double pod_latency()
+int direction_set( 1 or -1 )
+int direction_toggle()
+

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+cat maxconnect | sed "s|\(^INSTALL=\)\(.*\)$|\1$1|" >$1/maxconnect && chmod +x $1/maxconnect
+ln -sf $1/maxconnect /usr/bin/maxconnect
+ln -sf $1/maxconnect /usr/bin/max-runwizard
+ln -sf $1/maxconnect /usr/bin/max-servicewizard
+ln -sf $1/maxconnect /usr/bin/max-deploywizard
+ln -sf $1/maxconnect /usr/bin/max-admin
+ln -sf $1/maxconnect /usr/bin/max-bundle
+

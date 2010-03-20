@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<jardesc>
+    <jar path="maxconnect/maxconnect.jar"/>
+    <options buildIfNeeded="true" compress="true" descriptionLocation="/maxconnect/maxconnect.jardesc" exportErrors="true" exportWarnings="true" includeDirectoryEntries="false" overwrite="true" saveDescription="true" storeRefactorings="false" useSourceFolders="false"/>
+    <storedRefactorings deprecationInfo="true" structuralOnly="false"/>
+    <selectedProjects/>
+    <manifest generateManifest="false" manifestLocation="/maxconnect/maxconnect.manifest" manifestVersion="1.0" reuseManifest="false" saveManifest="true" usesManifest="true">
+        <sealing sealJar="false">
+            <packagesToSeal/>
+            <packagesToUnSeal/>
+        </sealing>
+    </manifest>
+    <selectedElements exportClassFiles="true" exportJavaFiles="false" exportOutputFolder="false">
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{WizardPagePart.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta{MaxRobot.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/error.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/maxconnect.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{BrowsePage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{DeployReviewPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{RunFinalPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{DeployFinalPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.ui{ProcessStarter.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.ui{ServiceBrowser.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/check_on.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/copy.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{Prompt.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.task{ExecuteTask.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{FileSelectionTree.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.client{ServiceClient.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.task{Task.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/okay.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/check_hover.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{ComponentTitledBorder.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{ImageCache.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/max5r.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.event{LayoutListener.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{ServiceConfigPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{UI_MaxService.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/max5j.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/admin.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/deploy.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{BundleWizard.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.task{TaskListener.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/check_off.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta{MaxService.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta{MaxConnect.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{BundleFinalPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{DeployWizard.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{UI_MaxRobot.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/skip.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.ui{RobotBrowser.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/refresh.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/sign_add.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/service.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{HeaderPane.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.client{DiscoveryClient.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{TristateCheckbox.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.task{SoftwareSyncTask.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/save.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/bundle.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta{SoftwareCache.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/check_partial.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/success.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{ServiceFinalPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{Wizard.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.task{DeployTask.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.ui{SoftwareBrowser.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{StepsPane.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.event{ServiceListener.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/run.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/export.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{CredentialsPage.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/sign_remove.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{RunWizard.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/sign_cancel.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.client{SoftwareBundleClient.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{DirectoryChooser.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/sign_tick.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/info.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.uipart{UI_SoftwareBundle.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/warning.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{DeployGeneralPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.event{BrowseListener.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta{SoftwareBundle.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{SoftwarePage.java"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/unknown.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/sign_info.png"/>
+        <file path="/maxconnect/src/org/senseta/wiz/img/question.png"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz.pages{BundleConfigPage.java"/>
+        <javaElement handleIdentifier="=maxconnect/src&lt;org.senseta.wiz{ServiceWizard.java"/>
+    </selectedElements>
+</jardesc>

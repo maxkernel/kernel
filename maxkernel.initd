@@ -1,0 +1,64 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides: maxkernel
+# Default-Start: 2 3 4 5
+# Default-Stop:
+# Required-Start: $network
+# Required-Stop:
+# Short-Description: Start up maxkernel and autostart client script
+# Description: A utility service that starts/stops maxkernel and autostart client script
+### END INIT INFO
+
+INSTALL=
+
+test $INSTALL/maxkernel || exit 0
+. /lib/lsb/init-functions
+
+if [ $UID -ne 0 ]; then
+	echo "Must be root!" 1>&2
+	exit 1
+fi
+
+
+case "$1" in
+	start)
+		log_daemon_msg "Starting maxkernel"
+		if start-stop-daemon --start --background --pidfile /var/local/maxkernel.pid --make-pidfile --startas $INSTALL/maxkernel; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
+		
+		sleep 1
+		
+		log_daemon_msg "Starting maxkernel autostart client"
+		if max-client -ad; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
+		;;
+	stop)
+		log_daemon_msg "Stopping maxkernel"
+		if start-stop-daemon --stop --pidfile /var/local/maxkernel.pid --oknodo; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
+		rm -f /var/local/maxkernel.pid
+		
+		log_daemon_msg "Stopping maxkernel autostart client"
+		max-client -k
+		log_end_msg 0
+		;;
+	restart)
+		$0 stop
+		sleep 1
+		$0 start
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|restart}"
+esac
+
+exit 0
+
