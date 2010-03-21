@@ -122,6 +122,7 @@ public class DirectoryChooser extends JTree
 		
 		public boolean isLeaf()
 		{
+			/*
 			if (!view.isTraversable(getFile()) || getFile().listFiles() == null)
 				return true;
 			
@@ -131,8 +132,10 @@ public class DirectoryChooser extends JTree
 				if (view.isTraversable(f))
 					return false;
 			}
+			*/
 			
-			return true;
+			//return true;
+			return false;
 		}
 		
 		private void populateChildren() {

@@ -6,8 +6,10 @@
 <JVMSearchPath>jdkpath</JVMSearchPath>
 <JVMSearchPath>exepath</JVMSearchPath>
 <JVMSearchPath>jview</JVMSearchPath>
+<arguments></arguments>
 <classPath>maxconnect.jar</classPath>
 <classPath>jsch-0.1.42.jar</classPath>
+<classPath>ant.jar</classPath>
 <embeddedJar>false</embeddedJar>
 <executableName>maxconnect.exe</executableName>
 <iconLocation>maxconnect.png</iconLocation>

@@ -22,9 +22,9 @@ public class TristateCheckbox extends JPanel implements LayoutManager, MouseList
 	private static final long serialVersionUID = -4404437875938358320L;
 	
 	public enum CheckState {
-		UNCHECKED(new ImageIcon(ImageCache.fromCache("check_off")), new ImageIcon(ImageCache.fromCache("check_hover"))),
-		PARTIAL(new ImageIcon(ImageCache.fromCache("check_partial")), new ImageIcon(ImageCache.fromCache("check_hover"))),
-		CHECKED(new ImageIcon(ImageCache.fromCache("check_on")), new ImageIcon(ImageCache.fromCache("check_hover")));
+		UNCHECKED(new ImageIcon(ImageCache.fromCache("check_off")), new ImageIcon(ImageCache.fromCache("check_offh"))),
+		PARTIAL(new ImageIcon(ImageCache.fromCache("check_partial")), new ImageIcon(ImageCache.fromCache("check_partialh"))),
+		CHECKED(new ImageIcon(ImageCache.fromCache("check_on")), new ImageIcon(ImageCache.fromCache("check_onh")));
 		
 		public static CheckState next(CheckState current)
 		{
