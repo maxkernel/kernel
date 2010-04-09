@@ -15,7 +15,7 @@ RELEASE		= ALPHA
 OBJECTS		= kernel.o meta.o module.o profile.o syscall.o io.o syscallblock.o property.o config.o calibration.o buffer.o serialize.o trigger.o exec.o luaenv.o math.o
 HEADERS		= kernel.h buffer.h array.h serialize.h 
 TARGET		= maxkernel
-MODULES		= netui discovery console service map serial jpegcompress x264compress nimu maxpod pololu-mssc videre webcam videoserver test
+MODULES		= netui discovery console service network map serial jpegcompress x264compress nimu maxpod pololu-mssc videre webcam miscserver test
 UTILS		= max-kdump max-modinfo max-syscall max-log max-autostart max-client
 PACKAGES	= libconfuse libffi glib-2.0 gnet-2.0 gmodule-2.0 sqlite lua5.1 libmatheval
 DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMODEL="\"$(MODEL)\""

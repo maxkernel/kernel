@@ -3,16 +3,15 @@
 
 #include <kernel.h>
 #include <buffer.h>
-#include "videoserver.h"
 
 
-DEF_BLOCK(http, http_new, "i");
-BLK_ONUPDATE(http, http_update);
-BLK_INPUT(http, jpeg_frame, "x");
+DEF_BLOCK(jpeghttp, jpeghttp_new, "i");
+BLK_ONUPDATE(jpeghttp, jpeghttp_update);
+BLK_INPUT(jpeghttp, frame, "x");
 
 
 /* Adapted from MJPG-Streamer   Thanks guys! */
-#define BOUNDARY			"EndOfFrame"
+#define BOUNDARY			"myboundry"
 #define STDHEADER			"HTTP/1.0 200 OK\r\n" \
 								"Connection: close\r\n" \
 								"Server: MaxKernel-v" VERSION "\r\n" \
@@ -29,18 +28,39 @@ BLK_INPUT(http, jpeg_frame, "x");
 
 
 
+typedef struct
+{
+	const char * class_name;
+	char * obj_name;
+	unsigned int obj_id;
+	info_f info;
+	destructor_f destructor;
 
-static char * http_info(void * object)
+	unsigned int port;
+	void * socket;
+	GSList * clients;
+	mutex_t * mutex;
+} server_t;
+
+typedef struct
+{
+	server_t * parent;
+	void * socket;
+	GIOChannel * gio;
+} client_t;
+
+
+static char * jpeghttp_info(void * object)
 {
 	char * str = "[SERVER INFO PLACEHOLDER]";
 	return strdup(str);
 }
 
-static void http_destroy(void * object)
+static void jpeghttp_destroy(void * object)
 {
 	server_t * server = object;
 
-	g_mutex_lock(server->mutex);
+	mutex_lock(server->mutex);
 
 	GSList * next = server->clients;
 	while (next != NULL)
@@ -55,11 +75,11 @@ static void http_destroy(void * object)
 	}
 	gnet_tcp_socket_delete(server->socket);
 
-	g_mutex_unlock(server->mutex);
-	g_mutex_free(server->mutex);
+	mutex_unlock(server->mutex);
+	//mutex_free(server->mutex);
 }
 
-static boolean http_clientdata(GIOChannel * gio, GIOCondition condition, void * data)
+static boolean jpeghttp_clientdata(GIOChannel * gio, GIOCondition condition, void * data)
 {
 	client_t * client = data;
 	server_t * server = client->parent;
@@ -75,7 +95,7 @@ static boolean http_clientdata(GIOChannel * gio, GIOCondition condition, void * 
 		//user has disconnected
 
 		//remove from list
-		g_mutex_lock(server->mutex);
+		mutex_lock(server->mutex);
 
 		GSList * item = g_slist_find(server->clients, client);
 		if (item != NULL)
@@ -84,7 +104,7 @@ static boolean http_clientdata(GIOChannel * gio, GIOCondition condition, void * 
 			g_free(client);
 		}
 
-		g_mutex_unlock(server->mutex);
+		mutex_unlock(server->mutex);
 
 		return FALSE;
 	}
@@ -92,7 +112,7 @@ static boolean http_clientdata(GIOChannel * gio, GIOCondition condition, void * 
 	return TRUE;
 }
 
-static boolean http_newclient(GIOChannel * gio, GIOCondition condition, void * data)
+static boolean jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void * data)
 {
 	server_t * server = data;
 
@@ -117,11 +137,11 @@ static boolean http_newclient(GIOChannel * gio, GIOCondition condition, void * d
 	client->gio = sockchan;
 
 	//add client to list
-	g_mutex_lock(server->mutex);
+	mutex_lock(server->mutex);
 	server->clients = g_slist_append(server->clients, client);
-	g_mutex_unlock(server->mutex);
+	mutex_unlock(server->mutex);
 
-	g_io_add_watch(sockchan, G_IO_IN, http_clientdata, client);
+	g_io_add_watch(sockchan, G_IO_IN, jpeghttp_clientdata, client);
 
 	//now send standard header
 	size_t wrote = 0;
@@ -137,15 +157,14 @@ static boolean http_newclient(GIOChannel * gio, GIOCondition condition, void * d
 	return TRUE;
 }
 
-void * http_new(int port)
+void * jpeghttp_new(int port)
 {
-	GString * name = g_string_new("");
-	g_string_printf(name, "HTTP (port %d)", port);
+	String name = string_new("HTTP (port %d)", port);
 
-	server_t * server = kobj_new("VideoStream", g_string_free(name, FALSE), http_info, http_destroy, sizeof(server_t));
+	server_t * server = kobj_new("JpegHttpStream", string_copy(&name), jpeghttp_info, jpeghttp_destroy, sizeof(server_t));
 	server->port = port;
 	server->socket = gnet_tcp_socket_server_new_with_port(port);
-	server->mutex = g_mutex_new();
+	server->mutex = mutex_new(M_RECURSIVE);
 
 	if (server->socket == NULL)
 	{
@@ -154,19 +173,22 @@ void * http_new(int port)
 	else
 	{
 		GIOChannel * serverchan = gnet_tcp_socket_get_io_channel(server->socket);
-		g_io_add_watch(serverchan, G_IO_IN, http_newclient, server);
+		g_io_add_watch(serverchan, G_IO_IN, jpeghttp_newclient, server);
 	}
 
 	return server;
 }
 
-void http_update(void * data)
+void jpeghttp_update(void * data)
 {
 	server_t * server = data;
 	if (server == NULL || ISNULL(jpeg_frame) || g_slist_length(server->clients) == 0)
 	{
+		LOG(LOG_INFO, "HTTP NO DATA %d", ISNULL(jpeg_frame));
 		return;
 	}
+
+	LOG(LOG_INFO, "HTTP DATA");
 
 	buffer_t jpeg_frame = INPUTT(buffer_t, jpeg_frame);
 
@@ -174,7 +196,7 @@ void http_update(void * data)
 	g_string_printf(header, PREFRAMEHEADER, buffer_datasize(jpeg_frame));
 	size_t s1 = header->len, s2 = buffer_datasize(jpeg_frame), s3 = strlen(POSTFRAMEHEADER);
 
-	g_mutex_lock(server->mutex);
+	mutex_lock(server->mutex);
 
 	GSList * next = server->clients;
 	while (next != NULL)
@@ -199,7 +221,7 @@ void http_update(void * data)
 		next = next->next;
 	}
 
-	g_mutex_unlock(server->mutex);
+	mutex_unlock(server->mutex);
 
 	g_string_free(header, TRUE);
 }

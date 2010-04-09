@@ -66,6 +66,10 @@ static unsigned int webcam_getformat(char * fmt)
 	{
 		return V4L2_PIX_FMT_YUYV;
 	}
+	else if (strcmp(fmt, "mjpeg") == 0)
+	{
+		return V4L2_PIX_FMT_MJPEG;
+	}
 
 	return 0;
 }
@@ -78,6 +82,9 @@ static size_t webcam_getbufsize(int fmt, int width, int height)
 			return width*height+(width*height/2);
 
 		case V4L2_PIX_FMT_YUYV:
+			return width*height*2;
+
+		case V4L2_PIX_FMT_MJPEG:
 			return width*height*2;
 
 		default:
@@ -320,6 +327,7 @@ static buffer_t webcam_readframe(webcam_t * webcam)
 		return NULL;
 	}
 
+	/*
 	size_t expect_size = webcam_getbufsize(webcam->format, webcam->width, webcam->height);
 	buffer_t frame = buffer_new(expect_size);
 
@@ -329,8 +337,12 @@ static buffer_t webcam_readframe(webcam_t * webcam)
 		buffer_free(frame);
 		return NULL;
 	}
+	*/
 
-	memcpy(buffer_data(frame), webcam->buffers[buf.index].start, MIN(webcam->buffers[buf.index].length, expect_size));
+	size_t expect_size = webcam->buffers[buf.index].length;
+	buffer_t frame = buffer_new(expect_size);
+
+	memcpy(buffer_data(frame), webcam->buffers[buf.index].start, expect_size);
 
 	if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
@@ -447,10 +459,16 @@ void webcam_update(void * object)
 			OUTPUT(width, &webcam->width);
 			OUTPUT(height, &webcam->height);
 			OUTPUT_NOCOPY(frame, &frame);
+
+			LOG(LOG_INFO, "FRAME");
 		}
 	}
 	else if (r < 0)
 	{
 		LOG(LOG_WARN, "Could not call select on camera %s: %s", webcam->path, strerror(errno));
+	}
+	else
+	{
+		LOG(LOG_INFO, "NO FRAME");
 	}
 }

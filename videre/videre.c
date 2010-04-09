@@ -19,6 +19,10 @@ MOD_PREACT(module_preactivate);
 DEF_BLOCK(camera, camera_new, "i");
 BLK_ONUPDATE(camera, camera_update);
 
+
+#define VIDERE_LOCAL_PARAM_BASE               0xFF000UL
+#define VIDERE_CAM_FW_LEVEL_OFFSET            (1*4)
+
 static void camera_free(dc1394camera_t * cam)
 {
 	dc1394_video_set_transmission(cam, DC1394_OFF);
@@ -124,6 +128,27 @@ void * camera_new(int camnum)
 			camera_free(cam);
 			return NULL;
 		}
+	}
+
+
+	//qval = getRegister(VIDERE_LOCAL_PARAM_BASE+VIDERE_CAM_FW_LEVEL_OFFSET);
+	LOG(LOG_DEBUG, "Videre: getting local params for camera %d", camnum);
+
+	uint32_t qval = 0;
+
+	dc1394_get_control_register(cam, VIDERE_LOCAL_PARAM_BASE + VIDERE_CAM_FW_LEVEL_OFFSET, &qval); //getRegister(VIDERE_LOCAL_PARAM_BASE+VIDERE_CAM_FW_LEVEL_OFFSET);
+    int major = (qval & 0x0000ff00)>>8;
+    int minor = (qval & 0x000000ff);
+
+    if ((qval >> 16) != 0 || major < 2 || minor > 10)
+    {
+    	LOG(LOG_WARN, "Videre: No local parameters");
+    }
+	else
+	{
+		//uint32_t firmware = qval & 0xffff;
+
+		LOG(LOG_DEBUG, "Videre firmware: %02d.%02d", major, minor);
 	}
 
 

@@ -13,7 +13,7 @@ static GRegex * meta_regex = NULL;
 static boolean file_exists(const char * path)
 {
 	struct stat buf;
-	int i = stat (path, &buf);
+	int i = stat(path, &buf);
 	return i == 0 && S_ISREG(buf.st_mode);
 }
 

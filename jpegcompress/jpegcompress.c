@@ -216,6 +216,8 @@ static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 
 void jpeg_update(void * object)
 {
+	LOG(LOG_INFO, "PRE-JPEG COMPRESS");
+
 	if (object == NULL || ISNULL(width) || ISNULL(height) || ISNULL(frame))
 	{
 		//required input parameters not there!
@@ -227,6 +229,8 @@ void jpeg_update(void * object)
 		//invalid input dimensions
 		return;
 	}
+
+	LOG(LOG_INFO, "JPEG COMPRESS");
 
 	jpeg_t * jpeg = object;
 	struct jpeg_compress_struct * cinfo = jpeg->cinfo;
