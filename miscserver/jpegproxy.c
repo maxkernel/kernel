@@ -50,14 +50,14 @@ static void doconnect(proxy_t * proxy)
 	{
 		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
 		{
-			LOG(LOG_WARN, "Proxy: could not connect to proxy: %s", strerror(errno));
+			//LOG(LOG_WARN, "Proxy: could not connect to proxy: %s", strerror(errno));
 			continue;
 		}
 
 		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
 		{
 			close(sockfd);
-			LOG(LOG_WARN, "Proxy: count not connect to proxy: %s", strerror(errno));
+			//LOG(LOG_WARN, "Proxy: count not connect to proxy: %s", strerror(errno));
 			continue;
 		}
 
@@ -65,7 +65,7 @@ static void doconnect(proxy_t * proxy)
 	}
 
 	if (p == NULL) {
-		LOG(LOG_ERR, "Proxy: failed to connect to client");
+		//LOG(LOG_ERR, "Proxy: failed to connect to client");
 		return;
 	}
 
@@ -106,22 +106,19 @@ void jpegproxy_update(void * data)
 		return;
 	}
 
-	LOG(LOG_INFO, "HERE");
 	if (ISNULL(frame))
 	{
 		return;
 	}
-	LOG(LOG_INFO, "HERE2");
 
 	buffer_t frame = INPUTT(buffer_t, frame);
-	ssize_t sent = send(proxy->sock, frame, buffer_size(frame), MSG_DONTWAIT);
+	ssize_t sent = send(proxy->sock, frame, buffer_size(frame), 0);
 
 	if (sent != buffer_size(frame))
 	{
-		LOG(LOG_WARN, "Proxy: could not send all data to proxy (sent %d out of %d). DESYNC", sent, buffer_size(frame));
 		close(proxy->sock);
 		proxy->sock = -1;
 	}
 
-	LOG(LOG_INFO, "SENT %d", buffer_size(frame));
+	//LOG(LOG_INFO, "SENT %d", buffer_size(frame));
 }

@@ -14,10 +14,10 @@ maxpod = loadmodule("maxpod")
 
 webcam = loadmodule("webcam")
 ----left = webcam.device.new("/dev/video0", "YUV420", 640, 480)
-left = webcam.device.new("/dev/video0", "YUV422", 320, 240)
+left = webcam.device.new("/dev/video0", "YUV422", 640, 480)
 
 jpeg = loadmodule("jpegcompress")
-left_jpeg = jpeg.compressor.new("YUV422")
+left_jpeg = jpeg.compressor.new("YUV422", 80)
 
 miscserver = loadmodule("miscserver")
 left_srv = miscserver.jpegproxy.new("www.maxkernel.com", 8089)
@@ -34,7 +34,7 @@ route(left.height, left_jpeg.height)
 route(left.frame, left_jpeg.frame)
 route(left_jpeg.frame, left_srv.frame)
 
-rg = newvrategroup("Camera pipeline", { left, left_jpeg, left_srv }, nil, 10)
+rg = newvrategroup("Camera pipeline", { left, left_jpeg, left_srv }, nil, 7)
 
 --newsyscall("videoparams", {left.width, left.height, rg.rate})
 

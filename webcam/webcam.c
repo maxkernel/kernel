@@ -460,7 +460,7 @@ void webcam_update(void * object)
 			OUTPUT(height, &webcam->height);
 			OUTPUT_NOCOPY(frame, &frame);
 
-			LOG(LOG_INFO, "FRAME");
+			//LOG(LOG_INFO, "FRAME");
 		}
 	}
 	else if (r < 0)
@@ -469,6 +469,6 @@ void webcam_update(void * object)
 	}
 	else
 	{
-		LOG(LOG_INFO, "NO FRAME");
+		//LOG(LOG_INFO, "NO FRAME");
 	}
 }

@@ -13,7 +13,7 @@ MOD_VERSION("0.9");
 MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
 MOD_DESCRIPTION("Jpeg compression module");
 
-DEF_BLOCK(compressor, jpeg_new, "s");
+DEF_BLOCK(compressor, jpeg_new, "si");
 BLK_ONUPDATE(compressor, jpeg_update);
 BLK_ONDESTROY(compressor, jpeg_free);
 BLK_INPUT(compressor, width, "i");
@@ -33,7 +33,7 @@ typedef void (*convert_f)(size_t row, JDIMENSION width, JDIMENSION height, buffe
 
 typedef struct
 {
-	int width, height;
+	int width, height, quality;
 
 	struct jpeg_compress_struct * cinfo;
 	struct jpeg_error_mgr * jerr;
@@ -68,9 +68,10 @@ static convert_f jpeg_getconverter(char * fmt)
 	return NULL;
 }
 
-void * jpeg_new(char * format)
+void * jpeg_new(char * format, int quality)
 {
 	jpeg_t * jpeg = g_malloc0(sizeof(jpeg_t));
+	jpeg->quality = quality;
 	jpeg->converter = jpeg_getconverter(format);
 
 	if (jpeg->converter == NULL)
@@ -216,8 +217,6 @@ static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 
 void jpeg_update(void * object)
 {
-	LOG(LOG_INFO, "PRE-JPEG COMPRESS");
-
 	if (object == NULL || ISNULL(width) || ISNULL(height) || ISNULL(frame))
 	{
 		//required input parameters not there!
@@ -229,8 +228,6 @@ void jpeg_update(void * object)
 		//invalid input dimensions
 		return;
 	}
-
-	LOG(LOG_INFO, "JPEG COMPRESS");
 
 	jpeg_t * jpeg = object;
 	struct jpeg_compress_struct * cinfo = jpeg->cinfo;
@@ -280,6 +277,7 @@ void jpeg_update(void * object)
 		cinfo->in_color_space = JCS_YCbCr;
 
 		jpeg_set_defaults(cinfo);
+		jpeg_set_quality(cinfo, jpeg->quality, TRUE);
 	}
 
 	if (setjmp(jpeg->jmp))
