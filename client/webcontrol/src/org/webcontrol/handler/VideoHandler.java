@@ -22,7 +22,7 @@ public class VideoHandler implements HttpHandler {
 		if (!ex.getRequestMethod().equalsIgnoreCase("GET"))
 			return;
 		
-		ex.getRequestURI();
+		//ex.getRequestURI();
 		ex.sendResponseHeaders(HttpCodes.HTTP_OKAY, 0);
 		DataOutputStream out = new DataOutputStream(ex.getResponseBody());
 		

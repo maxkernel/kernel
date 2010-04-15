@@ -11,6 +11,7 @@ import org.webcontrol.handler.VideoHandler;
 public class FeedClient implements Runnable
 {
 	private static final int FEEDPORT = 8089;
+	private static final int TIMEOUT = 4000;
 	
 	@Override
 	public void run()
@@ -21,6 +22,7 @@ public class FeedClient implements Runnable
 			while (true)
 			{
 				Socket fclient = feedserver.accept();
+				fclient.setSoTimeout(TIMEOUT);
 				BufferedInputStream in = new BufferedInputStream(fclient.getInputStream());
 				
 				try

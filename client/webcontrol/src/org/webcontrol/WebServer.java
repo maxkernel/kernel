@@ -2,6 +2,7 @@ package org.webcontrol;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
@@ -11,7 +12,8 @@ import org.webcontrol.handler.VideoHandler;
 
 import com.sun.net.httpserver.HttpServer;
 
-public class WebServer {
+public class WebServer
+{
 
 	public static void main(String[] args) throws IOException
 	{
@@ -32,7 +34,7 @@ public class WebServer {
 		HttpServer server = HttpServer.create(new InetSocketAddress(port), 3);
 		server.createContext("/", new RootHandler(new File("www")));
 		server.createContext("/video", new VideoHandler());
-		server.createContext("/control", new ControlHandler());
+		server.createContext("/control", new ControlHandler(InetAddress.getByName("localhost"), 10301));
 		server.setExecutor(Executors.newCachedThreadPool());
 		server.start();
 		

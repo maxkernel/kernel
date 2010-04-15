@@ -1,5 +1,6 @@
-package org.webcontrol.applet;
+package org.webcontrol.applet.ui;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -23,6 +24,8 @@ public class VideoPanel extends JLabel implements Runnable
 	public VideoPanel()
 	{
 		super("< No Video >", JLabel.CENTER);
+		setOpaque(true);
+		setBackground(Color.BLACK);
 	}
 	
 	public void connect(URL videourl) throws IOException
@@ -49,8 +52,9 @@ public class VideoPanel extends JLabel implements Runnable
 				readall(in, data);
 				
 				BufferedImage image = ImageIO.read(new ByteArrayInputStream(data));
+				
 				setText(null);
-				setIcon(new ImageIcon(image));
+				setIcon(new ImageIcon(image.getScaledInstance(getWidth(), (int)((double)getWidth()*0.75), BufferedImage.SCALE_SMOOTH)));
 			}
 		} catch (IOException e)
 		{
