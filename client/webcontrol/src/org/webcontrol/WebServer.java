@@ -34,7 +34,7 @@ public class WebServer
 		HttpServer server = HttpServer.create(new InetSocketAddress(port), 3);
 		server.createContext("/", new RootHandler(new File("www")));
 		server.createContext("/video", new VideoHandler());
-		server.createContext("/control", new ControlHandler(InetAddress.getByName("localhost"), 10301));
+		server.createContext("/control", new ControlHandler(InetAddress.getByName("192.168.1.117"), 8080));
 		server.setExecutor(Executors.newCachedThreadPool());
 		server.start();
 		

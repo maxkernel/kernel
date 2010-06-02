@@ -21,12 +21,15 @@ import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JApplet;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JToggleButton;
 import javax.swing.JWindow;
 
+import org.webcontrol.applet.client.ControlClient;
+import org.webcontrol.applet.joystick.Joystick;
 import org.webcontrol.applet.ui.DriveStick;
 import org.webcontrol.applet.ui.LookStick;
 import org.webcontrol.applet.ui.VideoPanel;
@@ -46,15 +49,16 @@ public class WebApplet extends JApplet implements LayoutManager
 	private LookStick look;
 	
 	private JToggleButton usejoystick, takecontrol, fullscreen;
+	private JButton snapshot;
 	private JLabel logo, l_drive, l_look;
 	
 	public WebApplet() throws Exception
-	{
-		videopanel = new VideoPanel();
+	{	
 		drive = new DriveStick();
 		look = new LookStick();
 		
 		control = new ControlClient(drive, look);
+		videopanel = new VideoPanel(control);
 		joystick = null;
 		
 		logo = new JLabel();
@@ -62,6 +66,14 @@ public class WebApplet extends JApplet implements LayoutManager
 		logo.setVerticalAlignment(JLabel.BOTTOM);
 		l_drive = new JLabel("Drive");
 		l_look = new JLabel("Look");
+		
+		snapshot = new JButton("Snapshot");
+		snapshot.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				control.takeSnapshot();
+			}
+		});
 		
 		usejoystick = new JToggleButton("Use Joystick");
 		usejoystick.addActionListener(new ActionListener() {
@@ -131,6 +143,7 @@ public class WebApplet extends JApplet implements LayoutManager
 		content.add(videopanel);
 		content.add(drive);
 		content.add(look);
+		content.add(snapshot);
 		
 		content.add(logo);
 		content.add(l_look);
@@ -138,7 +151,7 @@ public class WebApplet extends JApplet implements LayoutManager
 		
 		content.add(usejoystick);
 		content.add(takecontrol);
-		content.add(fullscreen);
+		//content.add(fullscreen);
 		
 		setLayout(new BorderLayout());
 		add(content, BorderLayout.CENTER);
@@ -175,6 +188,12 @@ public class WebApplet extends JApplet implements LayoutManager
 		}, JOYSTICK_POLL, JOYSTICK_POLL, TimeUnit.MILLISECONDS);
 	}
 	
+	@Override
+	public void stop()
+	{
+		control.setHaveControl(false);
+	}
+	
 	private void polljoystick()
 	{
 		if (joystick == null || !usejoystick.isSelected())
@@ -204,13 +223,14 @@ public class WebApplet extends JApplet implements LayoutManager
 		
 		l_drive.setBounds(w-345, 25, 100, 25);
 		drive.setBounds(w-345, y+50, 175, 175);
+		snapshot.setBounds(w-150, y+50, 125, 30);
 		
 		l_look.setBounds(w-345, y+250, 100, 25);
 		look.setBounds(w-345, y+275, 340, 125);
 		
 		usejoystick.setBounds(w-345, y+410, 115, 25);
 		takecontrol.setBounds(w-225, y+410, 115, 25);
-		fullscreen.setBounds(w-105, y+410, 100, 25);
+		//fullscreen.setBounds(w-105, y+410, 100, 25);
 		
 		logo.setBounds(w-350, y+450, 350, h-460);
 	}

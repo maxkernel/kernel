@@ -1,4 +1,4 @@
-package org.webcontrol.applet;
+package org.webcontrol.applet.joystick;
 
 import net.java.games.input.Component;
 import net.java.games.input.Controller;

@@ -1,4 +1,4 @@
-package org.webcontrol.applet;
+package org.webcontrol.applet.joystick;
 
 public abstract class Joystick
 {

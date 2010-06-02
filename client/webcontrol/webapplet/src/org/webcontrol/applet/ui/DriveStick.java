@@ -11,7 +11,7 @@ import java.awt.geom.Point2D;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 
-import org.webcontrol.applet.Joystick;
+import org.webcontrol.applet.joystick.Joystick;
 
 public class DriveStick extends JPanel implements MouseListener, MouseMotionListener
 {

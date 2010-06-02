@@ -11,12 +11,13 @@ import java.awt.geom.Point2D;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 
-import org.webcontrol.applet.Joystick;
+import org.webcontrol.applet.joystick.Joystick;
 
 public class LookStick extends JPanel implements MouseListener, MouseMotionListener
 {
 	private static final long serialVersionUID = 0L;
-	private static final double JOYSTICK_SCALE = 0.07;
+	private static final double VERT_SCALE = 0.05;
+	private static final double HORIZ_SCALE = 0.03;
 	
 	private Point2D.Double pos;
 	
@@ -51,8 +52,8 @@ public class LookStick extends JPanel implements MouseListener, MouseMotionListe
 			return;
 		}
 		
-		double x = -Math.cos(pov) * JOYSTICK_SCALE;
-		double y = Math.sin(pov) * JOYSTICK_SCALE;
+		double x = -Math.cos(pov) * HORIZ_SCALE;
+		double y = Math.sin(pov) * VERT_SCALE;
 		
 		setPosition(x+pos.x, y+pos.y);
 		

@@ -42,10 +42,11 @@ public class ControlHandler implements HttpHandler
 		try
 		{
 			//read in the values and properly scale them
-			double thro = in.readDouble();
+			double thro = in.readDouble() * 0.5;
 			double turn = in.readDouble() * (-5.0 * Math.PI / 36.0);
 			double pan = in.readDouble() * (Math.PI);
 			double tilt = in.readDouble() * (Math.PI / 2.0);
+			boolean snapshot = in.readBoolean();
 			
 			//send it away
 			DatagramPacket packet = new DatagramPacket(new byte[0], 0);
@@ -53,6 +54,9 @@ public class ControlHandler implements HttpHandler
 			packet.setPort(port);
 			
 			packet.setData(("0"+thro).getBytes(Charset.forName("US-ASCII")));
+			sock.send(packet);
+			
+			packet.setData(("1"+(snapshot? "1" : "0")).getBytes(Charset.forName("US-ASCII")));
 			sock.send(packet);
 			
 			packet.setData(("2"+turn).getBytes(Charset.forName("US-ASCII")));

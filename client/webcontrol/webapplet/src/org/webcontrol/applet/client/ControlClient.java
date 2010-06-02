@@ -1,4 +1,4 @@
-package org.webcontrol.applet;
+package org.webcontrol.applet.client;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -15,9 +15,12 @@ import org.webcontrol.applet.ui.LookStick;
 public class ControlClient
 {
 	private static final int TIMEOUT = 50;
+	public static enum SnapshotState { DISABLED, THROWAWAY, SAVE, AFTER };
+	public SnapshotState snapshot;
 	
 	private DriveStick drive;
 	private LookStick look;
+	
 	
 	private URL url;
 	private boolean havecontrol;
@@ -25,6 +28,7 @@ public class ControlClient
 	public ControlClient(DriveStick drive, LookStick look)
 	{
 		havecontrol = false;
+		snapshot = SnapshotState.DISABLED;
 		this.drive = drive;
 		this.look = look;
 	}
@@ -51,6 +55,14 @@ public class ControlClient
 		this.havecontrol = havecontrol;
 	}
 	
+	public void takeSnapshot()
+	{
+		if (!havecontrol)
+			return;
+		
+		snapshot = SnapshotState.THROWAWAY;
+	}
+	
 	private void sendcontrol()
 	{
 		if (!havecontrol)
@@ -68,6 +80,7 @@ public class ControlClient
 			out.writeDouble(drive.getXPosition());	//turn
 			out.writeDouble(look.getXPosition());	//pan
 			out.writeDouble(look.getYPosition());	//tilt
+			out.writeBoolean(snapshot != SnapshotState.DISABLED && snapshot != SnapshotState.AFTER);
 			out.flush();
 			
 			out.close();

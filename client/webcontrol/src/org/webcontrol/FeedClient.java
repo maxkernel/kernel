@@ -1,10 +1,15 @@
 package org.webcontrol;
 
 import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import org.webcontrol.handler.VideoHandler;
 
@@ -12,6 +17,8 @@ public class FeedClient implements Runnable
 {
 	private static final int FEEDPORT = 8089;
 	private static final int TIMEOUT = 4000;
+	private static final DateFormat DATEFMT = new SimpleDateFormat("yyyy-MM-dd'T'HH-mm-ss-SSS");
+	private static final File CAPTUREDIR = new File("/var/capture");
 	
 	@Override
 	public void run()
@@ -51,6 +58,17 @@ public class FeedClient implements Runnable
 						synchronized (VideoHandler.BARRIER) {
 							VideoHandler.BARRIER.notifyAll();
 						}
+						
+						/*
+						if (CAPTUREDIR.exists())
+						{
+							File fp = new File(CAPTUREDIR, DATEFMT.format(new Date())+".jpg");
+							FileOutputStream fout = new FileOutputStream(fp);
+							fout.write(data);
+							fout.flush();
+							fout.close();
+						}
+						*/
 					}
 					
 				} catch (Exception e)
