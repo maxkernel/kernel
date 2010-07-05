@@ -18,8 +18,8 @@ typedef struct
 } String;
 
 String string_blank();
-String string_new(const char * fmt, ...);
-void string_append(String * str, const char * fmt, ...);
+String string_new(const char * fmt, ...) CHECK_PRINTF(1, 2);
+void string_append(String * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
 void string_vappend(String * str, const char * fmt, va_list args);
 
 String string_clone(const String * str);

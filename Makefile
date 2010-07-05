@@ -2,7 +2,7 @@ MODEL		= Max 5J
 
 #REMOVE PRIOR TO RELEASE
 ifeq ("$(shell whoami)", "dklofas")
-INSTALL		= /home/dklofas/projects/maxkernel/src
+INSTALL		= /home/dklofas/Projects/maxkernel/src
 else
 INSTALL		= /usr/lib/maxkernel
 endif

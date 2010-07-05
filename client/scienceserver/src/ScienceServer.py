@@ -7,6 +7,7 @@ Created on Jun 2, 2010
 import threading
 import socket
 import time
+import struct
 import re
 import logging
 import uuid
@@ -16,9 +17,13 @@ HOST = ''
 PORT = 8080
 WWW = "www"
 EXPIRE = 24 * 60 * 60
+TIMEOUT = 5
 LOG = logging.getLogger("scienceserver")
 PASSFILE = "users.txt"
 SESSIONS = {}
+
+ACK = 1
+NACK = 0
 
 # Global configuration
 logging.basicConfig(level=logging.DEBUG)
@@ -55,9 +60,14 @@ def session(user):
         pass
     
     s = sessionc()
+    s.type = 'user'
     s.user = user
     s.uid = uuid.uuid4()
     s.expires = time.time() + EXPIRE
+    
+    s.videocond = threading.Condition()
+    s.videodata = []
+    
     SESSIONS[str(s.uid)] = s
     
     LOG.info("Created session for user '"+user+"' with uid "+str(s.uid))
@@ -121,6 +131,80 @@ def handleactivation(conn, addr, id, proto, header, target):
     
     id = session(user)
     conn.send("id="+id+"\r\n")
+    
+    SESSIONS[id].actConnection = conn
+    
+    def handlerobot(args):
+        SESSIONS[id].type = 'robot'
+    
+    def handlelist(args):
+        for v in SESSIONS.keys():
+            if SESSIONS[v].type == 'robot':
+                conn.send("robot="+SESSIONS[v].user+","+str(SESSIONS[v].uid)+"\r\n")
+    
+    def handlechat(args):
+        if not args:
+            return
+        
+        name = SESSIONS[id].user
+        for v in SESSIONS.keys():
+            try:
+                SESSIONS[v].actConnection.send("chat=("+name+" @ "+time.strftime("%I:%M:%S%p")+") "+str(args)+"\r\n")
+            except:
+                pass
+    
+    def handledrop(args):
+        del SESSIONS[id]
+    
+    while True:
+        data = conn.recv(512)
+        
+        if not data:
+            return
+        
+        c = re.match("^([a-zA-Z0-9_]+)(?:=(.*))?\r\n$", data);
+        if not c:
+            continue
+        
+        {
+            'iamrobot':     handlerobot,
+            'listrobots':   handlelist,
+            'chat':         handlechat,
+            'disconnect':   handledrop
+        }.get(c.group(1), lambda cmd: 0)(c.group(2));
+
+def handlevideo(conn, addr, url, proto, header, target):
+    if proto != "ATP" or not url:
+        return
+    
+    c = re.match("^(U|D)/([a-zA-Z0-9_\\-]+)$", url);
+    if not c:
+        return
+    
+    mode = c.group(1)
+    id = c.group(2)
+    
+    if not SESSIONS[id]:
+        return
+    
+    s = SESSIONS[id]
+    
+    if mode == 'U':
+        # Uploading video to id
+        pass
+    
+    else:
+        # Downloading video from id
+        while True:
+            s.videocond.acquire()
+            s.videocond.wait(TIMEOUT)
+            conn.send(struct.pack('I', len(s.videodata)))
+            conn.send(struct.pack('B'*len(s.videodata), *s.videodata))
+            resp = conn.recv(1)
+            
+            if not resp or resp[0] == NACK:
+                return
+    
 
 def handleerror(conn, addr, id, proto, header, target):
     LOG.warn("Invalid request for /"+target+"/"+str(id))
@@ -151,7 +235,8 @@ def handlerequest(conn, addr):
         id = t.group(2)
         
         {
-            'activation': handleactivation 
+            'activation':   handleactivation,
+            'video':        handlevideo
         }.get(target, handleerror)(conn, addr, id, proto, header, target)
     
     conn.close()
@@ -164,6 +249,7 @@ if __name__ == '__main__':
     bg.daemon = True
     bg.start()
     
+    # Start the server
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
     server.listen(1)
@@ -171,8 +257,12 @@ if __name__ == '__main__':
     try:
         
         while True:
+            
+            # Accept incoming connections
             conn, addr = server.accept()
             LOG.info("Client connected "+str(addr))
+            
+            # Handle the connection in a separate thread
             t = threading.Thread(target=handlerequest, args=[conn, addr])
             t.daemon = True
             t.start()

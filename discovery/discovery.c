@@ -26,7 +26,7 @@ boolean discovery_newclient(int fd, fdcond_t cond, void * data)
 	memset(buf, 0, sizeof(buf));
 
 	struct sockaddr_in remote;
-	size_t remote_len = sizeof(remote);
+	socklen_t remote_len = sizeof(remote);
 	ZERO(remote);
 
 	ssize_t bytesread = recvfrom(fd, buf, PACKET_LEN-1, 0, (struct sockaddr *)&remote, &remote_len);
@@ -51,7 +51,7 @@ boolean discovery_newclient(int fd, fdcond_t cond, void * data)
 			if (syscall_exists("service_getstreamconfig", "s:v"))
 			{
 				const char ** config = SYSCALL("service_getstreamconfig");
-				string_append(&reply, *config);
+				string_append(&reply, "%s", *config);
 				syscall_free(config);
 			}
 

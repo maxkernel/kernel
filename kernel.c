@@ -231,7 +231,7 @@ String kernel_logformat(Level level, const char * domain, uint64_t milliseconds,
 	else if ((level & LEVEL_INFO) > 0)		levelstr = "Info";
 	else if ((level & LEVEL_DEBUG) > 0)		levelstr = "Debug";
 
-	return string_new("%s (%-5s) %lld - %s\n", domain, levelstr, milliseconds, message);
+	return string_new("%s (%-5s) %" PRIu64 " - %s\n", domain, levelstr, milliseconds, message);
 }
 
 /*---------------- KOBJECT FUNCTIONS --------------------*/

@@ -613,7 +613,7 @@ static int l_newsyscall(lua_State * L)
 	while (inputs[i] != NULL)
 	{
 		const char * idesc = inputs[i]->input->desc;
-		g_string_append_printf(desc, " P%d (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), idesc != NULL? idesc : "(no desc)");
+		g_string_append_printf(desc, " P%zu (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), idesc != NULL? idesc : "(no desc)");
 		i++;
 	}
 

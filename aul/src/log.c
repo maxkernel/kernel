@@ -135,7 +135,7 @@ struct log_file
 
 static void log_print(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
-	fprintf(stdout, "%s (%-5s) %lld - %s\n", domain, level2string(level), milliseconds, message);
+	fprintf(stdout, "%s (%-5s) %" PRIu64 " - %s\n", domain, level2string(level), milliseconds, message);
 }
 
 static void log_filewrite(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
@@ -147,7 +147,7 @@ static void log_filewrite(Level level, const char * domain, uint64_t millisecond
 		return;
 	}
 
-	String buf = string_new("<%s, %s, %lld> %s\n", domain, level2string(level), milliseconds, message);
+	String buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
 	ssize_t wrote = write(data->fd, buf.string, buf.length);
 
 	if (wrote == -1)

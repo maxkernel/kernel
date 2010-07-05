@@ -23,7 +23,7 @@ static void syscallblock_dosyscall(void * object, ...)
 	while (*sig != '\0')
 	{
 		string_clear(&pname);
-		string_append(&pname, "p%d", sigi+1);
+		string_append(&pname, "p%zu", sigi+1);
 
 		switch (*sig)
 		{
@@ -111,7 +111,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		for(; params[i] != NULL; i++)
 		{
 			string_clear(&pname);
-			string_append(&pname, "p%d", i+1);
+			string_append(&pname, "p%zu", i+1);
 
 			bio_t * out = malloc0(sizeof(bio_t));
 			out->block = blk;
@@ -136,7 +136,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		for (; params[i] != NULL; i++)
 		{
 			string_clear(&pname);
-			string_append(&pname, "p%d", i+1);
+			string_append(&pname, "p%zu", i+1);
 			io_route(g_hash_table_lookup(sb->block_inst->outputs_inst, pname.string), params[i]);
 		}
 	}

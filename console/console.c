@@ -206,7 +206,7 @@ static boolean console_newunixclient(int fd, fdcond_t condition, void * userdata
 static boolean console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 {
 	struct sockaddr_in addr;
-	size_t size = sizeof(addr);
+	socklen_t size = sizeof(addr);
 
 	int client = accept(fd, (struct sockaddr *)&addr, &size);
 	if (client == -1)

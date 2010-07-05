@@ -33,6 +33,8 @@ typedef int boolean;
 #define LIKELY(x)       __builtin_expect(!!(x), 1)
 #define UNLIKELY(x)     __builtin_expect(!!(x), 0)
 
+#define CHECK_PRINTF(fmt_arg, arg1)		__attribute__((format (printf, fmt_arg, arg1)))
+
 
 #define ZERO(x)			memset(&(x), 0, sizeof(x))
 #define PZERO(x, size)	memset(x, 0, size)

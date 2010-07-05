@@ -3,7 +3,7 @@
 
 debug("Control has been passed to Lua")
 
-path=path .. ":/home/dklofas/projects/maxkernel/src/miscserver:/home/dklofas/projects/maxkernel/src/videotools:/home/dklofas/projects/maxkernel/src/jpegcompress:/home/dklofas/projects/maxkernel/src/x264compress:/home/dklofas/projects/maxkernel/src/nimu:/home/dklofas/projects/maxkernel/src/network"
+path=path .. ":/home/dklofas/Projects/maxkernel/src/miscserver:/home/dklofas/Projects/maxkernel/src/videotools:/home/dklofas/Projects/maxkernel/src/jpegcompress:/home/dklofas/Projects/maxkernel/src/x264compress:/home/dklofas/Projects/maxkernel/src/nimu:/home/dklofas/Projects/maxkernel/src/network"
 
 
 

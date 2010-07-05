@@ -159,7 +159,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 static boolean tcp_newclient(int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
-	size_t socklen = sizeof(addr);
+	socklen_t socklen = sizeof(addr);
 	int sock = accept(fd, (struct sockaddr *)&addr, &socklen);
 	if (sock == -1)
 	{

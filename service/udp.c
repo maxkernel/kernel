@@ -30,7 +30,7 @@ static void udp_send(stream_t * data, packet_t * packet)
 static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
-	size_t addrlen = sizeof(addr);
+	socklen_t addrlen = sizeof(addr);
 
 	packet_t packet;
 
