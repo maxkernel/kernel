@@ -32,7 +32,7 @@ void log_addlistener(log_f listener, logclose_f closer, void * userdata);
 void log_removelistener(log_f listener);
 void log_setdefault(log_f listener, logclose_f closer, void * userdata);
 
-static inline void log_write(Level level, const char * domain, const char * fmt, ...)
+static inline CHECK_PRINTF(3, 4) void log_write(Level level, const char * domain, const char * fmt, ...)
 {
 #if !defined(ALPHA) && !defined(BETA)
 	if (level == LEVEL_DEBUG)
@@ -40,6 +40,7 @@ static inline void log_write(Level level, const char * domain, const char * fmt,
 		return;
 	}
 #endif
+
 	va_list args;
 	va_start(args, fmt);
 	log_dispatch(level, domain, fmt, args);

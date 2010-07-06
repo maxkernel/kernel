@@ -15,7 +15,7 @@ extern "C" {
 
 #define AUL_MAINLOOP_TIMEOUT_US		10000
 #define AUL_MAINLOOP_SLEEP_US		100
-#define AUL_NANOS_PER_SEC			1000000000LL
+#define AUL_NANOS_PER_SEC		1000000000LL
 
 typedef enum
 {

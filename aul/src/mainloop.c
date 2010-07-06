@@ -273,7 +273,7 @@ static boolean mainloop_timerdispatch(int fd, fdcond_t cond, void * userdata)
 
 	if (timeouts > 1)
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Timer %s has been unsynchronized. It has fired %lld times without being dispatched!", tm->name, timeouts);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Timer %s has been unsynchronized. It has fired %" PRIu64 " times without being dispatched!", tm->name, timeouts);
 	}
 
 

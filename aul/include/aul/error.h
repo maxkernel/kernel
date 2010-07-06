@@ -16,10 +16,9 @@ typedef struct
 	String message;
 } Error;
 
-#define error_check(e)		(e != NULL && *e != NULL && error_isset(*e))
+#define error_check(e)		(e != NULL && *e != NULL && (*e)->code != 0)
 
 Error * error_new(int code, const char * fmt, ...);
-boolean error_isset(Error * err);
 void error_clear(Error * err);
 
 #define error_free(err)		FREE(err)

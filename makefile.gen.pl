@@ -19,7 +19,7 @@ print STDOUT <<END;
 TARGET		= $module.mo
 DEFINES		= $defines
 LINKFLAGS	= \$(shell pkg-config --libs glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --libs \$(PACKAGES)) \$(LINKOPTS)
-COMPILEFLAGS	= -pipe -ggdb3 -Wall -Iinclude -I.. -I../aul/include \$(DEFINES) -DMODULE \$(COMPILEOPTS) -fpic \$(shell pkg-config --cflags glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --cflags \$(PACKAGES))
+COMPILEFLAGS	= -pipe -ggdb3 -Wall -Iinclude -I.. -I../aul/include \$(DEFINES) -DMODULE \$(COMPILEOPTS) \$(foreach dep,\$(DEPENDS),-I../\$(dep)/include) -fpic \$(shell pkg-config --cflags glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --cflags \$(PACKAGES))
 
 
 all: \$(OBJECTS)

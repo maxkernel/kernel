@@ -17,11 +17,6 @@ Error * error_new(int code, const char * fmt, ...)
 	return err;
 }
 
-boolean error_isset(Error * err)
-{
-	return err->code != 0;
-}
-
 void error_clear(Error * err)
 {
 	err->code = 0;

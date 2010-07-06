@@ -1,4 +1,4 @@
-OBJECTS		= error.o log.o net.o string.o list.o mainloop.o
+OBJECTS		= error.o log.o net.o string.o list.o mainloop.o hashtable.o
 DEFINES		= -D_GNU_SOURCE
 
 LIBS		= -lrt -lz
