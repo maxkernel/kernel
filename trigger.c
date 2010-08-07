@@ -16,7 +16,7 @@
 #define VARCLOCK_BLK_NAME		"varclock"
 #define VARCLOCK_BLK_IO			"rate"
 
-#define TRUE_NAME				"true trigger"
+#define true_NAME				"true trigger"
 
 
 extern module_t * kernel_module;
@@ -55,7 +55,7 @@ void * trigger_new(const char * name, info_f info, destructor_f destructor, trig
 {
 	if (malloc_size < sizeof(trigger_f))
 	{
-		LOGK(LOG_FATAL, "Size of new trigger is too small: %d", malloc_size);
+		LOGK(LOG_FATAL, "Size of new trigger is too small: %zu", malloc_size);
 		//will exit
 	}
 
@@ -72,17 +72,17 @@ static char * trigger_infoclock(void * obj)
 	return strdup(str);
 }
 
-static boolean trigger_waitclock(void * object)
+static bool trigger_waitclock(void * object)
 {
 	trigger_clock_t * clk = object;
 
 	if (clk->interval_nsec == 0)
 	{
-		//trigger interval is 0 (never trigger), sleep max time and return FALSE
+		//trigger interval is 0 (never trigger), sleep max time and return false
 		struct timespec sleeptime = nanos2timespec(MAXIMUM_SLEEP_NANO);
 		nanosleep(&sleeptime, NULL);
 
-		return FALSE;
+		return false;
 	}
 
 
@@ -90,7 +90,7 @@ static boolean trigger_waitclock(void * object)
 	{
 		//clock hasn't been init yet
 		gettime(&clk->last_trigger);
-		return TRUE;
+		return true;
 	}
 
 	struct timespec now;
@@ -102,7 +102,7 @@ static boolean trigger_waitclock(void * object)
 	{
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
-			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %lld nanoseconds)", clk->kobject.obj_name, (diff - clk->interval_nsec));
+			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", clk->kobject.obj_name, (diff - clk->interval_nsec));
 			gettime(&clk->last_trigger);
 		}
 		else
@@ -110,7 +110,7 @@ static boolean trigger_waitclock(void * object)
 			addnanos(&clk->last_trigger, clk->interval_nsec);
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	uint64_t nanosleft = clk->interval_nsec - diff;
@@ -120,7 +120,7 @@ static boolean trigger_waitclock(void * object)
 		struct timespec sleeptime = nanos2timespec(MAXIMUM_SLEEP_NANO);
 		nanosleep(&sleeptime, NULL);
 
-		return FALSE;
+		return false;
 	}
 	else
 	{
@@ -128,7 +128,7 @@ static boolean trigger_waitclock(void * object)
 		nanosleep(&sleeptime, NULL);
 
 		addnanos(&clk->last_trigger, clk->interval_nsec);
-		return TRUE;
+		return true;
 	}
 
 
@@ -159,13 +159,13 @@ static boolean trigger_waitclock(void * object)
 			clk->next_trigger = NULL;
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	if (diff > MAXIMUM_SLEEP)
 	{
 		usleep(MAXIMUM_SLEEP);
-		return FALSE;
+		return false;
 	}
 
 	//if we're here, diff is less than MAXIMUM_SLEEP
@@ -176,7 +176,7 @@ static boolean trigger_waitclock(void * object)
 	long useconds = (long)(1.0 / clk->freq_hz * 1000000.0);
 	g_time_val_add(clk->next_trigger, useconds);
 */
-//	return TRUE;
+//	return true;
 }
 
 trigger_t * trigger_newclock(const char * name, double freq_hz)
@@ -195,7 +195,7 @@ static char * trigger_infovarclock(void * obj)
 	return g_strdup(str);
 }
 
-static boolean trigger_waitvarclock(void * object)
+static bool trigger_waitvarclock(void * object)
 {
 	trigger_varclock_t * clk = object;
 
@@ -215,7 +215,7 @@ static boolean trigger_waitvarclock(void * object)
 		if (diff > clk->interval_nsec)
 		{
 			memcpy(&clk->last_trigger, &now, sizeof(struct timespec));
-			return TRUE;
+			return true;
 		}
 	}
 
@@ -236,7 +236,7 @@ static boolean trigger_waitvarclock(void * object)
 		clk->next_trigger = NULL;
 
 		usleep(MAXIMUM_SLEEP);
-		return FALSE;
+		return false;
 	}
 
 	if (clk->next_trigger == NULL)
@@ -245,7 +245,7 @@ static boolean trigger_waitvarclock(void * object)
 		clk->freq_hz = new_freq_hz;
 
 		//update the io
-		io_dooutput(clk->block_inst, VARCLOCK_IO, &clk->freq_hz, TRUE);
+		io_dooutput(clk->block_inst, VARCLOCK_IO, &clk->freq_hz, true);
 		io_afterblock(clk->block_inst);
 
 		return trigger_waitclock(object);
@@ -265,7 +265,7 @@ static boolean trigger_waitvarclock(void * object)
 		clk->freq_hz = new_freq_hz;
 
 		//update the io
-		io_dooutput(clk->block_inst, VARCLOCK_IO, &clk->freq_hz, TRUE);
+		io_dooutput(clk->block_inst, VARCLOCK_IO, &clk->freq_hz, true);
 		io_afterblock(clk->block_inst);
 
 		GTimeVal * now = g_malloc0(sizeof(GTimeVal));
@@ -279,7 +279,7 @@ static boolean trigger_waitvarclock(void * object)
 			g_free(clk->next_trigger);
 			clk->next_trigger = now;
 
-			return TRUE;
+			return true;
 		}
 		else
 		{
@@ -353,21 +353,21 @@ trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 	return (trigger_t *)clk;
 }
 
-/* ---------------------------- TRIGGER TRUE ------------------------------- */
+/* ---------------------------- TRIGGER true ------------------------------- */
 static char * trigger_infotrue(void * obj)
 {
 	char * str = "[PLACEHOLDER TRIGGER INFO]";
 	return strdup(str);
 }
 
-static boolean trigger_waittrue(void * object)
+static bool trigger_waittrue(void * object)
 {
-	return TRUE;
+	return true;
 }
 
 trigger_t * trigger_newtrue(const char * name)
 {
-	String str = string_new("%s " TRUE_NAME, name);
+	String str = string_new("%s " true_NAME, name);
 	trigger_t * trig = trigger_new(string_copy(&str), trigger_infotrue, NULL, trigger_waittrue, sizeof(trigger_t));
 	return trig;
 }

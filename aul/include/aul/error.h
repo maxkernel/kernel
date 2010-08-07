@@ -13,7 +13,8 @@ extern "C" {
 typedef struct
 {
 	int code;
-	String message;
+	const char * message;
+	String __message;
 } Error;
 
 #define error_check(e)		(e != NULL && *e != NULL && (*e)->code != 0)

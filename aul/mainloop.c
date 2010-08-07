@@ -80,7 +80,7 @@ void mainloop_run(mainloop_t * loop)
 
 
 	String loopname;
-	boolean isruning;
+	bool isruning;
 	int maxfd, numwatches;
 	fd_set readset, writeset, errorset;
 	struct timeval timeout;
@@ -88,7 +88,7 @@ void mainloop_run(mainloop_t * loop)
 	ZERO(loopname);
 
 	mutex_lock(&loop->runlock);
-	loop->running = TRUE;
+	loop->running = true;
 	string_append(&loopname, "%s", loop->name);
 	mutex_unlock(&loop->runlock);
 
@@ -170,7 +170,7 @@ void mainloop_stop(mainloop_t * loop)
 	if (loop == NULL)	loop = root;
 
 	mutex_lock(&loop->runlock);
-	loop->running = FALSE;
+	loop->running = false;
 	mutex_unlock(&loop->runlock);
 }
 
@@ -264,7 +264,7 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 
 
 
-static boolean mainloop_timerdispatch(int fd, fdcond_t cond, void * userdata)
+static bool mainloop_timerdispatch(int fd, fdcond_t cond, void * userdata)
 {
 	struct __timer * tm = userdata;
 

@@ -59,14 +59,14 @@ void service_freestream(stream_t * stream)
 			mutex_lock(&service->lock);
 			{
 				size_t i = 0;
-				boolean found = FALSE;
+				bool found = false;
 
 				for (; i<STREAMS_PER_SERVICE; i++)
 				{
 					if (service->streams[i] == stream)
 					{
 						service->streams[i] = NULL;
-						found = TRUE;
+						found = true;
 						break;
 					}
 				}
@@ -93,7 +93,7 @@ void service_freestream(stream_t * stream)
 		mutex_unlock(&client->lock);
 	}
 
-	stream->inuse = FALSE;
+	stream->inuse = false;
 }
 
 void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestroy_f destroy, size_t size)
@@ -111,7 +111,7 @@ void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestr
 			if (!item->inuse)
 			{
 				PZERO(item, size);
-				item->inuse = TRUE;
+				item->inuse = true;
 				item->protocol = protocol;
 				item->send = send;
 				item->destroy = destroy;
@@ -161,7 +161,7 @@ client_t * service_getclient(char * client_handle)
 			{
 				ZERO(clients[i]);
 				clients[i].timeout_us = kernel_timestamp();
-				clients[i].inuse = TRUE;
+				clients[i].inuse = true;
 				client = &clients[i];
 				break;
 			}
@@ -189,7 +189,7 @@ client_t * service_getclient(char * client_handle)
 }
 
 
-static boolean service_checktimeout(void * userdata)
+static bool service_checktimeout(void * userdata)
 {
 	GHashTableIter itr;
 	client_t * client = NULL;
@@ -214,7 +214,7 @@ static boolean service_checktimeout(void * userdata)
 						service_freestream(client->streams[i]);
 					}
 
-					client->inuse = FALSE;
+					client->inuse = false;
 				}
 				mutex_unlock(&client->lock);
 			}
@@ -223,7 +223,7 @@ static boolean service_checktimeout(void * userdata)
 
 	mutex_unlock(&servicelock);
 
-	return TRUE;
+	return true;
 }
 
 static void service_runloop()

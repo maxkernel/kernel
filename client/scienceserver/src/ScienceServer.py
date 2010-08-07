@@ -219,7 +219,7 @@ def handlerequest(conn, addr):
     proto = ""
     for v in d:
         g = re.match("^GET (.*) ((?:HTTP)|(?:TEXT)|(?:ATP)).*$", v)
-        h = re.match("^([a-zA-Z0-9\\-]+): (.*)$", v)
+        h = re.match("^([a-zA-Z0-9_\\-]+): (.*)$", v)
         if g:
             get = g.group(1)
             proto = g.group(2)

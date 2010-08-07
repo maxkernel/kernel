@@ -63,13 +63,13 @@ void service_dispatchdata(service_h service_handle, client_h client_handle, stre
 	mutex_lock(&service->lock);
 	{
 		size_t i;
-		boolean found = FALSE;
+		bool found = false;
 
 		for (i=0; i<STREAMS_PER_SERVICE; i++)
 		{
 			if (service->streams[i] == stream)
 			{
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}
@@ -123,14 +123,14 @@ void service_startstream(service_h service_handle, stream_h stream_handle)
 	mutex_lock(&service->lock);
 	{
 		size_t i;
-		boolean found = FALSE;
+		bool found = false;
 
 		for (i=0; i<STREAMS_PER_SERVICE; i++)
 		{
 			if (service->streams[i] == NULL)
 			{
 				service->streams[i] = stream;
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}
@@ -185,14 +185,14 @@ void service_stopstream(service_h service_handle, stream_h stream_handle)
 	mutex_lock(&service->lock);
 	{
 		size_t i;
-		boolean found = FALSE;
+		bool found = false;
 
 		for (i=0; i<STREAMS_PER_SERVICE; i++)
 		{
 			if (service->streams[i] == stream)
 			{
 				service->streams[i] = NULL;
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}
@@ -321,13 +321,13 @@ void service_writeclientdata(service_h service_handle, stream_h stream_handle, u
 
 	mutex_lock(&service->lock);
 	{
-		boolean found = FALSE;
+		bool found = false;
 		size_t i=0;
 		for (; i<STREAMS_PER_SERVICE; i++)
 		{
 			if (service->streams[i] != stream)
 			{
-				found = TRUE;
+				found = true;
 				break;
 			}
 		}

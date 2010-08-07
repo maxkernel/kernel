@@ -19,7 +19,6 @@ static regex_t get_match;
 static regex_t params_match;
 static regex_t header_match;
 
-
 typedef struct
 {
 	const char * uri;
@@ -32,7 +31,7 @@ typedef struct
 
 typedef struct
 {
-	boolean inuse;
+	bool inuse;
 	char buffer[BUFFER_LEN];
 	size_t length;
 
@@ -59,7 +58,7 @@ static inline String addr2string(uint32_t ip)
 	return string_new("%d.%d.%d.%d", a1, a2, a3, a4);
 }
 
-static boolean http_newdata(int fd, fdcond_t cond, void * userdata)
+static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 {
 	http_buffer * buffer = userdata;
 
@@ -78,8 +77,8 @@ static boolean http_newdata(int fd, fdcond_t cond, void * userdata)
 			if (regexec(&get_match, buffer->buffer, 3, match, 0) == 0)
 			{
 				// The browser is using GET. Gooood.
-				char request_uri[100] = {0};
-				memcpy(request_uri, buffer->buffer + match[1].rm_so, match[1].rm_eo - match[1].rm_so);
+				char request_uri[250] = {0};
+				memcpy(request_uri, buffer->buffer + match[1].rm_so, MIN(sizeof(request_uri) - 1, match[1].rm_eo - match[1].rm_so));
 
 				// Parse the GET parameters off the URI
 				hashtable_clear(&buffer->ctx->parameters);
@@ -91,7 +90,7 @@ static boolean http_newdata(int fd, fdcond_t cond, void * userdata)
 					size_t offset = 0;
 					while (regexec(&params_match, params + offset, 3, match, 0) == 0)
 					{
-						boolean atend = params[offset + match[0].rm_eo] == '\0';
+						bool atend = params[offset + match[0].rm_eo] == '\0';
 
 						char * key = params + offset + match[1].rm_so;
 						key[match[1].rm_eo - match[1].rm_so] = '\0';
@@ -178,16 +177,16 @@ static boolean http_newdata(int fd, fdcond_t cond, void * userdata)
 		else
 		{
 			// We only have some of the header... no matter, just return true and we'll get the rest on the next pass
-			return TRUE;
+			return true;
 		}
 	}
 
-	buffer->inuse = FALSE;
+	buffer->inuse = false;
 	close(fd);
-	return FALSE;
+	return false;
 }
 
-static boolean http_newclient(int fd, fdcond_t cond, void * userdata)
+static bool http_newclient(int fd, fdcond_t cond, void * userdata)
 {
 	http_context * ctx = userdata;
 
@@ -217,7 +216,7 @@ static boolean http_newclient(int fd, fdcond_t cond, void * userdata)
 		else
 		{
 			// Set up the buffer
-			buffer->inuse = TRUE;
+			buffer->inuse = true;
 			buffer->buffer[0] = '\0';
 			buffer->length = 0;
 			buffer->ctx = ctx;
@@ -228,7 +227,7 @@ static boolean http_newclient(int fd, fdcond_t cond, void * userdata)
 	}
 
 
-	return TRUE;
+	return true;
 }
 
 http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error)
@@ -271,7 +270,7 @@ void http_adduri(http_context * ctx, const char * uri, http_match match, http_ca
 	filt->callback = cb;
 	filt->userdata = userdata;
 
-	list_add(&filt->filter, &ctx->filters);
+	list_add_tail(&filt->filter, &ctx->filters);
 }
 
 void http_printf(http_connection * conn, const char * fmt, ...)

@@ -251,7 +251,7 @@ static int l_newblock(lua_State * L)
 					params[index] = v; \
 					break; }
 
-			__l_newblock_elem(T_BOOLEAN, boolean, "boolean", lua_toboolean)
+			__l_newblock_elem(T_BOOLEAN, bool, "boolean", lua_toboolean)
 			__l_newblock_elem(T_INTEGER, int, "integer", lua_tointeger)
 			__l_newblock_elem(T_DOUBLE, double, "double", lua_tonumber)
 			__l_newblock_elem(T_STRING, char *, "string", lua_tostring)
@@ -313,7 +313,7 @@ static int l_config__index(lua_State * L)
 					f(L, *(t2 *)cfg->variable);\
 					break;
 
-			__l_config__index_elem(T_BOOLEAN, boolean, lua_pushboolean)
+			__l_config__index_elem(T_BOOLEAN, bool, lua_pushboolean)
 			__l_config__index_elem(T_INTEGER, int, lua_pushinteger)
 			__l_config__index_elem(T_DOUBLE, double, lua_pushnumber)
 			__l_config__index_elem(T_STRING, char *, lua_pushstring)
@@ -619,7 +619,7 @@ static int l_newsyscall(lua_State * L)
 
 	syscallblock_t * sb = syscallblock_new(name, inputs, desc->str);
 
-	g_string_free(desc, TRUE);
+	g_string_free(desc, true);
 	g_free(inputs);
 
 	lua_newtable(L);
@@ -628,9 +628,9 @@ static int l_newsyscall(lua_State * L)
 	return 1;
 }
 
-boolean lua_execfile(const char * name)
+bool lua_execfile(const char * name)
 {
-	boolean ret = TRUE;
+	bool ret = true;
 	const char * filepath = resolvepath(name);
 	if (filepath == NULL)
 	{
@@ -663,7 +663,7 @@ boolean lua_execfile(const char * name)
 	{
 		LOGK(LOG_ERR, "Lua: %s", lua_tostring(L, -1));
 		lua_pop(L, 1);
-		ret = FALSE;
+		ret = false;
 	}
 
 	FREES(filepath);

@@ -45,7 +45,7 @@ static size_t io_size(bio_t * type)
 {
 	switch (type->sig)
 	{
-		case T_BOOLEAN:		return sizeof(boolean);
+		case T_BOOLEAN:		return sizeof(bool);
 		case T_INTEGER:		return sizeof(int);
 		case T_DOUBLE:		return sizeof(double);
 		case T_CHAR:		return sizeof(char);
@@ -151,7 +151,8 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 					atypes[i] = &t2; \
 					break;
 
-			__io_constructor_elem(T_BOOLEAN, ffi_type_uint)
+			// BOOL is 1 byte
+			__io_constructor_elem(T_BOOLEAN, ffi_type_uint8)
 			__io_constructor_elem(T_INTEGER, ffi_type_sint)
 			__io_constructor_elem(T_DOUBLE, ffi_type_double)
 			__io_constructor_elem(T_CHAR, ffi_type_uchar)
@@ -321,7 +322,7 @@ block_inst_t * io_getblockinst(const char * blkid)
 }
 */
 
-boolean io_route(boutput_inst_t * out, binput_inst_t * in)
+bool io_route(boutput_inst_t * out, binput_inst_t * in)
 {
 	if (out == NULL || in == NULL)
 	{
@@ -334,13 +335,13 @@ boolean io_route(boutput_inst_t * out, binput_inst_t * in)
 	if (in->src_inst != NULL)
 	{
 		LOGK(LOG_ERR, "Input %s in block %s in module %s has been double targeted (two outputs to one input)", in->input->name, in->block_inst->block->name, in->block_inst->block->module->path);
-		return FALSE;
+		return false;
 	}
 
 	blk_link_f link_func = io_linkfunc(out->output, in->input);
 	if (link_func == NULL)
 	{
-		return FALSE;
+		return false;
 	}
 
 	in->copy_func = link_func;
@@ -349,7 +350,7 @@ boolean io_route(boutput_inst_t * out, binput_inst_t * in)
 	out->links = list_append(out->links, in);
 	out->numlinks += 1;
 
-	return TRUE;
+	return true;
 }
 
 void io_beforeblock(block_inst_t * block)
@@ -388,8 +389,8 @@ void io_afterblock(block_inst_t * block)
 			out_inst->copybuf = out_inst->data;
 			out_inst->data = temp;
 
-			out_inst->data_modified = FALSE;
-			out_inst->copybuf_modified = TRUE;
+			out_inst->data_modified = false;
+			out_inst->copybuf_modified = true;
 		}
 	}
 
@@ -432,7 +433,7 @@ const void * io_input(const char * name)
 	return io_doinput(blk, name);
 }
 
-void io_dooutput(block_inst_t * blk, const char * name, const void * value, boolean docopy)
+void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool docopy)
 {
 	boutput_inst_t * out = g_hash_table_lookup(blk->outputs_inst, name);
 	if (out == NULL)
@@ -473,10 +474,10 @@ void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool
 		}
 	}
 
-	out->data_modified = TRUE;
+	out->data_modified = true;
 }
 
-void io_output(const char * name, const void * value, boolean docopy)
+void io_output(const char * name, const void * value, bool docopy)
 {
 	block_inst_t * blk = io_currentblockinst();
 	if (blk == NULL)
@@ -522,7 +523,7 @@ static void link_bufcopy(boutput_inst_t * out, binput_inst_t * in)
 			in->data = out->copybuf;
 			out->copybuf = temp;
 
-			out->copybuf_modified = FALSE;
+			out->copybuf_modified = false;
 		}
 	}
 	else

@@ -26,7 +26,7 @@ typedef void (*log_f)(Level level, const char * domain, uint64_t milliseconds, c
 typedef void (*logclose_f)(void * userdata);
 
 void log_destroy();
-boolean log_openfile(const char * path, Error ** err);
+bool log_openfile(const char * path, Error ** err);
 void log_dispatch(Level level, const char * domain, const char * fmt, va_list args);
 void log_addlistener(log_f listener, logclose_f closer, void * userdata);
 void log_removelistener(log_f listener);

@@ -31,12 +31,12 @@ typedef void (*blind_f)();
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
 typedef void (*calupdate_f)(const char * name, const char type, void * newvalue, void * target, const int justpreview);
-typedef boolean (*trigger_f)(void * object);
+typedef bool (*trigger_f)(void * object);
 typedef void * (*blk_constructor_f)();
 typedef void (*blk_onupdate_f)(void * userdata);
 typedef void (*blk_destroy_f)(void * userdata);
 typedef void (*blk_link_f)(struct __boutput_inst_t * output, struct __binput_inst_t * input);
-typedef boolean (*kthread_dotask_f)(struct __kthread_t * thread);
+typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
 
 
 typedef struct
@@ -228,8 +228,8 @@ typedef struct __boutput_inst_t
 	bio_t * output;
 	void * data;
 	void * copybuf;
-	boolean data_modified;
-	boolean copybuf_modified;
+	bool data_modified;
+	bool copybuf_modified;
 	List * links;
 	size_t numlinks;
 } boutput_inst_t;
@@ -256,8 +256,8 @@ typedef struct __kthread_t
 
 	pthread_t thread;
 	int priority;
-	volatile boolean running;
-	volatile boolean stop;
+	volatile bool running;
+	volatile bool stop;
 	trigger_t * trigger;
 	runnable_t * runnable;
 } kthread_t;
@@ -282,13 +282,13 @@ const char * getpath();
 const char * resolvepath(const char * name);
 meta_t * meta_parse(const char * path);
 module_t * module_get(const char * name);
-gboolean module_exists(const char * name);
+bool module_exists(const char * name);
 void module_init(const module_t * module);
 int module_compare(const void * a, const void * b);
 module_t * module_load(const char * name);
 void module_kernelinit();
 
-boolean lua_execfile(const char * name);
+bool lua_execfile(const char * name);
 
 void syscall_reg(syscall_t * syscall);
 syscall_t * syscall_get(const char * name);
@@ -302,7 +302,7 @@ block_inst_t * syscallblock_getblockinst(syscallblock_t * sb);
 void profile_init();
 void profile_addthreadrealtime(kthread_t * kth, uint64_t nanoseconds);
 void profile_addthreadcputime(kthread_t * kth, uint64_t nanoseconds);
-boolean profile_track(void * userdata);
+bool profile_track(void * userdata);
 #endif
 
 #define KTHREAD_SCHED		SCHED_RR
@@ -330,10 +330,10 @@ block_inst_t * io_newblock(block_t * blk, void ** args);
 void io_beforeblock(block_inst_t * block);
 void io_afterblock(block_inst_t * block);
 const void * io_doinput(block_inst_t * blk, const char * name);
-void io_dooutput(block_inst_t * blk, const char * name, const void * value, boolean docopy);
+void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool docopy);
 
 void io_newcomplete(block_inst_t * inst);
-boolean io_route(boutput_inst_t * out, binput_inst_t * in);
+bool io_route(boutput_inst_t * out, binput_inst_t * in);
 
 cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname);
 void cfg_setparam(const gchar * modname, const gchar * cfgname, const gchar * value);

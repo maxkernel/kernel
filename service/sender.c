@@ -18,7 +18,7 @@ typedef struct
 } packetbuf_t;
 
 
-static boolean stop = FALSE;
+static bool stop = false;
 static packetbuf_t packets[SERVICE_PACKETS_MAX];
 
 static struct list_head packets_queue;
@@ -180,7 +180,7 @@ void send_startthread(void * userdata)
 
 void send_stopthread(void * userdata)
 {
-	stop = TRUE;
+	stop = true;
 
 	mutex_lock(&listlock);
 	{

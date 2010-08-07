@@ -1,12 +1,12 @@
 #include <string.h>
 
 #include <kernel.h>
-#include <serial.h>
+#include <aul/serial.h>
+#include <aul/mainloop.h>
 
 MOD_VERSION("0.9");
 MOD_AUTHOR("Andrew Klofas <andrew.klofas@senseta.com> and Jacques Dolan <jacques.dolan@gmail.com>");
 MOD_DESCRIPTION("Module connects to a USB Memsense nIMU");
-MOD_DEPENDENCY( "serial" );
 MOD_INIT(module_init);
 
 static int fd = 0;
@@ -18,16 +18,18 @@ CFG_PARAM(serial_port, "s", "Serial port of the Memsense nIMU");
 
 static char buffer[250];
 static size_t bufi = 0;
-static boolean nimu_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
+static bool nimu_newdata(int fd, fdcond_t condition, void * userdata)
 {
+	/*
 	size_t read = 0;
 
 	GIOStatus status = g_io_channel_read_chars(gio, buffer + bufi, sizeof(buffer) - bufi, &read, NULL);
 	if (status != G_IO_STATUS_NORMAL)
 	{
 		LOG(LOG_INFO, "NIMU DISCONNECT");
-		return FALSE;
+		return false;
 	}
+	*/
 
 	/*
 	LOG(LOG_INFO, "READ %d, ON %d, PACKET %d", read, bufi, (size_t) buffer[4] & 0xFF);
@@ -58,12 +60,13 @@ static boolean nimu_newdata(GIOChannel * gio, GIOCondition condition, void * emp
 	}
 	*/
 
-	LOG(LOG_INFO, "Read %d", read);
+	//LOG(LOG_INFO, "Read %zu", read);
 
 
-	return TRUE;
+	return true;
 }
 
 void module_init() {
-	fd = serial_open_bin(serial_port, B115200, nimu_newdata);
+	fd = serial_open(serial_port, B115200);
+	mainloop_addwatch(NULL, fd, FD_READ, nimu_newdata, NULL);
 }

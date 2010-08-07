@@ -10,7 +10,7 @@ static char path[PATH_MAX_SIZE] = {0};
 
 static GRegex * meta_regex = NULL;
 
-static boolean file_exists(const char * path)
+static bool file_exists(const char * path)
 {
 	struct stat buf;
 	int i = stat(path, &buf);

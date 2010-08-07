@@ -34,7 +34,7 @@ double property_get_d(const char * name)
 	return g_strtod(property_get(name), NULL);
 }
 
-boolean property_isset(const char * name)
+bool property_isset(const char * name)
 {
 	return property_get(name) != NULL;
 }

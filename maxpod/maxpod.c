@@ -29,9 +29,9 @@ int rear_channel				= 3;
 int pan_channel					= 4;
 int tilt_channel				= 5;
 
-boolean enable_antiroll = TRUE;
-boolean enable_slowreverse = TRUE;
-boolean enable_directiontoggle = TRUE;
+bool enable_antiroll = true;
+bool enable_slowreverse = true;
+bool enable_directiontoggle = true;
 
 //static functions
 static void setmaps();
@@ -165,7 +165,7 @@ static void pod_heartbeat(void * userdata)
 		}
 		else
 		{
-			*pod_alive = FALSE;
+			*pod_alive = false;
 		}
 	}
 */
@@ -199,9 +199,9 @@ static void pod_sendecho(int refresh)
 }
 */
 
-static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
+static bool pod_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
 {
-	static boolean pod_initial_response; /* FALSE */
+	static bool pod_initial_response; /* false */
 
 	char d;
 	size_t read;
@@ -211,7 +211,7 @@ static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empt
 	{
 		//end stream!
 		LOG(LOG_WARN, "End of stream reached in MaxPOD serial port %s", serial_port);
-		return FALSE;
+		return false;
 	}
 	g_queue_push_tail(&data, (void *)(int)d);
 
@@ -234,7 +234,7 @@ static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empt
 		if (packet[0] != STX || packet[5] != ETX)
 		{
 			if (!pod_initial_response)
-				return TRUE;
+				return true;
 
 			//frame error
 			LOG(LOG_WARN, "Frame error in MaxPOD");
@@ -248,7 +248,7 @@ static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empt
 			pod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
 		}
 
-		pod_initial_response = TRUE;
+		pod_initial_response = true;
 
 		switch (packet[3])
 		{
@@ -256,8 +256,8 @@ static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empt
 			{
 				/*
 				if (pod_alive == NULL)
-					pod_alive = g_malloc(sizeof(boolean));
-				*pod_alive = TRUE;
+					pod_alive = g_malloc(sizeof(bool));
+				*pod_alive = true;
 				*/
 
 				break;
@@ -287,7 +287,7 @@ static boolean pod_newdata(GIOChannel * gio, GIOCondition condition, void * empt
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 /* -------- SYSCALLS ------------------*/
@@ -478,7 +478,7 @@ void pod_updatecal(const char * name, const char type, void * newvalue, void * t
 			if (motor_preview_thread == NULL)
 			{
 				GError * err = NULL;
-				g_thread_create(pod_updatecal_motor, NULL, FALSE, &err);
+				g_thread_create(pod_updatecal_motor, NULL, false, &err);
 				if (err != NULL)
 				{
 					LOG(LOG_WARN, "Error while creating motor preview thread: %s", err->message);

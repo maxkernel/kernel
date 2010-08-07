@@ -31,6 +31,7 @@ DEP="
 linux-rt
 acpid
 build-essential
+xutils-dev
 yasm
 gdb
 openssh-server

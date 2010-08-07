@@ -151,7 +151,7 @@ static void webcam_unmap(webcam_t * webcam)
 }
 */
 
-static boolean webcam_init(webcam_t * webcam)
+static bool webcam_init(webcam_t * webcam)
 {
 	struct v4l2_capability cap;
 	struct v4l2_format fmt;
@@ -159,21 +159,21 @@ static boolean webcam_init(webcam_t * webcam)
 	if (xioctl(webcam->fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
 			LOG(LOG_ERR, "Webcam: %s is not a V4L2 device", webcam->path);
-			return FALSE;
+			return false;
 		} else {
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QUERYCAP on %s: %s", webcam->path, strerror(errno));
-			return FALSE;
+			return false;
 		}
 	}
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 		LOG(LOG_ERR, "Webcam: %s is not a video capture device", webcam->path);
-		return FALSE;
+		return false;
 	}
 
 	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
 		LOG(LOG_ERR, "Webcam: %s does not support streaming I/O", webcam->path);
-		return FALSE;
+		return false;
 	}
 
 
@@ -187,7 +187,7 @@ static boolean webcam_init(webcam_t * webcam)
 	if (xioctl(webcam->fd, VIDIOC_S_FMT, &fmt) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not set video parameters (%dx%d, %s) on %s: %s", webcam->width, webcam->height, webcam->format_str, webcam->path, strerror(errno));
-		return FALSE;
+		return false;
 	}
 
 	webcam->width = fmt.fmt.pix.width;
@@ -197,10 +197,10 @@ static boolean webcam_init(webcam_t * webcam)
 
 
 
-	return TRUE;
+	return true;
 }
 
-static boolean webcam_start(webcam_t * webcam)
+static bool webcam_start(webcam_t * webcam)
 {
 	//Initialize memmap
 	struct v4l2_requestbuffers req;
@@ -212,22 +212,22 @@ static boolean webcam_start(webcam_t * webcam)
 	if (xioctl(webcam->fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
 			LOG(LOG_ERR, "Webcam: %s does not support memory mapping", webcam->path);
-			return FALSE;
+			return false;
 		} else {
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_REQBUFS on %s: %s", webcam->path, strerror(errno));
-			return FALSE;
+			return false;
 		}
 	}
 
 	if (req.count != NUM_BUFFERS) {
 		LOG(LOG_ERR, "Webcam: Insufficient buffer memory on %s. Requested %d, got %d", webcam->path, NUM_BUFFERS, req.count);
-		return FALSE;
+		return false;
 	}
 
 	webcam->buffers = g_malloc0(sizeof(videobuffer_t) * req.count);
 	if (!webcam->buffers) {
 		LOG(LOG_ERR, "Webcam: Out of buffer memory");
-		return FALSE;
+		return false;
 	}
 
 	for (webcam->n_buffers = 0; webcam->n_buffers < req.count; webcam->n_buffers++) {
@@ -241,7 +241,7 @@ static boolean webcam_start(webcam_t * webcam)
 		if (xioctl(webcam->fd, VIDIOC_QUERYBUF, &buf) == -1)
 		{
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QUERYBUF on %s: %s", webcam->path, strerror(errno));
-			return FALSE;
+			return false;
 		}
 
 		webcam->buffers[webcam->n_buffers].length = buf.length;
@@ -251,7 +251,7 @@ static boolean webcam_start(webcam_t * webcam)
 		{
 			LOG(LOG_ERR, "Webcam: Could not mmap buffers on %s: %s", webcam->path, strerror(errno));
 			webcam->buffers[webcam->n_buffers].start = 0;
-			return FALSE;
+			return false;
 		}
 	}
 
@@ -268,7 +268,7 @@ static boolean webcam_start(webcam_t * webcam)
 		if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 		{
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF on %s: %s", webcam->path, strerror(errno));
-			return FALSE;
+			return false;
 		}
 	}
 
@@ -276,19 +276,19 @@ static boolean webcam_start(webcam_t * webcam)
 	if (xioctl(webcam->fd, VIDIOC_STREAMON, &type) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_STREAMON on %s: %s", webcam->path, strerror(errno));
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
-static boolean webcam_stop(webcam_t * webcam)
+static bool webcam_stop(webcam_t * webcam)
 {
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (xioctl(webcam->fd, VIDIOC_STREAMOFF, &type) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_STREAMOFF on %s: %s", webcam->path, strerror(errno));
-		return FALSE;
+		return false;
 	}
 
 	if (webcam->buffers != NULL)
@@ -298,14 +298,14 @@ static boolean webcam_stop(webcam_t * webcam)
 		{
 			if (munmap(webcam->buffers[i].start, webcam->buffers[i].length) == -1)
 			{
-				LOG(LOG_ERR, "Webcam: could not munmap buffer %d on %s", i, webcam->path);
+				LOG(LOG_ERR, "Webcam: could not munmap buffer %zu on %s", i, webcam->path);
 			}
 		}
 		g_free(webcam->buffers);
 		webcam->buffers = NULL;
 	}
 
-	return TRUE;
+	return true;
 }
 
 static buffer_t webcam_readframe(webcam_t * webcam)

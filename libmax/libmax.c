@@ -137,7 +137,7 @@ int max_asyscall(maxhandle_t * hand, const char * syscall, const char * signatur
 						*(t2 *)return_value = *(t2 *)buffer_data(params); \
 						break; }
 
-				__max_asyscall_elem(T_BOOLEAN, boolean)
+				__max_asyscall_elem(T_BOOLEAN, bool)
 				__max_asyscall_elem(T_INTEGER, int)
 				__max_asyscall_elem(T_DOUBLE, double)
 				__max_asyscall_elem(T_CHAR, char)

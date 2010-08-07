@@ -94,7 +94,7 @@ static void s_log_write(Level level, const char * domain, uint64_t milliseconds,
 		return;
 	}
 
-	boolean * ld = userdata;
+	bool * ld = userdata;
 	if (*ld)
 	{
 		//log has been disabled
@@ -102,12 +102,12 @@ static void s_log_write(Level level, const char * domain, uint64_t milliseconds,
 	}
 
 	//disable the log to prevent recusion on logged errors
-	*ld = TRUE;
+	*ld = true;
 	{
 		String msg = kernel_logformat(level, domain, milliseconds, message);
 		service_writedata(S_LOG_HANDLE, kernel_timestamp(), msg.string, msg.length);
 	}
-	*ld = FALSE;
+	*ld = false;
 }
 
 static void s_log_close(void * userdata)
@@ -123,7 +123,7 @@ void service_default_init()
 	service_register(S_ECHO_HANDLE, "Echo data util", RAW, NULL, "Echo data back to client", NULL, NULL, s_echo_userdata);
 	service_register(S_LOG_HANDLE, "Log messages", TXT, NULL, "Send log messages to client", s_log_newconnect, NULL, NULL);
 
-	boolean * ld = malloc0(sizeof(boolean));
+	bool * ld = malloc0(sizeof(bool));
 	log_addlistener(s_log_write, s_log_close, ld);
 }
 

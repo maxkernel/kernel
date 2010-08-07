@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <glib.h>
 
@@ -62,7 +63,7 @@ const gchar * type(gchar t)
 		case T_DOUBLE:			return "number";
 		case T_CHAR:			return "character";
 		case T_STRING:			return "string";
-		case T_ARRAY_BOOLEAN:	return "boolean array";
+		case T_ARRAY_BOOLEAN:	return "bool array";
 		case T_ARRAY_INTEGER:	return "integer array";
 		case T_ARRAY_DOUBLE:	return "number array";
 		case T_BUFFER:			return "buffer";
@@ -77,7 +78,7 @@ static int l_syscall(lua_State * L)
 	maxhandle_t * handle = lua_touserdata(L, lua_upvalueindex(3));
 
 	//get return type
-	gboolean free_ret;
+	bool free_ret;
 	gpointer ret;
 	switch (sig[0])
 	{
@@ -87,16 +88,16 @@ static int l_syscall(lua_State * L)
 				free_ret = b; \
 				break;
 
-		__syscall_elem1(T_BOOLEAN, gboolean, FALSE)
-		__syscall_elem1(T_INTEGER, gint, FALSE)
-		__syscall_elem1(T_DOUBLE, gdouble, FALSE)
-		__syscall_elem1(T_CHAR, gchar, FALSE)
-		__syscall_elem1(T_STRING, gchar *, TRUE)
+		__syscall_elem1(T_BOOLEAN, bool, false)
+		__syscall_elem1(T_INTEGER, gint, false)
+		__syscall_elem1(T_DOUBLE, gdouble, false)
+		__syscall_elem1(T_CHAR, gchar, false)
+		__syscall_elem1(T_STRING, gchar *, true)
 
 		case T_VOID:
 		case ':':
 			ret = NULL;
-			free_ret = FALSE;
+			free_ret = false;
 			break;
 
 		case T_ARRAY_BOOLEAN:
@@ -132,7 +133,7 @@ static int l_syscall(lua_State * L)
 					g_ptr_array_add(args, v); \
 					break; }
 
-			__syscall_elem2(T_BOOLEAN, gboolean, lua_toboolean(L, i))
+			__syscall_elem2(T_BOOLEAN, bool, lua_toboolean(L, i))
 			__syscall_elem2(T_INTEGER, gint, lua_tointeger(L, i))
 			__syscall_elem2(T_DOUBLE, gdouble, (gdouble)lua_tonumber(L, i))
 			__syscall_elem2(T_CHAR, gchar, (gchar)lua_tointeger(L, i))
@@ -172,7 +173,7 @@ static int l_syscall(lua_State * L)
 					f(L, *(t2 *)ret); \
 					break;
 
-			__syscall_elem3(T_BOOLEAN, gboolean, lua_pushboolean)
+			__syscall_elem3(T_BOOLEAN, bool, lua_pushboolean)
 			__syscall_elem3(T_INTEGER, gint, lua_pushinteger)
 			__syscall_elem3(T_DOUBLE, gdouble, lua_pushnumber)
 			__syscall_elem3(T_STRING, gchar *, lua_pushstring)
@@ -200,7 +201,7 @@ static int l_syscall(lua_State * L)
 	i=0;
 	for (; i<args->len; i++)
 		g_free(args->pdata[i]);
-	g_ptr_array_free(args, TRUE);
+	g_ptr_array_free(args, true);
 
 	return 1;
 }

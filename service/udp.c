@@ -1,4 +1,4 @@
-//#include <errno.h>
+#include <errno.h>
 
 #include <aul/mainloop.h>
 #include <aul/net.h>
@@ -24,10 +24,14 @@ static void udp_send(stream_t * data, packet_t * packet)
 {
 	udpstream_t * stream = (udpstream_t *)data;
 	ssize_t s = sendto(stream->sockfd, packet->data.raw, packet->size, 0, &stream->addr, sizeof(struct sockaddr_in));
-	//LOG(LOG_INFO, "SENT %d bytes (%s)", s, packet->size, packet->data.header.frag_num, packet->data.header.frame_length, strerror(errno));
+
+	if (s <= 0)
+	{
+		LOG(LOG_WARN, "Error while sending UDP service packet to %s (error: %zd, reason: %s)", stream->stream.client->handle, s, strerror(errno));
+	}
 }
 
-static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
+static bool udp_newdata(int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t addrlen = sizeof(addr);
@@ -43,30 +47,30 @@ static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
 		if (packet.data.header.sync != PACKET_SYNC)
 		{
 			LOG(LOG_WARN, "Service client (?) has desynchronized (UDP)");
-			return TRUE;
+			return true;
 		}
 
 		if (packet.data.header.frame_length > SERVICE_FRAGSIZE)
 		{
 			//LOG(LOG_INFO, "SIZE=%d", packet.data.header.frame_length);
 			LOG(LOG_WARN, "Service client (?) packet size too big (UDP)");
-			return TRUE;
+			return true;
 		}
 
 		if (packet.size != (packet.data.header.frame_length + HEADER_LENGTH))
 		{
 			LOG(LOG_WARN, "Service client (?) invalid packet length (UDP)");
-			return TRUE;
+			return true;
 		}
 
 		client_t * client = service_getclient(packet.data.header.client_handle);
 		if (client == NULL)
 		{
 			//out of memory
-			return TRUE;
+			return true;
 		}
 
-		boolean iserror = FALSE;
+		bool iserror = false;
 		udpstream_t * stream = NULL;
 		mutex_lock(&client->lock);
 		{
@@ -76,7 +80,7 @@ static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
 				if (stream == NULL)
 				{
 					//out of memory
-					iserror = TRUE;
+					iserror = true;
 				}
 				else
 				{
@@ -100,7 +104,7 @@ static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
 					String real = addr2string(stream->addr.sin_addr.s_addr);
 					String spoof = addr2string(addr.sin_addr.s_addr);
 					LOG(LOG_WARN, "Service client (%s) with registered address (%s:%d) is trying to be spoofed by address (%s:%d)", client->handle, real.string, stream->addr.sin_port, spoof.string, addr.sin_port);
-					iserror = TRUE;
+					iserror = true;
 				}
 			}
 		}
@@ -113,7 +117,7 @@ static boolean udp_newdata(int fd, fdcond_t cond, void * userdata)
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 String udp_streamconfig()

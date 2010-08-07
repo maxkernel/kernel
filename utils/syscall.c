@@ -87,7 +87,7 @@ int main(int argc, char ** argv)
 		{
 			case T_BOOLEAN:
 			{
-				boolean * v = g_malloc(sizeof(boolean));
+				bool * v = g_malloc(sizeof(bool));
 				*v = atoi(argv[index + 2]);
 				g_ptr_array_add(args, v);
 				break;
@@ -149,7 +149,7 @@ int main(int argc, char ** argv)
 				ret = g_malloc(sizeof(t2)); \
 				break;
 
-		__ret_type(T_BOOLEAN, boolean)
+		__ret_type(T_BOOLEAN, bool)
 		__ret_type(T_INTEGER, int)
 		__ret_type(T_DOUBLE, double)
 		__ret_type(T_CHAR, char)
@@ -177,7 +177,7 @@ int main(int argc, char ** argv)
 	{
 		case T_BOOLEAN:
 		{
-			if (*(boolean *)ret)
+			if (*(bool *)ret)
 				g_print("true\n");
 			else
 				g_print("false\n");

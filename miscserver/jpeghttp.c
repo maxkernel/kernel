@@ -79,7 +79,7 @@ static void jpeghttp_destroy(void * object)
 	//mutex_free(server->mutex);
 }
 
-static boolean jpeghttp_clientdata(GIOChannel * gio, GIOCondition condition, void * data)
+static bool jpeghttp_clientdata(GIOChannel * gio, GIOCondition condition, void * data)
 {
 	client_t * client = data;
 	server_t * server = client->parent;
@@ -106,13 +106,13 @@ static boolean jpeghttp_clientdata(GIOChannel * gio, GIOCondition condition, voi
 
 		mutex_unlock(server->mutex);
 
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
-static boolean jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void * data)
+static bool jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void * data)
 {
 	server_t * server = data;
 
@@ -125,7 +125,7 @@ static boolean jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void
 		LOG(LOG_WARN, "Could not read new network socket");
 
 		server->socket = NULL;
-		return FALSE;
+		return false;
 	}
 
 	GIOChannel * sockchan = gnet_tcp_socket_get_io_channel(sock);
@@ -154,7 +154,7 @@ static boolean jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void
 	}
 	g_io_channel_flush(sockchan, NULL);
 
-	return TRUE;
+	return true;
 }
 
 void * jpeghttp_new(int port)
@@ -223,6 +223,6 @@ void jpeghttp_update(void * data)
 
 	mutex_unlock(server->mutex);
 
-	g_string_free(header, TRUE);
+	g_string_free(header, true);
 }
 

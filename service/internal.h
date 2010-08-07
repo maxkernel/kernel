@@ -72,7 +72,7 @@ typedef void (*pdestroy_f)(struct __stream_t * data);
 
 typedef struct __stream_t
 {
-	boolean inuse;
+	bool inuse;
 
 	char handle[HANDLE_MAXLEN];
 	protocol_t protocol;
@@ -127,7 +127,7 @@ typedef struct __service_t
 
 typedef struct __client_t
 {
-	boolean inuse;
+	bool inuse;
 	char handle[HANDLE_MAXLEN];
 
 	int64_t timeout_us;
@@ -161,9 +161,9 @@ void service_startstream(service_h service_handle, stream_h stream_handle);
 void service_stopstream(service_h service_handle, stream_h stream_handle);
 
 
-static inline boolean isunique(char * str, GHashTable * table)
+static inline bool isunique(char * str, GHashTable * table)
 {
-	boolean unique;
+	bool unique;
 
 	mutex_lock(&servicelock);
 	{

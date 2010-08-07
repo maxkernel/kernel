@@ -30,10 +30,10 @@ static void syscallblock_dosyscall(void * object, ...)
 			#define __sb_dosyscall_elem(t1, t2) \
 				case t1: {\
 					t2 v = va_arg(args, t2); \
-					io_dooutput(sb->block_inst, pname.string, &v, FALSE); \
+					io_dooutput(sb->block_inst, pname.string, &v, false); \
 					break; }
 
-			__sb_dosyscall_elem(T_BOOLEAN, boolean)
+			__sb_dosyscall_elem(T_BOOLEAN, int)
 			__sb_dosyscall_elem(T_INTEGER, int)
 			__sb_dosyscall_elem(T_DOUBLE, double)
 			__sb_dosyscall_elem(T_CHAR, int)

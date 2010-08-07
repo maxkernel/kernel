@@ -150,7 +150,7 @@ unsigned int hash_str(const void * key)
 	return DJBHash(k, strlen(k));
 }
 
-boolean hash_streq(const void * a, const void * b)
+bool hash_streq(const void * a, const void * b)
 {
 	const char * aa = a, * bb = b;
 	return strcmp(aa, bb) == 0;

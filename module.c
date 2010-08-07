@@ -47,7 +47,7 @@ static void module_destroy(void * object)
 	//do not dlclose module because that address space might still be in use
 }
 
-static boolean module_symbol(void * module, const char * name, void ** function_ptr)
+static bool module_symbol(void * module, const char * name, void ** function_ptr)
 {
 	void * fcn = *function_ptr = dlsym(module, name);
 	return fcn != NULL;
@@ -80,7 +80,7 @@ module_t * module_get(const char * name)
 	return module;
 }
 
-gboolean module_exists(const char * name)
+bool module_exists(const char * name)
 {
 	return module_get(name) != NULL;
 }
@@ -184,6 +184,7 @@ module_t * module_load(const char * name)
 		//call preactivate
 		if (module->preactivate != NULL)
 		{
+			LOG(LOG_DEBUG, "Calling registered pre-activation function on module %s", name);
 			module->preactivate();
 		}
 
@@ -323,7 +324,7 @@ module_t * module_load(const char * name)
 
 			trigger_t * trigger = trigger_newclock(name, clock->update_freq_hz);
 			runnable_t * runnable = exec_newfunction(name, updatefunc, NULL);
-			kthread_t * kth = kthread_new(g_string_free(namestr, FALSE), trigger, runnable, 0);
+			kthread_t * kth = kthread_new(g_string_free(namestr, false), trigger, runnable, 0);
 			kthread_schedule(kth);
 
 			next = next->next;
@@ -339,7 +340,7 @@ module_t * module_load(const char * name)
 			g_string_printf(obj_name, "%s:%s", module->kobject.obj_name, block->name);
 
 			block->module = module;
-			block->kobject.obj_name = g_string_free(obj_name, FALSE);
+			block->kobject.obj_name = g_string_free(obj_name, false);
 			block->kobject.info = io_blockinfo;
 			block->kobject.destructor = io_blockfree;
 
@@ -417,6 +418,7 @@ module_t * module_load(const char * name)
 		//call postactivate
 		if (module->postactivate != NULL)
 		{
+			LOG(LOG_DEBUG, "Calling registered post-activation function on module %s", name);
 			module->postactivate();
 		}
 

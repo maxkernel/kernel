@@ -4,22 +4,10 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#ifndef __BOOLEAN
-#define __BOOLEAN
-typedef int boolean;
-#endif
-
-#ifndef TRUE
-# define TRUE		1
-#endif
-
-#ifndef FALSE
-# define FALSE		0
 #endif
 
 #ifndef MICROS_PER_SECOND

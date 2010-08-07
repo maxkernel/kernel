@@ -64,7 +64,8 @@ void * asyscall_exec(const char * name, void ** args)
 		switch (method_returntype(syscall->sig))
 		{
 			case T_BOOLEAN:
-				rtype = &ffi_type_uint;		break;
+				// BOOL is 1 byte
+				rtype = &ffi_type_uint8;	break;
 			case T_INTEGER:
 				rtype = &ffi_type_sint;		break;
 			case T_DOUBLE:
@@ -97,7 +98,8 @@ void * asyscall_exec(const char * name, void ** args)
 				switch (*sig)
 				{
 					case T_BOOLEAN:
-						atype[sigi] = &ffi_type_uint;		break;
+						// BOOL is 1 byte
+						atype[sigi] = &ffi_type_uint8;		break;
 					case T_INTEGER:
 						atype[sigi] = &ffi_type_sint;		break;
 					case T_DOUBLE:
@@ -134,7 +136,7 @@ void * asyscall_exec(const char * name, void ** args)
 	switch (syscall->sig[0])
 	{
 		case T_BOOLEAN:
-			rsize = sizeof(boolean);	break;
+			rsize = sizeof(bool);		break;
 		case T_INTEGER:
 			rsize = sizeof(int);		break;
 		case T_DOUBLE:
@@ -200,7 +202,7 @@ void * vsyscall_exec(const char * name, va_list args)
 					g_ptr_array_add(pargs, (void *) el); \
 					break; }
 
-			__vsyscall_exec_element(T_BOOLEAN, boolean)
+			__vsyscall_exec_element(T_BOOLEAN, int)
 			__vsyscall_exec_element(T_INTEGER, int)
 			__vsyscall_exec_element(T_DOUBLE, double)
 			__vsyscall_exec_element(T_CHAR, int)
@@ -223,7 +225,7 @@ void * vsyscall_exec(const char * name, va_list args)
 	size_t i=0;
 	for (; i<pargs->len; i++)
 		g_free(pargs->pdata[i]);
-	g_ptr_array_free(pargs, TRUE);
+	g_ptr_array_free(pargs, true);
 	*/
 	
 	void ** params = vparam_pack(method_params(syscall->sig), args);
@@ -248,18 +250,18 @@ void syscall_free(void * p)
 	g_free(p);
 }
 
-boolean syscall_exists(const gchar * name, const gchar * sig)
+bool syscall_exists(const gchar * name, const gchar * sig)
 {
 	const syscall_t * syscall = syscall_get(name);
 	
 	if (syscall == NULL)
-		return FALSE;
+		return false;
 	
 	if (sig != NULL && strlen(sig) > 0)
 	{
 		return method_isequal(sig, syscall->sig);
 	}
 	else
-		return TRUE;
+		return true;
 }
 

@@ -36,7 +36,7 @@ static void tcp_send(stream_t * data, packet_t * packet)
 }
 
 
-static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
+static bool tcp_newdata(int fd, fdcond_t cond, void * userdata)
 {
 	tcpstream_t * data = userdata;
 
@@ -51,7 +51,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 		LOG(LOG_DEBUG, "Service client (%s) disconnected TCP%s", data->stream.client == NULL ? "?" : data->stream.client->handle, errstr.string);
 
 		service_freestream((stream_t *)data);
-		return FALSE;
+		return false;
 	}
 	data->packet.size += bytesread;
 
@@ -78,7 +78,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 		{
 			//we are still desync'd
 			data->packet.size = 0;
-			return TRUE;
+			return true;
 		}
 	}
 
@@ -90,7 +90,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 			LOG(LOG_WARN, "Service client '%s' has desynchronized (TCP)", data->stream.client == NULL ? "?" : data->stream.client->handle);
 
 			data->state = DESYNC;
-			return TRUE;
+			return true;
 		}
 
 		if (data->packet.data.header.frame_length > SERVICE_FRAGSIZE)
@@ -98,7 +98,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 			LOG(LOG_WARN, "Service client '%s' packet size too big (TCP)", data->stream.client == NULL ? "?" : data->stream.client->handle);
 
 			data->packet.size = 0;
-			return TRUE;
+			return true;
 		}
 
 		if (data->packet.size >= (data->packet.data.header.frame_length + HEADER_LENGTH))
@@ -114,16 +114,16 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 				{
 					//out of memory
 					service_freestream(&data->stream);
-					return FALSE;
+					return false;
 				}
 
-				boolean iserror = FALSE;
+				bool iserror = false;
 				mutex_lock(&client->lock);
 				{
 					if (client->streams[TCP] != NULL)
 					{
 						LOG(LOG_WARN, "Service client '%s' already has a TCP client", client->handle);
-						iserror = TRUE;
+						iserror = true;
 					}
 
 					client->streams[TCP] = (stream_t *)data;
@@ -133,7 +133,7 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 				if (iserror)
 				{
 					service_freestream(&data->stream);
-					return FALSE;
+					return false;
 				}
 
 				data->stream.client = client;
@@ -152,11 +152,11 @@ static boolean tcp_newdata(int fd, fdcond_t cond, void * userdata)
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 
-static boolean tcp_newclient(int fd, fdcond_t cond, void * userdata)
+static bool tcp_newclient(int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t socklen = sizeof(addr);
@@ -179,7 +179,7 @@ static boolean tcp_newclient(int fd, fdcond_t cond, void * userdata)
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 String tcp_streamconfig()

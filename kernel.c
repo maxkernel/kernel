@@ -293,7 +293,7 @@ static char * kthread_info(void * kthread)
 static void kthread_destroy(void * kthread)
 {
 	kthread_t * kth = kthread;
-	kth->stop = TRUE;
+	kth->stop = true;
 
 	if (kth->running && kth != kthread_self())
 	{
@@ -333,7 +333,7 @@ static void * kthread_dothread(void * object)
 	}
 
 	kth->thread = pthread_self();
-	kth->running = TRUE;
+	kth->running = true;
 	while (!kth->stop)
 	{
 		while (!kth->trigger->func(kth->trigger) && !kth->stop)
@@ -373,11 +373,11 @@ static void * kthread_dothread(void * object)
 		sched_yield();
 	}
 
-	kth->running = FALSE;
+	kth->running = false;
 	return NULL;
 }
 
-static boolean kthread_start(kthread_t * kth)
+static bool kthread_start(kthread_t * kth)
 {
 	pthread_t pthread;
 	int result = pthread_create(&pthread, NULL, kthread_dothread, kth);
@@ -385,10 +385,10 @@ static boolean kthread_start(kthread_t * kth)
 	if (result == -1)
 	{
 		LOGK(LOG_ERR, "Could not create new kernel thread: %s", strerror(result));
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
 void kthread_schedule(kthread_t * thread)
@@ -409,7 +409,7 @@ kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * run
 {
 	kthread_t * kth = kobj_new("Thread", name, kthread_info, kthread_destroy, sizeof(kthread_t));
 	kth->priority = priority;
-	kth->running = FALSE;
+	kth->running = false;
 	kth->trigger = trigger;
 	kth->runnable = runnable;
 
@@ -441,7 +441,7 @@ trigger_t * kthread_gettrigger(kthread_t * kth)
 	return kth->trigger;
 }
 
-static boolean kthread_dotasks(void * userdata)
+static bool kthread_dotasks(void * userdata)
 {
 	mutex_lock(&kthread_tasks_mutex);
 
@@ -459,7 +459,7 @@ static boolean kthread_dotasks(void * userdata)
 	}
 
 	mutex_unlock(&kthread_tasks_mutex);
-	return TRUE;
+	return true;
 }
 
 static void kthread_dosinglepass(void * userdata)
@@ -468,7 +468,7 @@ static void kthread_dosinglepass(void * userdata)
 	rfunc->dorunfunc(rfunc->userdata);
 
 	kthread_t * kth = kthread_self();
-	kth->stop = TRUE;
+	kth->stop = true;
 	FREE(rfunc);
 }
 
@@ -508,10 +508,10 @@ void kthread_newthread(const char * name, int priority, handler_f threadfunc, ha
 	kthread_schedule(kth);
 }
 
-boolean kthread_requeststop()
+bool kthread_requeststop()
 {
 	kthread_t * kth = kthread_self();
-	return kth == NULL? FALSE : kth->stop;
+	return kth == NULL? false : kth->stop;
 }
 
 /*---------------- KERN FUNCTIONS -----------------------*/
@@ -760,7 +760,7 @@ int main(int argc, char * argv[])
 	cfg_free(cfg);
 
 
-	//mainloop = g_main_loop_new(NULL, FALSE);
+	//mainloop = g_main_loop_new(NULL, false);
 	/*
 	{
 		//analyze inputs and outputs on all blocks and make sure everything is kosher
@@ -892,7 +892,7 @@ int main(int argc, char * argv[])
 			kthread_t * kth = next->data;
 
 			GError * err = NULL;
-			g_thread_create(kthread_dothread, kth, FALSE, &err);
+			g_thread_create(kthread_dothread, kth, false, &err);
 			if (err != NULL)
 			{
 				LOGK(LOG_FATAL, "Could not create new kernel thread: %s", err->message);
@@ -922,7 +922,7 @@ int main(int argc, char * argv[])
 	g_hash_table_iter_init(&itr, kthreads);
 	while (g_hash_table_iter_next(&itr, NULL, (void **)&kth))
 	{
-		kth->stop = TRUE;
+		kth->stop = true;
 		pthread_join(kth->thread, NULL);
 	}
 	*/

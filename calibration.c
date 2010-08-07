@@ -60,7 +60,7 @@ done:
 	if (value != NULL)
 		c = cal_make(type, value);
 	
-	g_string_free(query, TRUE);
+	g_string_free(query, true);
 	sqlite_finalize(vm, NULL);
 	
 	return c;
@@ -110,7 +110,7 @@ void cal_setparam(const char * module, const char * name, const char * value)
 
 	if (mod->calupdate != NULL)
 	{
-		mod->calupdate(name, cal->sig[0], pvalue, cal->active, TRUE);
+		mod->calupdate(name, cal->sig[0], pvalue, cal->active, true);
 	}
 }
 
@@ -128,7 +128,7 @@ void cal_merge(const char * comment)
 	while (next != NULL)
 	{
 		calentry_t * cal = next->data;
-		int changed = FALSE;
+		int changed = false;
 
 		if (cal->preview != NULL)
 		{
@@ -170,7 +170,7 @@ void cal_merge(const char * comment)
 
 			if (cal->module->calupdate != NULL)
 			{
-				cal->module->calupdate(cal->name, cal->sig[0], cal->preview, cal->active, FALSE);
+				cal->module->calupdate(cal->name, cal->sig[0], cal->preview, cal->active, false);
 			}
 			g_free(cal->preview);
 			cal->preview = NULL;

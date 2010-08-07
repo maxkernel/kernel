@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <aul/string.h>
+
 #include <kernel.h>
 #include <httpserver.h>
 
@@ -13,7 +15,7 @@
 #define T_CALGET_HEAD	"Cal.rownum=0;Cal.loading=true;Cal.calTab.removeAll();Cal.calTab.add(["
 #define T_CALGET_ITEM	"Cal.mkrow('%s', '%s', '%c', '%s', %lf, %lf, %lf, %lf),"
 #define T_CALGET_TAIL	"]);Cal.calTab.doLayout(false, true);Cal.loading=false;"
-#define T_CALSET		""
+#define T_CALSET		" "
 #define T_CALSAVE		"setTimeout(function(){Ext.getCmp('cal_comment').setValue('');Ext.MessageBox.hide();}, 900);"
 
 int port = 80;
@@ -26,19 +28,56 @@ MOD_DEPENDENCY("httpserver");
 
 static http_context * ctx;
 
+static inline double handle_calget__step(double stride)
+{
+	if (stride <= 100.0)			return 1.0;
+	else if (stride <= 1000.0)		return 10.0;
+	else if (stride <= 20000.0)		return 100.0;
+	else							return 1000.0;
+}
+
+static void handle_calget__itri(void * udata, char * module, char * name, char type, char * desc, int value, int min, int max)
+{
+	http_connection * conn = udata;
+	double stride = handle_calget__step(max-min);
+	http_printf(conn, T_CALGET_ITEM, module, name, type, desc, (double)value, (double)min, (double)max, stride);
+}
+
+static void handle_calget__itrd(void * udata, char * module, char * name, char type, char * desc, double value, double min, double max)
+{
+	http_connection * conn = udata;
+	double stride = handle_calget__step(max-min);
+	http_printf(conn, T_CALGET_ITEM, module, name, type, desc, value, min, max, stride);
+}
+
 static void handle_calget(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
 {
+	char * revert = hashtable_get(params, "revert");
+	if (revert != NULL && strcmp(revert, "1") == 0)
+	{
+		cal_revert();
+	}
 
+	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
+	http_printf(conn, T_CALGET_HEAD);
+
+	cal_iterate(handle_calget__itri, handle_calget__itrd, conn);
+
+	http_printf(conn, T_CALGET_TAIL);
 }
 
 static void handle_calset(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
 {
-
+	cal_setparam(hashtable_get(params, "module"), hashtable_get(params, "name"), hashtable_get(params, "value"));
+	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
+	http_printf(conn, T_CALSET);
 }
 
 static void handle_calsave(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
 {
-
+	cal_merge(hashtable_get(params, "comment"));
+	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
+	http_printf(conn, T_CALSAVE);
 }
 
 static void handle_root(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
@@ -53,18 +92,21 @@ static void handle_root(http_connection * conn, hashtable_t * headers, hashtable
 	String path = string_new("%s/%s%s", INSTALL, ROOT, uri);
 	if (stat(path.string, &statbuf) == -1 || !S_ISREG(statbuf.st_mode))
 	{
-		http_printf(conn, "HTTP/1.0 404 Not Found\r\n\r\n");
+		http_printf(conn, "HTTP/1.1 404 Not Found\r\n\r\n");
 		return;
 	}
 
 	int fp = open(path.string, O_RDONLY);
 	if (fp < 0)
 	{
-		http_printf(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
-					"<html><body><h1>Error: Could not open file %s</h1>"
-					"</body></html>", uri);
+		// We could stat the file but couldn't open it? How can this be?
+		http_printf(conn, "HTTP/1.1 500 Internal Server Error\r\n\r\n");
 		return;
 	}
+
+
+	// If we are this far, we are successful at opening file
+	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
 
 	ssize_t bytesread;
 	char buf[150];
@@ -81,7 +123,7 @@ void module_init()
 	ctx = http_new(port, NULL, &err);
 	if (err != NULL)
 	{
-		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message.string);
+		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message);
 		error_free(err);
 		return;
 	}

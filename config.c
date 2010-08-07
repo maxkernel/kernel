@@ -49,11 +49,11 @@ void cfg_setparam(const gchar * modname, const gchar * cfgname, const gchar * va
 				*(t2*)cfg->variable = t3; \
 				break; }
 
-		__cfg_setparam_element(T_BOOLEAN, gboolean, atoi(value))
-		__cfg_setparam_element(T_INTEGER, gint, atoi(value))
-		__cfg_setparam_element(T_DOUBLE, gdouble, g_strtod(value, NULL))
-		__cfg_setparam_element(T_CHAR, gchar, value[0])
-		__cfg_setparam_element(T_STRING, gchar*, g_strdup(value))
+		__cfg_setparam_element(T_BOOLEAN, bool, atoi(value))
+		__cfg_setparam_element(T_INTEGER, int, atoi(value))
+		__cfg_setparam_element(T_DOUBLE, double, g_strtod(value, NULL))
+		__cfg_setparam_element(T_CHAR, char, value[0])
+		__cfg_setparam_element(T_STRING, char *, g_strdup(value))
 
 		default:
 		{

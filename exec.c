@@ -90,7 +90,7 @@ void * exec_new(const char * name, info_f info, destructor_f destructor, handler
 {
 	if (malloc_size < sizeof(runnable_t))
 	{
-		LOGK(LOG_FATAL, "Runnable (runnable_t) size is too small: %d", malloc_size);
+		LOGK(LOG_FATAL, "Runnable (runnable_t) size is too small: %zu", malloc_size);
 		//will exit
 	}
 
@@ -179,7 +179,7 @@ runnable_t * exec_getcurrent()
 gboolean exec_isblockinst(exec_f * exec)
 {
 	if (exec == NULL)
-		return FALSE;
+		return false;
 
 	return *exec == exec_doblock;
 }

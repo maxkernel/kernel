@@ -36,7 +36,7 @@ static inline const char * level2string(Level level)
 	return levelstr;
 }
 
-static boolean file_exists(const char * path)
+static bool file_exists(const char * path)
 {
 	struct stat buf;
 	int i = stat(path, &buf);
@@ -64,13 +64,13 @@ static void move_archive(const char * prefix, int arnum)
 	rename(oldpath.string, newpath.string);
 }
 
-static boolean compress_archive(const char * prefix, int arnum)
+static bool compress_archive(const char * prefix, int arnum)
 {
 	String oldpath = string_new("%s.%d", prefix, arnum);
 	if (!file_exists(oldpath.string))
 	{
 		//nothing to do
-		return TRUE;
+		return true;
 	}
 	String newpath = string_new("%s.%d.gz", prefix, arnum+1);
 
@@ -81,7 +81,7 @@ static boolean compress_archive(const char * prefix, int arnum)
 
 		if (src == NULL || dest == NULL)
 		{
-			return FALSE;
+			return false;
 		}
 
 		unsigned char buf[ZLIB_BUFSIZE];
@@ -92,14 +92,14 @@ static boolean compress_archive(const char * prefix, int arnum)
 			{
 				fclose(src);
 				gzclose(dest);
-				return FALSE;
+				return false;
 			}
 
 			if (gzwrite(dest, buf, bytes) != bytes)
 			{
 				fclose(src);
 				gzclose(dest);
-				return FALSE;
+				return false;
 			}
 		} while (!feof(src));
 
@@ -109,7 +109,7 @@ static boolean compress_archive(const char * prefix, int arnum)
 	}
 
 	unlink(oldpath.string);
-	return TRUE;
+	return true;
 }
 
 static void archive(const char * path)
@@ -207,12 +207,12 @@ void log_destroy()
 	}
 }
 
-boolean log_openfile(const char * path, Error ** err)
+bool log_openfile(const char * path, Error ** err)
 {
 	if (error_check(err))
 	{
 		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function log_open");
-		return FALSE;
+		return false;
 	}
 	
 	int fd = FILEOPEN(path);
@@ -222,7 +222,7 @@ boolean log_openfile(const char * path, Error ** err)
 		{
 			*err = error_new(errno, strerror(errno));
 		}
-		return FALSE;
+		return false;
 	}
 	FILEOPENHEADER(fd);
 
@@ -232,7 +232,7 @@ boolean log_openfile(const char * path, Error ** err)
 	data->fd = fd;
 
 	log_addlistener(log_filewrite, log_fileclose, data);
-	return TRUE;
+	return true;
 }
 
 void log_dispatch(Level level, const char * domain, const char * fmt, va_list args)

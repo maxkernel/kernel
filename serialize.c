@@ -19,7 +19,7 @@ static size_t param_size(char type, void * data)
 		#define __deserialize_elem(t1, t2) \
 			case t1: return sizeof(t2);
 
-		__deserialize_elem(T_BOOLEAN, boolean)
+		__deserialize_elem(T_BOOLEAN, bool)
 		__deserialize_elem(T_INTEGER, int)
 		__deserialize_elem(T_DOUBLE, double)
 		__deserialize_elem(T_CHAR, char)
@@ -123,7 +123,7 @@ buffer_t aserialize(const char * sig, void ** args)
 	return buf;
 }
 
-boolean deserialize(const char * sig, void ** params, buffer_t buffer)
+bool deserialize(const char * sig, void ** params, buffer_t buffer)
 {
 	int sigi = 0, taili = strlen(sig);
 	char * data = buffer_data(buffer);
@@ -157,7 +157,7 @@ boolean deserialize(const char * sig, void ** params, buffer_t buffer)
 				#if defined(KERNEL)
 					LOG(LOG_WARN, "Invalid type '%c' in signature '%s'", sig[sigi], sig);
 				#endif
-				return FALSE;
+				return false;
 		}
 
 		if (data - (char *)buffer_data(buffer) > buffer_datasize(buffer))
@@ -165,11 +165,11 @@ boolean deserialize(const char * sig, void ** params, buffer_t buffer)
 			#if defined(KERNEL)
 				LOG(LOG_WARN, "Corrupt buffer");
 			#endif
-			return FALSE;
+			return false;
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 char method_returntype(const char * sig)
@@ -216,7 +216,7 @@ const char * method_params(const char * sig)
 }
 
 
-boolean method_isequal(const char * sig1, const char * sig2)
+bool method_isequal(const char * sig1, const char * sig2)
 {
 	return strcmp(method_params(sig1), method_params(sig2)) == 0 && method_returntype(sig1) == method_returntype(sig2);
 }
@@ -272,7 +272,7 @@ void ** vparam_pack(const char * sig, va_list args)
 	{
 		switch (sig[sigi])
 		{
-			case T_BOOLEAN:	len += sizeof(boolean);		break;
+			case T_BOOLEAN:	len += sizeof(bool);		break;
 			case T_INTEGER:	len += sizeof(int);			break;
 			case T_DOUBLE:	len += sizeof(double);		break;
 			case T_CHAR:	len += sizeof(char);		break;
@@ -308,9 +308,16 @@ void ** vparam_pack(const char * sig, va_list args)
 					taili += sizeof(t2); \
 					break; }
 
-			__vparam_pack_elem(T_BOOLEAN, boolean)
 			__vparam_pack_elem(T_INTEGER, int)
 			__vparam_pack_elem(T_DOUBLE, double)
+
+			case T_BOOLEAN:
+			{
+				bool v = (bool) va_arg(args, int);
+				*(bool *)(array[sigi] = (bool *)array+taili) = v;
+				taili += sizeof(bool);
+				break;
+			}
 
 			case T_CHAR:
 			{

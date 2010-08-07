@@ -58,7 +58,7 @@ static void console_replyclient(int fd, buffer_t reply)
 }
 
 
-static boolean console_clientdata(int fd, fdcond_t condition, void * userdata)
+static bool console_clientdata(int fd, fdcond_t condition, void * userdata)
 {
 	ssize_t bytesread;
 	size_t bufsize;
@@ -82,7 +82,7 @@ static boolean console_clientdata(int fd, fdcond_t condition, void * userdata)
 
 		//if read == 0, socket has closed
 		close(fd);
-		return FALSE;
+		return false;
 	}
 
 	//now receive the rest
@@ -92,7 +92,7 @@ static boolean console_clientdata(int fd, fdcond_t condition, void * userdata)
 	bytesread = recv(fd, buf + sizeof(size_t), bufsize - sizeof(size_t), MSG_WAITALL);
 	if (bytesread < bufsize - sizeof(size_t))
 	{
-		LOG(LOG_WARN, "Could not receive syscall buffer (read=%d, all=%d)", bytesread, bufsize - sizeof(size_t));
+		LOG(LOG_WARN, "Could not receive syscall buffer (read=%zd, all=%zu)", bytesread, bufsize - sizeof(size_t));
 		goto done;
 	}
 
@@ -184,10 +184,10 @@ done:
 	FREE(buf);
 	FREE(array);
 
-	return TRUE;
+	return true;
 }
 
-static boolean console_newunixclient(int fd, fdcond_t condition, void * userdata)
+static bool console_newunixclient(int fd, fdcond_t condition, void * userdata)
 {
 	int client = accept(fd, NULL, NULL);
 	if (client == -1)
@@ -200,10 +200,10 @@ static boolean console_newunixclient(int fd, fdcond_t condition, void * userdata
 		LOG(LOG_DEBUG, "New UNIX console client (%s)", CONSOLE_SOCKFILE);
 	}
 
-	return TRUE;
+	return true;
 }
 
-static boolean console_newtcpclient(int fd, fdcond_t condition, void * userdata)
+static bool console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t size = sizeof(addr);
@@ -220,7 +220,7 @@ static boolean console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 		LOG(LOG_DEBUG, "New TCP console client (%s)", str_addr.string);
 	}
 	
-	return TRUE;
+	return true;
 }
 
 void module_init()

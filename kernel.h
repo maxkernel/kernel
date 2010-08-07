@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <glib.h>
 #include <gmodule.h>
 
@@ -134,10 +135,10 @@ void kobj_destroy(kobject_t * object);
 #define KTH_PRIO_MAX			99
 void kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata);
 void kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata);
-boolean kthread_requeststop();
+bool kthread_requeststop();
 
 #define SYSCALL(name, ...) syscall_exec(name, ## __VA_ARGS__)
-boolean syscall_exists(const char * name, const char * sig);
+bool syscall_exists(const char * name, const char * sig);
 void * syscall_exec(const char * name, ...);
 void * vsyscall_exec(const char * name, va_list args);
 void * asyscall_exec(const char * name, void ** args);
@@ -148,16 +149,16 @@ void property_clear(const char * name);
 char * property_get(const char * name);
 int property_get_i(const char * name);
 double property_get_d(const char * name);
-boolean property_isset(const char * name);
+bool property_isset(const char * name);
 
 const void * io_input(const char * name);
-void io_output(const char * name, const void * value, boolean docopy);
+void io_output(const char * name, const void * value, bool docopy);
 
 #define ISNULL(name)				(INPUT(name) == NULL)
 #define INPUT(name)					io_input(#name)
 #define INPUTT(type, name)			(*(const type *)INPUT(name))
-#define OUTPUT(name, value)			io_output(#name, value, TRUE)
-#define OUTPUT_NOCOPY(name, value)	io_output(#name, value, FALSE)
+#define OUTPUT(name, value)			io_output(#name, value, true)
+#define OUTPUT_NOCOPY(name, value)	io_output(#name, value, false)
 
 const char * max_model();
 const char * kernel_id();

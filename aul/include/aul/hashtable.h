@@ -13,7 +13,7 @@ extern "C" {
 
 
 typedef unsigned int (*hashcode_f)(const void * key);
-typedef boolean (*hashequals_f)(const void * a, const void * b);
+typedef bool (*hashequals_f)(const void * a, const void * b);
 
 typedef struct
 {
@@ -44,7 +44,7 @@ void hashtable_clear(hashtable_t * table);
 
 // Hashcode functions
 unsigned int hash_str(const void * key);
-boolean hash_streq(const void * a, const void * b);
+bool hash_streq(const void * a, const void * b);
 
 #ifdef __cplusplus
 }

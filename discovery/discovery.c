@@ -17,10 +17,10 @@ CFG_PARAM(enable_discovery, "b", "Enables other computers to discover this robot
 
 #define PACKET_LEN		25
 
-boolean enable_discovery = FALSE;
+bool enable_discovery = false;
 char hostname[50];
 
-boolean discovery_newclient(int fd, fdcond_t cond, void * data)
+bool discovery_newclient(int fd, fdcond_t cond, void * data)
 {
 	char buf[PACKET_LEN];
 	memset(buf, 0, sizeof(buf));
@@ -32,16 +32,16 @@ boolean discovery_newclient(int fd, fdcond_t cond, void * data)
 	ssize_t bytesread = recvfrom(fd, buf, PACKET_LEN-1, 0, (struct sockaddr *)&remote, &remote_len);
 	if (bytesread > 0)
 	{
-		boolean doreply = FALSE;
+		bool doreply = false;
 		if (enable_discovery && strcmp(buf, "discover") == 0)
 		{
 			//sleep for a *very* short time, so other end doesn't get slammed with responses all at once
 			usleep(rand()%10000);
-			doreply = TRUE;
+			doreply = true;
 		}
 		else if (strprefix(buf, "name=") && strcmp(buf+5, hostname) == 0)
 		{
-			doreply = TRUE;
+			doreply = true;
 		}
 
 		if (doreply)
@@ -59,7 +59,7 @@ boolean discovery_newclient(int fd, fdcond_t cond, void * data)
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 void module_init()

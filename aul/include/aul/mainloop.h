@@ -25,15 +25,15 @@ typedef enum
 	FD_ERROR	= 1 << 3
 } fdcond_t;
 
-typedef boolean (*watch_f)(int fd, fdcond_t condition, void * userdata);
-typedef boolean (*timer_f)(void * userdata);
+typedef bool (*watch_f)(int fd, fdcond_t condition, void * userdata);
+typedef bool (*timer_f)(void * userdata);
 
 struct __watcher;
 
 typedef struct
 {
 	const char * name;
-	volatile boolean running;
+	volatile bool running;
 	mutex_t runlock;
 	
 	struct list_head list;

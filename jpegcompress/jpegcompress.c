@@ -165,7 +165,7 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 	jpeg->dest->next_output_byte = jpeg->buffer+(newlen-oldlen);
 	jpeg->dest->free_in_buffer = newlen-oldlen;
 
-	return TRUE;
+	return true;
 }
 
 /*-------------------------- THE BEEF OF THE MODULE ------------------------*/
@@ -277,7 +277,7 @@ void jpeg_update(void * object)
 		cinfo->in_color_space = JCS_YCbCr;
 
 		jpeg_set_defaults(cinfo);
-		jpeg_set_quality(cinfo, jpeg->quality, TRUE);
+		jpeg_set_quality(cinfo, jpeg->quality, true);
 	}
 
 	if (setjmp(jpeg->jmp))
@@ -291,7 +291,7 @@ void jpeg_update(void * object)
 	else
 	{
 		//start the compression
-		jpeg_start_compress(cinfo, TRUE);
+		jpeg_start_compress(cinfo, true);
 
 		JSAMPROW rowdata[1] = {jpeg->row};
 		int rownum = 0;
