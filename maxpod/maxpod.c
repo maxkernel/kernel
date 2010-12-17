@@ -1,11 +1,14 @@
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+#include <unistd.h>
 
 #include <kernel.h>
-#include <serial.h>
 #include <map.h>
 #include <array.h>
+#include <aul/serial.h>
+#include <aul/queue.h>
+#include <aul/mainloop.h>
 
 MOD_VERSION("1.0");
 MOD_AUTHOR("Andrew Klofas - andrew.klofas@senseta.com");
@@ -100,15 +103,18 @@ CFG_PARAM(	enable_directiontoggle,		"i",	"Enable symmetric driving. If toggled, 
 //DEF_CLOCK(pod_heartbeat, 3);	//update at 3 hertz
 //DEF_CLOCK(pod_sendecho, 1);		//update at 1 hertz
 
+#define QUEUE_SIZE					(PACKET_SIZE * 4)
+
 #define POD_MAXLATENCY				0.5		/* seconds */
 #define POD_MOTORPREVIEW_TIME		(3 * MICROS_PER_SECOND)		/* 3 seconds */
 
 static int pod_fd;
-static GQueue data = G_QUEUE_INIT;
 //static GTimer * pod_latency_timer = NULL;
 static double motor_throttle = 0.0;
 static int direction = 1;
 static int64_t motorpreview_expire = 0;
+static queue_t queue;
+static char data[QUEUE_SIZE];
 
 static map_t * map_motor			= NULL;
 static map_t * map_motor_rev		= NULL;
@@ -199,36 +205,37 @@ static void pod_sendecho(int refresh)
 }
 */
 
-static bool pod_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
+//static bool pod_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
+static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
 {
 	static bool pod_initial_response; /* false */
 
 	char d;
-	size_t read;
+	ssize_t numread;
 
-	g_io_channel_read(gio, &d, sizeof(char), &read);
-	if (read != sizeof(char))
+	numread = read(fd, &d, sizeof(char));
+	if (numread != sizeof(char))
 	{
 		//end stream!
 		LOG(LOG_WARN, "End of stream reached in MaxPOD serial port %s", serial_port);
 		return false;
 	}
-	g_queue_push_tail(&data, (void *)(int)d);
+	ENQUEUE(&queue, d);
 
-	while ((int)g_queue_peek_head(&data) == DLE)
+	while (!queue_isempty(&queue) && *(char *)queue_peak(&queue) == DLE)
 	{
 		//dump all DLE's not in a packet
-		g_queue_pop_head(&data);
+		(void)DEQUEUE(&queue, char);
 	}
 
-	if (data.length >= PACKET_SIZE)
+	if (queue_size(&queue) >= PACKET_SIZE)
 	{
 		int packet[PACKET_SIZE];
 		int i=0;
 
 		for (; i<PACKET_SIZE; i++)
 		{
-			packet[i] = (int)g_queue_pop_head(&data);
+			packet[i] = (int)DEQUEUE(&queue, char);
 		}
 
 		if (packet[0] != STX || packet[5] != ETX)
@@ -512,7 +519,10 @@ void pod_updatecal(const char * name, const char type, void * newvalue, void * t
 
 /* ------------- INIT --------------------*/
 void mod_init() {
-	pod_fd = serial_open_bin(serial_port, B115200, pod_newdata);
+	pod_fd = serial_open(serial_port, B115200);
+	mainloop_addwatch(NULL, pod_fd, FD_READ, pod_newdata, NULL);
+	QUEUE_INIT(queue, data);
+
 	setmaps();
 	kthread_newinterval("MaxPOD Heartbeat", KTH_PRIO_LOW, 3.0, pod_heartbeat, NULL);
 	kthread_newinterval("MaxPOD Motor Calibration Preview", KTH_PRIO_LOW, 2.0, pod_motorpreview, NULL);

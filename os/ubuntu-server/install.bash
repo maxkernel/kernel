@@ -37,6 +37,7 @@ gdb
 openssh-server
 pkg-config
 binutils-dev
+texlive
 libglib2.0-dev
 libgnet-dev
 libconfuse-dev

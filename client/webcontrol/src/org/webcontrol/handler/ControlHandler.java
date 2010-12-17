@@ -42,7 +42,7 @@ public class ControlHandler implements HttpHandler
 		try
 		{
 			//read in the values and properly scale them
-			double thro = in.readDouble() * 0.5;
+			double thro = in.readDouble();
 			double turn = in.readDouble() * (-5.0 * Math.PI / 36.0);
 			double pan = in.readDouble() * (Math.PI);
 			double tilt = in.readDouble() * (Math.PI / 2.0);
