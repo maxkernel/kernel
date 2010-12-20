@@ -57,8 +57,17 @@ static void console_replyclient(int fd, buffer_t reply)
 	}
 }
 
+static void console_null(void * DELETE_ME_SHITHEAD)
+{
 
-static bool console_clientdata(int fd, fdcond_t condition, void * userdata)
+}
+
+//static bool console_clientdata(int fd, fdcond_t condition, void * userdata)
+static void console_clientdata(void * userdata)
+{
+	int fd = (int)userdata;
+
+while (true)
 {
 	ssize_t bytesread;
 	size_t bufsize;
@@ -82,7 +91,8 @@ static bool console_clientdata(int fd, fdcond_t condition, void * userdata)
 
 		//if read == 0, socket has closed
 		close(fd);
-		return false;
+//		return false;
+		return;
 	}
 
 	//now receive the rest
@@ -184,7 +194,7 @@ done:
 	FREE(buf);
 	FREE(array);
 
-	return true;
+}
 }
 
 static bool console_newunixclient(int fd, fdcond_t condition, void * userdata)
@@ -196,13 +206,16 @@ static bool console_newunixclient(int fd, fdcond_t condition, void * userdata)
 	}
 	else
 	{
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, NULL);
+		// TODO - fix this to use mainloop!
+		kthread_newthread("Console client handler", KTH_PRIO_MEDIUM, console_clientdata, console_null, (void *)client);
+		//mainloop_addwatch(NULL, client, FD_READ, console_clientdata, NULL);
 		LOG(LOG_DEBUG, "New UNIX console client (%s)", CONSOLE_SOCKFILE);
 	}
 
 	return true;
 }
 
+/*
 static bool console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 {
 	struct sockaddr_in addr;
@@ -222,6 +235,7 @@ static bool console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 	
 	return true;
 }
+*/
 
 void module_init()
 {
@@ -244,6 +258,7 @@ void module_init()
 		LOG(LOG_DEBUG, "Awaiting UNIX console clients on file %s", CONSOLE_SOCKFILE);
 	}
 
+	/* TODO finish this
 	//start network socket (if cfg says to)
 	if (enable_network)
 	{
@@ -261,5 +276,6 @@ void module_init()
 			LOG(LOG_DEBUG, "Awaiting TCP console clients on port %d", CONSOLE_TCPPORT);
 		}
 	}
+	*/
 }
 

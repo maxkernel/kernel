@@ -7,7 +7,7 @@
 
 int main()
 {	
-	maxhandle_t * hand = max_remote("localhost");
+	maxhandle_t * hand = max_local();
 	
 	if (max_iserror(hand))
 	{

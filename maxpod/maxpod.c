@@ -13,7 +13,7 @@
 MOD_VERSION("1.0");
 MOD_AUTHOR("Andrew Klofas - andrew.klofas@senseta.com");
 MOD_DESCRIPTION("Driver for MaxPOD (Forth) IO Board.");
-MOD_DEPENDENCY("serial", "map");
+MOD_DEPENDENCY("map");
 MOD_INIT(mod_init);
 MOD_DESTROY(mod_destroy);
 
@@ -519,9 +519,10 @@ void pod_updatecal(const char * name, const char type, void * newvalue, void * t
 
 /* ------------- INIT --------------------*/
 void mod_init() {
+	QUEUE_INIT(queue, data);
+
 	pod_fd = serial_open(serial_port, B115200);
 	mainloop_addwatch(NULL, pod_fd, FD_READ, pod_newdata, NULL);
-	QUEUE_INIT(queue, data);
 
 	setmaps();
 	kthread_newinterval("MaxPOD Heartbeat", KTH_PRIO_LOW, 3.0, pod_heartbeat, NULL);

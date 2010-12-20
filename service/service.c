@@ -262,7 +262,7 @@ void module_init()
 	service_default_init();
 
 	serviceloop = mainloop_new("Service network loop");
-	mainloop_addtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * 1000LL, service_checktimeout, NULL);
+	mainloop_addtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL);
 	kthread_newthread("Service server", 5, service_runloop, service_stoploop, NULL);
 
 	send_init();

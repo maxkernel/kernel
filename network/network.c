@@ -18,7 +18,7 @@ BLK_ONUPDATE(STATIC, block_update);
 
 #define SIGNAL_DIR			"/sys/class/net"
 #define SIGNAL_LINK			"wireless/link"
-#define SIGNAL_MAX			70.0
+#define SIGNAL_MAX			100.0
 
 static const char * sigpath = NULL;
 

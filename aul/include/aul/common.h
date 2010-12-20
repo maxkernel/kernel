@@ -10,6 +10,10 @@
 extern "C" {
 #endif
 
+#ifndef MILLIS_PER_SECOND
+# define MILLIS_PER_SECOND		1000LL
+#endif
+
 #ifndef MICROS_PER_SECOND
 # define MICROS_PER_SECOND		1000000LL
 #endif

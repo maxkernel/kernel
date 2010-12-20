@@ -92,7 +92,10 @@ size_t queue_size(queue_t * queue)
 		if (ptr >= (queue->elems + (queue->elemsize * queue->numelems)))
 		{
 			// Wrap around if we've reached the end
-			ptr = queue->elems;
+			ptr = queue->elems - queue->elemsize;
 		}
 	}
+	
+	return i;
 }
+

@@ -17,6 +17,8 @@ typedef struct
 	size_t length;
 } String;
 
+#define STRING_INIT				{{0},0}
+
 String string_blank();
 String string_new(const char * fmt, ...) CHECK_PRINTF(1, 2);
 void string_append(String * str, const char * fmt, ...) CHECK_PRINTF(2, 3);

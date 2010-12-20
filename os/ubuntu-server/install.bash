@@ -7,7 +7,7 @@ then
 fi
 
 echo -n "=====****----.... MaxRobot software interactive-installer ....----****=====
-* Assumes that OS is a fresh copy of Ubuntu Server 9.10
+* Assumes that OS is a fresh copy of Ubuntu Server 10.04
 * Installer must be run as root and have internet access
 *
 * Shall I continue? [Y/n] "
@@ -26,9 +26,13 @@ INSTALL=/etc/maxos
 apt-get update
 apt-get -y upgrade
 
+#add software repos
+apt-get -y install python-software-properties
+add-apt-repository "deb http://archive.canonical.com/ lucid partner"
+apt-get update
+
 #install dependancies
 DEP="
-linux-rt
 acpid
 build-essential
 xutils-dev

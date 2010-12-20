@@ -12,7 +12,7 @@ CONFIG		= max.conf
 PROFILE		= yes
 RELEASE		= ALPHA
 
-MODULES		= netui discovery console service httpserver network map maxpod jpegcompress webcam test
+MODULES		= netui discovery console service httpserver network map maxpod jpegcompress webcam gps test
 HEADERS		= kernel.h buffer.h array.h serialize.h 
 
 SRCS		= kernel.c meta.c module.c profile.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c

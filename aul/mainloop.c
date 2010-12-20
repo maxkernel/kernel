@@ -290,10 +290,16 @@ void mainloop_addtimer(mainloop_t * loop, const char * name, uint64_t nanosecond
 	}
 
 	struct itimerspec timer;
-	timer.it_value.tv_nsec = now.tv_nsec;
-	timer.it_value.tv_sec = now.tv_sec;
 	timer.it_interval.tv_nsec = nanoseconds % AUL_NANOS_PER_SEC;
 	timer.it_interval.tv_sec = nanoseconds / AUL_NANOS_PER_SEC;
+	timer.it_value.tv_nsec = now.tv_nsec + timer.it_interval.tv_nsec;
+	timer.it_value.tv_sec = now.tv_sec + timer.it_interval.tv_sec;
+
+	if (timer.it_value.tv_nsec > NANOS_PER_SECOND)
+	{
+		timer.it_value.tv_nsec -= NANOS_PER_SECOND;
+		timer.it_value.tv_sec += 1;
+	}
 
 	int fd = timerfd_create(CLOCK_REALTIME, 0);
 	if (fd == -1)
