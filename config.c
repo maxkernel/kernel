@@ -8,17 +8,16 @@ extern GHashTable * modules;
 
 cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname)
 {
+	list_t * pos;
 	module_t * module = module_get(modname);
-	List * next = module->cfgentries;
-	while (next != NULL)
+
+	list_foreach(pos, &module->calentries)
 	{
-		cfgentry_t * cfg = next->data;
+		cfgentry_t * cfg = list_entry(pos, cfgentry_t, module_list);
 		if (strcmp(cfg->name, cfgname) == 0)
 		{
 			return cfg;
 		}
-
-		next = next->next;
 	}
 
 	return NULL;

@@ -29,7 +29,7 @@ struct __watcher
 	struct __listener readlistener;
 	struct __listener writelistener;
 	struct __listener errorlistener;
-	struct list_head list;
+	list_t list;
 } watchers[FD_SETSIZE];
 
 static mainloop_t * root = NULL;
@@ -61,7 +61,7 @@ mainloop_t * mainloop_new(const char * name)
 	loop->timeout.tv_sec = AUL_MAINLOOP_TIMEOUT_US / 1000000;
 	loop->timeout.tv_usec = AUL_MAINLOOP_TIMEOUT_US % 1000000;
 	mutex_init(&loop->runlock, M_RECURSIVE);
-	INIT_LIST_HEAD(&loop->list);
+	LIST_INIT(&loop->list);
 	FD_ZERO(&loop->readset);
 	FD_ZERO(&loop->writeset);
 	FD_ZERO(&loop->errorset);
@@ -133,8 +133,8 @@ void mainloop_run(mainloop_t * loop)
 
 				if (loop->running)
 				{
-					struct list_head * pos, * q;
-					list_for_each_safe(pos, q, &loop->list)
+					list_t * pos, * q;
+					list_foreach_safe(pos, q, &loop->list)
 					{
 						struct __watcher * item = list_entry(pos, struct __watcher, list);
 
@@ -218,7 +218,7 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	__mainloop__addmacro(FD_WRITE, writelistener, writeset)
 	__mainloop__addmacro(FD_ERROR, errorlistener, errorset)
 
-	list_add(&watchers[fd].list, &loop->list);
+	list_add(&loop->list, &watchers[fd].list);
 	mutex_unlock(&loop->runlock);
 }
 
@@ -256,7 +256,7 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 	if (watchers[fd].readlistener.function == NULL && watchers[fd].writelistener.function == NULL && watchers[fd].errorlistener.function == NULL)
 	{
 		watchers[fd].fd = -1;
-		list_del(&watchers[fd].list);
+		list_remove(&watchers[fd].list);
 	}
 
 	mutex_unlock(&loop->runlock);

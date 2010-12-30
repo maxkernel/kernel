@@ -311,23 +311,56 @@ binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
 	}
 
 	trigger_varclock_t * clk = (trigger_varclock_t *)trigger;
-	return g_hash_table_lookup(clk->block_inst->inputs_inst, VARCLOCK_BLK_IO);
+
+	list_t * pos;
+	binput_inst_t * in = NULL;
+	list_foreach(pos, &clk->block_inst->inputs_inst)
+	{
+		binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
+		if (strcmp(VARCLOCK_BLK_IO, test->input->name) == 0)
+		{
+			in = test;
+			break;
+		}
+	}
+
+	if (in == NULL)
+	{
+		LOGK(LOG_WARN, "Variable clock '%s' doesn't have a connected input!", clk->kobject.obj_name);
+	}
+
+	return in;
 }
 
 trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 {
-	block_t * blk = g_hash_table_lookup(kernel_module->blocks, VARCLOCK_BLK_NAME);
+	list_t * pos;
+	block_t * blk = NULL;
+
+	list_foreach(pos, &kernel_module->blocks)
+	{
+		block_t * test = list_entry(pos, block_t, module_list);
+		if (strcmp(VARCLOCK_BLK_NAME, test->name) == 0)
+		{
+			// We found the varclock block that
+			blk = test;
+			break;
+		}
+	}
+
 	if (blk == NULL)
 	{
+		// The varclock block doesn't exist, create it
+
 		blk = kobj_new("Block", strdup(VARCLOCK_KOBJ_NAME), io_blockinfo, io_blockfree, sizeof(block_t));
 		blk->name = strdup(VARCLOCK_BLK_NAME);
 		blk->desc = strdup("Variable clock trigger block");
 		blk->module = kernel_module;
+		LIST_INIT(&blk->inputs);
+		LIST_INIT(&blk->outputs);
 
-		bio_t * in = malloc(sizeof(bio_t));
-		bio_t * out = malloc(sizeof(bio_t));
-		PZERO(in, sizeof(bio_t));
-		PZERO(out, sizeof(bio_t));
+		bio_t * in = malloc0(sizeof(bio_t));
+		bio_t * out = malloc0(sizeof(bio_t));
 
 		in->block = blk;
 		in->name = strdup(VARCLOCK_BLK_IO);
@@ -339,10 +372,10 @@ trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 		out->sig = T_DOUBLE;
 		out->desc = strdup("The update rate (in Hz) that the rategroup is executed at");
 
-		blk->inputs = list_append(blk->inputs, in);
-		blk->outputs = list_append(blk->outputs, out);
+		list_add(&blk->inputs, &in->block_list);
+		list_add(&blk->outputs, &out->block_list);
 
-		g_hash_table_insert(kernel_module->blocks, (char *)blk->name, blk);
+		list_add(&kernel_module->blocks, &blk->module_list);
 	}
 
 	String str = string_new("%s " VARCLOCK_NAME, name);

@@ -9,7 +9,7 @@
 
 #include <aul/common.h>
 #include <aul/log.h>
-#include <aul/list.h>
+#include <aul/contrib/list.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +42,7 @@ typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
 typedef struct
 {
 	kobject_t kobject;
+	list_t global_list;
 
 	char * path;				//the path of the module, also the inst_id
 	char * version;				//the version string
@@ -52,14 +53,15 @@ typedef struct
 	blind_f postactivate;		//the function to call during postactivation phase
 	blind_f initialize;			//the function to call during initialization phase
 	blind_f destroy;			//the destroy function to call when exiting
-	List * syscalls;			//a list of syscall_t syscalls
-	List * cfgentries;			//a list of cfgentry_t config entries
-	GHashTable * calentries;	//a table of calentry_t calibration entries (name -> calentry_t)
+	list_t syscalls;			//a list of syscall_t syscalls
+	list_t cfgentries;			//a list of cfgentry_t config entries
+	list_t dependencies;		//a list of dependency_t dependency objects
+	list_t calentries;			//a list of calentry_t calibration entries (name -> calentry_t)
 	calupdate_f calupdate;		//the function to call when the calibration has been updated
-	GHashTable * blocks;		//a hash table of block_name -> block_t blocks defined in this module
-	List * block_inst;			//a list of all block_inst_t block instances created
-	struct __block_t * block_global;			//the global block_t block, or null if none
-	struct __block_inst_t * block_global_inst;	//the global block id, or null if no global block
+	list_t blocks;				//a list of all blocks defined in this module
+	list_t block_inst;			//a list of all block_inst_t block instances created
+	//struct __block_t * block_static;			//the static block_t block, or null if none
+	//struct __block_inst_t * block_static_inst;	//the static block inst, or null if no static block
 } module_t;
 
 typedef struct
@@ -67,21 +69,29 @@ typedef struct
 	char * version;
 	char * author;
 	char * description;
-	List * dependencies;
+	list_t dependencies;
 	char * preactivate;
 	char * postactivate;
 	char * initialize;
 	char * destroy;
-	List * syscalls;
-	List * cfgentries;
-	List * calentries;
+	list_t syscalls;
+	list_t cfgentries;
+	list_t calentries;
 	char * calupdate;
-	GHashTable * blocks;
+	list_t blocks;
 } meta_t;
 
 typedef struct
 {
+	char * modname;
+	module_t * module;
+	list_t module_list;
+} dependency_t;
+
+typedef struct
+{
 	kobject_t kobject;
+	list_t module_list;
 
 	const char * name;			//a copy of pointer obj_name
 	module_t * module;
@@ -103,14 +113,17 @@ typedef struct
 
 typedef struct {
 	module_t * module;
-	gchar * name;
-	gchar * desc;
-	gchar type;
+	list_t module_list;
+	char * name;
+	char * desc;
+	char type;
 	variable_t variable;
 } cfgentry_t;
 
 typedef struct {
 	module_t * module;
+	list_t module_list;
+	list_t global_list;
 	char * name;
 	char * desc;
 	char * sig;
@@ -120,8 +133,8 @@ typedef struct {
 } calentry_t;
 
 typedef struct {
-	gchar type;
-	gchar value[25];
+	char type;
+	char value[25];
 } calparam_t;
 
 typedef struct
@@ -155,6 +168,7 @@ typedef struct
 typedef struct __block_t
 {
 	kobject_t kobject;
+	list_t module_list;
 
 	const char * name;
 	module_t * module;
@@ -166,12 +180,14 @@ typedef struct __block_t
 	blk_onupdate_f onupdate;
 	const char * ondestroy_name;
 	blk_destroy_f ondestroy;
-	List * inputs;
-	List * outputs;
+	list_t inputs;
+	list_t outputs;
 } block_t;
 
 typedef struct {
 	block_t * block;
+	list_t block_list;
+
 	const char * name;
 	char sig;
 	const char * desc;
@@ -211,6 +227,7 @@ typedef struct
 typedef struct __block_inst_t
 {
 	kobject_t kobject;
+	list_t module_list;
 
 	handler_f runfunc;
 	handler_f stopfunc;
@@ -218,37 +235,45 @@ typedef struct __block_inst_t
 	block_t * block;
 	blk_destroy_f ondestroy;
 	gpointer userdata;
-	GHashTable * inputs_inst;
-	GHashTable * outputs_inst;
+	list_t inputs_inst;
+	list_t outputs_inst;
 } block_inst_t;
 
 typedef struct __boutput_inst_t
 {
 	block_inst_t * block_inst;
+	list_t block_inst_list;
+
 	bio_t * output;
 	void * data;
 	void * copybuf;
-	bool data_modified;
-	bool copybuf_modified;
-	List * links;
-	size_t numlinks;
+	//bool data_modified;
+	//bool copybuf_modified;
+
+	list_t links;
 } boutput_inst_t;
 
 typedef struct __binput_inst_t
 {
 	block_inst_t * block_inst;
+	list_t block_inst_list;
+
 	bio_t * input;
 	boutput_inst_t * src_inst;
+	list_t boutput_inst_list;
+
 	blk_link_f copy_func;
 	void * data;
 } binput_inst_t;
 
+/*
 typedef struct
 {
 	gchar * updatefunc;
 	gchar * update_freq_str;
 	gdouble update_freq_hz;
 } mclock_t;
+*/
 
 typedef struct __kthread_t
 {
@@ -267,7 +292,7 @@ typedef struct
 	const char * desc;
 	kthread_t * thread;
 	kthread_dotask_f task_func;
-	struct list_head list;
+	list_t list;
 } kthread_task_t;
 
 #define LOGFILE					"maxkernel.log"

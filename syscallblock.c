@@ -105,6 +105,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		blk->name = string_copy(&blkname);
 		blk->desc = string_copy(&blkdesc);
 		blk->module = kernel_module;
+		LIST_INIT(&blk->outputs);
 
 		String pname;
 		size_t i=0;
@@ -119,10 +120,10 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 			out->desc = STRDUP(params[i]->input->desc);
 			out->sig = params[i]->input->sig;
 
-			blk->outputs = list_append(blk->outputs, out);
+			list_add(&blk->outputs, &out->block_list);
 		}
 
-		g_hash_table_insert(kernel_module->blocks, (char *)blk->name, blk);
+		list_add(&kernel_module->blocks, &blk->module_list);
 		sb->block = blk;
 	}
 
@@ -137,7 +138,28 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		{
 			string_clear(&pname);
 			string_append(&pname, "p%zu", i+1);
-			io_route(g_hash_table_lookup(sb->block_inst->outputs_inst, pname.string), params[i]);
+
+			list_t * pos;
+			boutput_inst_t * out = NULL;
+			list_foreach(pos, &sb->block_inst->outputs_inst)
+			{
+				boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
+				if (strcmp(pname.string, test->output->name) == 0)
+				{
+					out = test;
+					break;
+				}
+			}
+
+			if (out != NULL)
+			{
+				io_route(out, params[i]);
+			}
+			else
+			{
+				LOGK(LOG_FATAL, "Could not route %s -> %s in syscall block! This error should be impossible to trigger!", pname.string, params[i]->input->name);
+				// Will exit
+			}
 		}
 	}
 

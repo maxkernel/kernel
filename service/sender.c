@@ -14,15 +14,15 @@ typedef struct
 	stream_t * stream;
 	packet_t packet;
 
-	struct list_head list;
+	list_t list;
 } packetbuf_t;
 
 
 static bool stop = false;
 static packetbuf_t packets[SERVICE_PACKETS_MAX];
 
-static struct list_head packets_queue;
-static struct list_head packets_free;
+static list_t packets_queue;
+static list_t packets_free;
 
 static mutex_t listlock;
 static cond_t barrier;
@@ -34,13 +34,13 @@ void send_init()
 	mutex_init(&listlock, M_RECURSIVE);
 	cond_init(&barrier);
 
-	INIT_LIST_HEAD(&packets_queue);
-	INIT_LIST_HEAD(&packets_free);
+	INIT_LIST(&packets_queue);
+	INIT_LIST(&packets_free);
 
 	size_t i=0;
 	for (; i<SERVICE_PACKETS_MAX; i++)
 	{
-		list_add(&packets[i].list, &packets_free);
+		list_add(&packets_free, &packets[i].list);
 	}
 }
 
@@ -54,8 +54,8 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 
 	size_t onpacket;
 
-	struct list_head packets;
-	INIT_LIST_HEAD(&packets);
+	list_t packets;
+	INIT_LIST(&packets);
 
 	mutex_lock(&listlock);
 	{
@@ -64,8 +64,8 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 			if (packets_free.next != &packets_free)
 			{
 				packetbuf_t * data = list_entry(packets_free.next, packetbuf_t, list);
-				list_del(packets_free.next);
-				list_add(&data->list, &packets);
+				list_remove(packets_free.next);
+				list_add(&packets, &data->list);
 			}
 			else
 			{
@@ -83,12 +83,12 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 		//put the buffers pack on the free list
 		mutex_lock(&listlock);
 		{
-			struct list_head * pos, * n;
-			list_for_each_safe(pos, n, &packets)
+			list_t * pos, * n;
+			list_foreach_safe(pos, n, &packets)
 			{
 				packetbuf_t * item = list_entry(pos, packetbuf_t, list);
-				list_del(pos);
-				list_add(&item->list, &packets_free);
+				list_remove(pos);
+				list_add(&packets_free, &item->list);
 			}
 		}
 		mutex_unlock(&listlock);
@@ -101,8 +101,8 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 		uint16_t fragnum = 0;
 		size_t index = 0;
 
-		struct list_head * pos, * n;
-		list_for_each_safe(pos, n, &packets)
+		list_t * pos, * n;
+		list_foreach_safe(pos, n, &packets)
 		{
 			packetbuf_t * buf = list_entry(pos, packetbuf_t, list);
 			buf->stream = stream;
@@ -122,10 +122,10 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 			packet->size = payloadsize + HEADER_LENGTH;
 			index += payloadsize;
 
-			list_del(pos);
+			list_remove(pos);
 			mutex_lock(&listlock);
 			{
-				list_add_tail(pos, &packets_queue);
+				list_add(&packets_queue, pos);
 				cond_signal(&barrier);
 			}
 			mutex_unlock(&listlock);
@@ -152,7 +152,7 @@ void send_startthread(void * userdata)
 					if (packets_queue.next != &packets_queue)
 					{
 						data = list_entry(packets_queue.next, packetbuf_t, list);
-						list_del(packets_queue.next);
+						list_remove(packets_queue.next);
 					}
 					else
 					{
@@ -169,7 +169,7 @@ void send_startthread(void * userdata)
 					//put data on packet_free list
 					mutex_lock(&listlock);
 					{
-						list_add(&data->list, &packets_free);
+						list_add(&packets_free, &data->list);
 					}
 					mutex_unlock(&listlock);
 				}

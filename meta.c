@@ -108,21 +108,30 @@ const char * resolvepath(const char * name)
 	return filepath;
 }
 
-static block_t * getblk(GHashTable * table, char * name)
+static block_t * getblk(list_t * list, char * name)
 {
+	list_t * pos;
 	block_t * blk;
 
-	if ((blk = g_hash_table_lookup(table, name)) == NULL)
+
+	list_foreach(pos, list)
 	{
-		blk = malloc(sizeof(block_t));
-		PZERO(blk, sizeof(block_t));
+		blk = list_entry(pos, block_t, module_list);
 
-		blk->kobject.class_name = "Block";
-		blk->name = g_strdup(name);
-
-		g_hash_table_insert(table, (char *)blk->name, blk);
+		if (strcmp(name, blk->name) == 0)
+		{
+			return blk;
+		}
 	}
 
+	// block does not exist, add it to list
+	blk = malloc0(sizeof(block_t));
+	blk->kobject.class_name = "Block";
+	blk->name = strdup(name);
+	LIST_INIT(&blk->inputs);
+	LIST_INIT(&blk->outputs);
+
+	list_add(list, &blk->module_list);
 	return blk;
 }
 
@@ -165,7 +174,11 @@ meta_t * meta_parse(const char * path)
 	
 	//build meta
 	meta = malloc0(sizeof(meta_t));
-	meta->blocks = g_hash_table_new(g_str_hash, g_str_equal);
+	LIST_INIT(&meta->dependencies);
+	LIST_INIT(&meta->syscalls);
+	LIST_INIT(&meta->cfgentries);
+	LIST_INIT(&meta->calentries);
+	LIST_INIT(&meta->blocks);
 
 	sect = bfd_get_section_by_name(abfd, ".meta");
 	if (sect == 0)
@@ -194,7 +207,7 @@ meta_t * meta_parse(const char * path)
 				syscall->sig = g_match_info_fetch(info, 3);
 				syscall->desc = g_match_info_fetch(info, 4);
 				
-				meta->syscalls = list_append(meta->syscalls, syscall);
+				list_add(&meta->syscalls, &syscall->module_list);
 			}
 			else if (strcmp(type, M_CFGPARAM) == 0)
 			{
@@ -207,7 +220,7 @@ meta_t * meta_parse(const char * path)
 
 				cfg->desc = g_match_info_fetch(info, 4);
 
-				meta->cfgentries = list_append(meta->cfgentries, cfg);
+				list_add(&meta->cfgentries, &cfg->module_list);
 			}
 			else if (strcmp(type, M_CALPARAM) == 0)
 			{
@@ -216,7 +229,7 @@ meta_t * meta_parse(const char * path)
 				cal->sig = g_match_info_fetch(info, 3);
 				cal->desc = g_match_info_fetch(info, 4);
 				
-				meta->calentries = list_append(meta->calentries, cal);
+				list_add(&meta->calentries, &cal->module_list);
 			}
 			else if (strcmp(type, M_CALUPDATE) == 0)
 			{
@@ -237,11 +250,13 @@ meta_t * meta_parse(const char * path)
 			else if (strcmp(type, M_DEP) == 0)
 			{
 				int i = 2;
-				char * dep;
+				char * depname;
 				
-				while ((dep = g_match_info_fetch(info, i++)) != NULL)
+				while ((depname = g_match_info_fetch(info, i++)) != NULL)
 				{
-					meta->dependencies = list_append(meta->dependencies, dep);
+					dependency_t * dep = malloc0(sizeof(dependency_t));
+					dep->modname = depname;
+					list_add(&meta->dependencies, &dep->module_list);
 				}
 			}
 			else if (strcmp(type, M_PREACT) == 0)
@@ -291,7 +306,7 @@ meta_t * meta_parse(const char * path)
 			else if (strcmp(type, M_BLOCK) == 0)
 			{
 				char * name = g_match_info_fetch(info, 2);
-				block_t * blk = getblk(meta->blocks, name);
+				block_t * blk = getblk(&meta->blocks, name);
 				g_free(name);
 
 				blk->new_name = g_match_info_fetch(info, 3);
@@ -301,7 +316,7 @@ meta_t * meta_parse(const char * path)
 			else if (strcmp(type, M_ONUPDATE) == 0)
 			{
 				char * name = g_match_info_fetch(info, 2);
-				block_t * blk = getblk(meta->blocks, name);
+				block_t * blk = getblk(&meta->blocks, name);
 				g_free(name);
 
 				blk->onupdate_name = g_match_info_fetch(info, 3);
@@ -309,7 +324,7 @@ meta_t * meta_parse(const char * path)
 			else if (strcmp(type, M_ONDESTROY) == 0)
 			{
 				char * name = g_match_info_fetch(info, 2);
-				block_t * blk = getblk(meta->blocks, name);
+				block_t * blk = getblk(&meta->blocks, name);
 				g_free(name);
 
 				blk->ondestroy_name = g_match_info_fetch(info, 3);
@@ -317,7 +332,7 @@ meta_t * meta_parse(const char * path)
 			else if (strcmp(type, M_INPUT) == 0)
 			{
 				char * name = g_match_info_fetch(info, 2);
-				block_t * blk = getblk(meta->blocks, name);
+				block_t * blk = getblk(&meta->blocks, name);
 				g_free(name);
 
 				bio_t * in = malloc0(sizeof(bio_t));
@@ -329,12 +344,12 @@ meta_t * meta_parse(const char * path)
 
 				in->desc = g_match_info_fetch(info, 5);
 
-				blk->inputs = list_append(blk->inputs, in);
+				list_add(&blk->inputs, &in->block_list);
 			}
 			else if (strcmp(type, M_OUTPUT) == 0)
 			{
 				char * name = g_match_info_fetch(info, 2);
-				block_t * blk = getblk(meta->blocks, name);
+				block_t * blk = getblk(&meta->blocks, name);
 				g_free(name);
 
 				bio_t * out = malloc0(sizeof(bio_t));
@@ -346,7 +361,7 @@ meta_t * meta_parse(const char * path)
 
 				out->desc = g_match_info_fetch(info, 5);
 
-				blk->outputs = list_append(blk->outputs, out);
+				list_add(&blk->outputs, &out->block_list);
 			}
 			else
 			{

@@ -36,13 +36,13 @@ newsyscall("videoparams", {left.width, left.height, rg.rate})
 
 
 -- Load wireless modules
-wifi = loadmodule("network")
-service = loadmodule("service")
-wifi_srv = service.bufferstream.new("wifi_ss", "Wifi signal strength", "RAW", "wifi service")
+--wifi = loadmodule("network")
+--service = loadmodule("service")
+--wifi_srv = service.bufferstream.new("wifi_ss", "Wifi signal strength", "RAW", "wifi service")
 
-route(wifi.strength, wifi_srv.buffer)
+--route(wifi.strength, wifi_srv.buffer)
 
-newrategroup("Wifi pipeline", {wifi, wifi_srv}, 2)
+--newrategroup("Wifi pipeline", {wifi, wifi_srv}, 2)
 
 
 

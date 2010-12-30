@@ -1,26 +1,35 @@
 SRCS		= libmax.c serialize.c buffer.c
-OBJS		= $(SRCS:.c=.o)
+TARGET		= libmax.so
 PACKAGES	= glib-2.0 gnet-2.0
 INCLUDES	= -I. -I.. -I../console/include
 DEFINES		= -DLIBMAX
 CFLAGS		= -pipe -ggdb3 -Wall -fpic $(shell pkg-config --cflags $(PACKAGES))
-LIBS		= $(shell pkg-config --libs $(PACKAGES))
-LFLAGS		= -shared
+LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul
+LFLAGS		= -shared -L../aul
 
-TARGET		= libmax.so
 
-.PHONY: install clean rebuild depend
+OBJS		= $(SRCS:.c=.o)
 
-all: $(TARGET)
+.PHONY: test install clean rebuild depend
+
+all: $(TARGET) test
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
+	$(MAKE) -C lua all
+
+test: test.o
+	$(CC) -o test test.o -L. -lmax
 
 install:
-	
+	cp -f libmax.so /usr/lib
+	ldconfig
+	$(MAKE) -C lua install
 
 clean:
 	rm -f $(OBJS) $(TARGET)
+	rm -f test test.o
+	$(MAKE) -C lua clean
 
 rebuild: clean all
 
@@ -35,7 +44,6 @@ depend: $(SRCS)
 #	ln -sf libmax.so.0 libmax.so
 #	$(CC) -o test test.o -L. -lmax -ldl
 #	rm -f $(OBJECTS) test.o
-#	$(MAKE) -C java all
 #	$(MAKE) -C lua all
 
 #clean:

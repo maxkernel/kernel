@@ -20,21 +20,21 @@
 #include "kernel.h"
 #include "kernel-priv.h"
 
-List * modules = NULL;
+list_t modules;
+list_t calentries;
 module_t * kernel_module = NULL;
 GHashTable * properties = NULL;
 GHashTable * kthreads = NULL;
-List * calentries = NULL;
 GHashTable * syscalls = NULL;
 
 mutex_t * io_lock = NULL;
 sqlite * database = NULL;
 uint64_t starttime = 0;
 
-static struct list_head objects = {0};
+static list_t objects = {0};
 static mutex_t kobj_mutex;
 
-static struct list_head kthread_tasks = {0};
+static list_t kthread_tasks = {0};
 static mutex_t kthread_tasks_mutex;
 
 static char logbuf[LOGBUF_SIZE] = {0};
@@ -256,7 +256,7 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 void kobj_register(kobject_t * object)
 {
 	mutex_lock(&kobj_mutex);
-	list_add(&object->kobjdb, &objects);
+	list_add(&objects, &object->kobjdb);
 	mutex_unlock(&kobj_mutex);
 }
 
@@ -275,7 +275,7 @@ void kobj_destroy(kobject_t * object)
 		object->destructor(object);
 	}
 
-	list_del(&object->kobjdb);
+	list_remove(&object->kobjdb);
 
 	FREES(object->obj_name);
 	FREE(object);
@@ -401,7 +401,7 @@ void kthread_schedule(kthread_t * thread)
 	task->task_func = kthread_start;
 
 	mutex_lock(&kthread_tasks_mutex);
-	list_add_tail(&task->list, &kthread_tasks);
+	list_add(&kthread_tasks, &task->list);
 	mutex_unlock(&kthread_tasks_mutex);
 }
 
@@ -445,15 +445,15 @@ static bool kthread_dotasks(void * userdata)
 {
 	mutex_lock(&kthread_tasks_mutex);
 
-	struct list_head * pos, * q;
-	list_for_each_safe(pos, q, &kthread_tasks)
+	list_t * pos, * q;
+	list_foreach_safe(pos, q, &kthread_tasks)
 	{
 		kthread_task_t * task = list_entry(pos, kthread_task_t, list);
 
 		LOGK(LOG_DEBUG, "Executing thread task: %s", task->desc);
 		task->task_func(task->thread);
 
-		list_del(pos);
+		list_remove(pos);
 		FREES(task->desc);
 		FREE(task);
 	}
@@ -580,16 +580,14 @@ const char * module_list()
 {
 	size_t i = 0;
 
-	List * next = modules;
-	while (next != NULL)
+	list_t * pos;
+	list_foreach(pos, &modules)
 	{
-		module_t * mod = next->data;
+		module_t * mod = list_entry(pos, module_t, global_list);
 		if (mod != NULL && !strprefix(mod->kobject.obj_name, "__"))
 		{
 			i += snprintf(cache_modules + i, CACHESTR_SIZE - i, "%s\n", mod->path);
 		}
-
-		next = next->next;
 	}
 
 	return cache_modules;
@@ -616,7 +614,7 @@ static void kern_defsyscall(syscall_f func, char * name, char * sig, char * desc
 	syscall->sig = strdup(sig);
 	syscall->func = func;
 
-	kernel_module->syscalls = list_append(kernel_module->syscalls, syscall);
+	list_add(&kernel_module->syscalls, &syscall->module_list);
 	syscall_reg(syscall);
 }
 
@@ -649,8 +647,10 @@ int main(int argc, char * argv[])
 	}
 
 	//initialize global variables
-	INIT_LIST_HEAD(&objects);
-	INIT_LIST_HEAD(&kthread_tasks);
+	LIST_INIT(&modules);
+	LIST_INIT(&calentries);
+	LIST_INIT(&objects);
+	LIST_INIT(&kthread_tasks);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
 	mutex_init(&kthread_tasks_mutex, M_RECURSIVE);
 	properties = g_hash_table_new(g_str_hash, g_str_equal);
@@ -860,19 +860,17 @@ int main(int argc, char * argv[])
 	*/
 	//call post functions
 	{
-		List * next = NULL;
+		list_t * pos;
 
 		//sort the calentries list
-		list_sort(calentries, cal_compare);
-		list_sort(modules, module_compare);
+		list_sort(&calentries, cal_compare);
+		list_sort(&modules, module_compare);
 
 		//call init function on all modules
-		next = modules;
-		while (next != NULL)
+		list_foreach(pos, &modules)
 		{
-			module_t * module = next->data;
+			module_t * module = list_entry(pos, module_t, global_list);
 			module_init(module);
-			next = next->next;
 		}
 
 		//check for new kernel tasks every second
@@ -927,8 +925,8 @@ int main(int argc, char * argv[])
 	}
 	*/
 
-	struct list_head * pos, * q;
-	list_for_each_safe(pos, q, &objects)
+	list_t * pos, * q;
+	list_foreach_safe(pos, q, &objects)
 	{
 		kobject_t * item = list_entry(pos, kobject_t, kobjdb);
 		kobj_destroy(item);

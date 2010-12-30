@@ -1,24 +1,10 @@
 #include <string.h>
 
+#include <aul/common.h>
 #include <aul/log.h>
 #include <aul/hashtable.h>
 
-
-// Taken with permission (and slightly modified) from http://www.partow.net/programming/hashfunctions/
-// (c) Arash Partow
-static unsigned int DJBHash(const char * str, unsigned int len)
-{
-	unsigned int hash = 5381;
-	unsigned int i    = 0;
-
-	for(i = 0; i < len; i++)
-	{
-		hash = ((hash << 5) + hash) + str[i];
-	}
-
-	return hash;
-}
-
+#if 0
 static void hashtable_init(hashtable_t * ht)
 {
 	int i;
@@ -26,22 +12,22 @@ static void hashtable_init(hashtable_t * ht)
 	// Initialize all the list pointers
 	for (i=0; i<AUL_HASHTABLE_BUCKETS; i++)
 	{
-		INIT_LIST_HEAD(&ht->buckets[i]);
+		LIST_INIT(&ht->buckets[i]);
 	}
-	INIT_LIST_HEAD(&ht->itr);
-	INIT_LIST_HEAD(&ht->empty);
+	LIST_INIT(&ht->itr);
+	LIST_INIT(&ht->empty);
 
 	// Add the empty buckets to the 'empty' list
 	for (i=0; i<AUL_HASHTABLE_ENTRIES; i++)
 	{
-		list_add(&ht->__list[i].bucket, &ht->empty);
+		list_add(&ht->empty, &ht->__list[i].bucket);
 	}
 }
 
-static hashentry_t * hashtable_getentry(hashtable_t * table, struct list_head * list, const void * key)
+static hashentry_t * hashtable_getentry(hashtable_t * table, list_t * list, const void * key)
 {
-	struct list_head * pos;
-	list_for_each(pos, list)
+	list_t * pos;
+	list_foreach(pos, list)
 	{
 		hashentry_t * item = list_entry(pos, hashentry_t, bucket);
 		if (table->equals(key, item->key))
@@ -73,7 +59,7 @@ void * hashtable_put(hashtable_t * table, const void * key, const void * data)
 	
 	if (entry == NULL)
 	{
-		if (list_empty(&table->empty))
+		if (list_isempty(&table->empty))
 		{
 			log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Out of free hashtable entries! Last value not added. Consider increasing limit (currently %d)", AUL_HASHTABLE_ENTRIES);
 			return NULL;
@@ -81,13 +67,13 @@ void * hashtable_put(hashtable_t * table, const void * key, const void * data)
 		
 		// Entry doesn't exist, take one from the empty list
 		hashentry_t * entry = list_entry(table->empty.next, hashentry_t, bucket);
-		list_del(&entry->bucket);
+		list_remove(&entry->bucket);
 		
 		entry->key = key;
 		entry->data = data;
 		
-		list_add(&entry->itr, &table->itr);
-		list_add(&entry->bucket, &table->buckets[bucketnum]);
+		list_add(&table->itr, &entry->itr);
+		list_add(&table->buckets[bucketnum], &entry->bucket);
 		
 		return NULL;
 	}
@@ -127,12 +113,12 @@ void * hashtable_remove(hashtable_t * table, const void * key)
 
 	void * data = (void *)entry->data;
 
-	list_del(&entry->bucket);
-	list_del(&entry->itr);
+	list_remove(&entry->bucket);
+	list_remove(&entry->itr);
 	entry->key = NULL;
 	entry->data = NULL;
 
-	list_add(&entry->bucket, &table->empty);
+	list_add(&table->empty, &entry->bucket);
 	return data;
 }
 
@@ -141,7 +127,43 @@ void hashtable_clear(hashtable_t * table)
 	// Re-initialize the table (resets all lists)
 	hashtable_init(table);
 }
+#endif
 
+
+hashtable_t * hashtable_new(size_t numbuckets, hashcode_f hasher, hashequals_f equals)
+{
+	hashtable_t * table = malloc0( (sizeof(hashtable_t)-(sizeof(list_t)*AUL_HASHTABLE_BUCKETS)) + (sizeof(list_t)*numbuckets));
+
+	table->hasher = hasher;
+	table->equals = equals;
+	table->numbuckets = numbuckets;
+
+	LIST_INIT(&table->iterator);
+
+	int i=0;
+	for (; i<numbuckets; i++)
+	{
+		LIST_INIT(&table->buckets[i]);
+	}
+
+	return table;
+}
+
+
+// Taken with permission (and slightly modified) from http://www.partow.net/programming/hashfunctions/
+// (c) Arash Partow
+static unsigned int DJBHash(const char * str, unsigned int len)
+{
+	unsigned int hash = 5381;
+	unsigned int i    = 0;
+
+	for(i = 0; i < len; i++)
+	{
+		hash = ((hash << 5) + hash) + str[i];
+	}
+
+	return hash;
+}
 
 // Hashcode functions
 unsigned int hash_str(const void * key)

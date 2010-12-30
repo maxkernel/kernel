@@ -87,12 +87,14 @@ size_t queue_size(queue_t * queue)
 
 	size_t i=0;
 	void * ptr = queue->head;
-	for (; ptr != queue->tail; ptr += queue->elemsize, i++)
+	for (; ptr != queue->tail; i++)
 	{
+		ptr += queue->elemsize;
+
 		if (ptr >= (queue->elems + (queue->elemsize * queue->numelems)))
 		{
 			// Wrap around if we've reached the end
-			ptr = queue->elems - queue->elemsize;
+			ptr = queue->elems;
 		}
 	}
 	

@@ -13,6 +13,7 @@
 MOD_PREACT(module_preact);
 
 #define NUM_BUFFERS		10
+#define NUM_KEYVALUES	30
 #define BUFFER_LEN		500
 
 static regex_t get_match;
@@ -21,12 +22,19 @@ static regex_t header_match;
 
 typedef struct
 {
+	const char * key;
+	const char * value;
+	hashentry_t hashentry;
+} http_keyvalue;
+
+typedef struct
+{
 	const char * uri;
 	http_match match;
 	http_callback callback;
 	void * userdata;
 
-	struct list_head filter;
+	list_t filter;
 } http_filter;
 
 typedef struct
@@ -41,10 +49,11 @@ typedef struct
 struct __http_context
 {
 	int socket;
-	struct list_head filters;
-	http_buffer buffers[NUM_BUFFERS];
-
 	mainloop_t * mainloop;
+	list_t filters;
+
+	http_buffer buffers[NUM_BUFFERS];
+	http_keyvalue keyvalues[NUM_KEYVALUES];
 	hashtable_t headers;
 	hashtable_t parameters;
 };
@@ -80,15 +89,17 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 				char request_uri[250] = {0};
 				memcpy(request_uri, buffer->buffer + match[1].rm_so, MIN(sizeof(request_uri) - 1, match[1].rm_eo - match[1].rm_so));
 
+				size_t keyvalue_index = 0;
+
 				// Parse the GET parameters off the URI
-				hashtable_clear(&buffer->ctx->parameters);
+				HASHTABLE_INIT(&buffer->ctx->parameters, hash_str, hash_streq);
 				if (strchr(request_uri, '?') != NULL)
 				{
 					char * params = strchr(request_uri, '?');
 					*params++ = '\0';
 
 					size_t offset = 0;
-					while (regexec(&params_match, params + offset, 3, match, 0) == 0)
+					while (regexec(&params_match, params + offset, 3, match, 0) == 0 && keyvalue_index < NUM_KEYVALUES)
 					{
 						bool atend = params[offset + match[0].rm_eo] == '\0';
 
@@ -98,7 +109,10 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 						char * value = params + offset + match[2].rm_so;
 						value[match[2].rm_eo - match[2].rm_so] = '\0';
 
-						hashtable_put(&buffer->ctx->parameters, key, value);
+						http_keyvalue * kv = &buffer->ctx->keyvalues[keyvalue_index++];
+						kv->key = key;
+						kv->value = value;
+						hashtable_put(&buffer->ctx->parameters, key, &kv->hashentry);
 
 						if (atend)
 							break;
@@ -109,8 +123,8 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 
 				// Pass the request through the filters
 				http_filter * pass_match = NULL;
-				struct list_head * pos;
-				list_for_each(pos, &buffer->ctx->filters)
+				list_t * pos;
+				list_foreach(pos, &buffer->ctx->filters)
 				{
 					http_filter * filter = list_entry(pos, http_filter, filter);
 					switch (filter->match)
@@ -141,11 +155,11 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 				if (pass_match != NULL)
 				{
 					// We have matched (at least) one filter. Parse the rest of the headers
-					hashtable_t * headers = &buffer->ctx->headers;
-					hashtable_clear(headers);
+					//hashtable_t * headers = &buffer->ctx->headers;
+					HASHTABLE_INIT(&buffer->ctx->headers, hash_str, hash_streq);
 
 					size_t offset = 0;
-					while (regexec(&header_match, buffer->buffer + offset, 3, match, 0) == 0)
+					while (regexec(&header_match, buffer->buffer + offset, 3, match, 0) == 0 && keyvalue_index < NUM_KEYVALUES)
 					{
 						char * key = buffer->buffer + offset + match[1].rm_so;
 						key[match[1].rm_eo - match[1].rm_so] = '\0';
@@ -153,12 +167,21 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 						char * value = buffer->buffer + offset + match[2].rm_so;
 						value[match[2].rm_eo - match[2].rm_so] = '\0';
 
-						hashtable_put(headers, key, value);
+						http_keyvalue * kv = &buffer->ctx->keyvalues[keyvalue_index++];
+						kv->key = key;
+						kv->value = value;
+						hashtable_put(&buffer->ctx->headers, key, &kv->hashentry);
 
 						offset += match[0].rm_eo+1;
 					}
 
-					pass_match->callback(&fd, headers, &buffer->ctx->parameters, request_uri);
+					if (keyvalue_index == NUM_KEYVALUES)
+					{
+						// We (most likely) ran out of http_keyvalues before completed parsing. Log it
+						LOG(LOG_WARN, "Ran out of key->value buffers in http_newdata. Consider increasing the number of key->value buffers (currently %d)", NUM_KEYVALUES);
+					}
+
+					pass_match->callback(&fd, buffer->ctx, request_uri);
 				}
 				else
 				{
@@ -240,9 +263,7 @@ http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error)
 
 	http_context * ctx = malloc0(sizeof(http_context));
 	ctx->mainloop = mainloop;
-	ctx->headers = hashtable_new(hash_str, hash_streq);
-	ctx->parameters = hashtable_new(hash_str, hash_streq);
-	INIT_LIST_HEAD(&ctx->filters);
+	LIST_INIT(&ctx->filters);
 
 	Error * err = NULL;
 
@@ -270,7 +291,7 @@ void http_adduri(http_context * ctx, const char * uri, http_match match, http_ca
 	filt->callback = cb;
 	filt->userdata = userdata;
 
-	list_add_tail(&filt->filter, &ctx->filters);
+	list_add(&ctx->filters, &filt->filter);
 }
 
 void http_printf(http_connection * conn, const char * fmt, ...)
@@ -291,6 +312,30 @@ void http_vprintf(http_connection * conn, const char * fmt, va_list args)
 void http_write(http_connection * conn, const void * buf, size_t len)
 {
 	send(*conn, buf, len, 0);
+}
+
+const char * http_getheader(http_context * ctx, const char * name)
+{
+	hashentry_t * entry = hashtable_get(&ctx->headers, name);
+	if (entry != NULL)
+	{
+		http_keyvalue * kv = hashtable_entry(entry, http_keyvalue, hashentry);
+		return kv->value;
+	}
+
+	return NULL;
+}
+
+const char * http_getparam(http_context * ctx, const char * name)
+{
+	hashentry_t * entry = hashtable_get(&ctx->parameters, name);
+	if (entry != NULL)
+	{
+		http_keyvalue * kv = hashtable_entry(entry, http_keyvalue, hashentry);
+		return kv->value;
+	}
+
+	return NULL;
 }
 
 void http_destroy(http_context * ctx)

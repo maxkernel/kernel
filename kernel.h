@@ -121,7 +121,7 @@ typedef struct
 	const char * obj_name;
 	info_f info;
 	destructor_f destructor;
-	struct list_head kobjdb;
+	list_t kobjdb;
 } kobject_t;
 
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size);

@@ -233,40 +233,34 @@ block_inst_t * io_newblock(block_t * blk, void ** args)
 
 	String str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.obj_name, blk->name);
 	block_inst_t * blk_inst = exec_new(string_copy(&str), io_instinfo, io_instdestroy, io_doinst, NULL, sizeof(block_inst_t));
-	blk->module->block_inst = list_append(blk->module->block_inst, blk_inst);
+	list_add(&blk->module->block_inst, &blk_inst->module_list);
 
 	blk_inst->block = blk;
 	blk_inst->ondestroy = blk->ondestroy;
-	blk_inst->inputs_inst = g_hash_table_new(g_str_hash, g_str_equal);
-	blk_inst->outputs_inst = g_hash_table_new(g_str_hash, g_str_equal);
+	LIST_INIT(&blk_inst->inputs_inst);
+	LIST_INIT(&blk_inst->outputs_inst);
 
-	List * next;
+	list_t * pos;
 
-	next = blk->inputs;
-	while (next != NULL)
+	list_foreach(pos, &blk->inputs)
 	{
-		bio_t * in = next->data;
-		binput_inst_t * in_inst = g_malloc0(sizeof(binput_inst_t));
-
+		bio_t * in = list_entry(pos, bio_t, block_list);
+		binput_inst_t * in_inst = malloc0(sizeof(binput_inst_t));
 		in_inst->block_inst = blk_inst;
 		in_inst->input = in;
 
-		g_hash_table_insert(blk_inst->inputs_inst, (char *)in->name, in_inst);
-
-		next = next->next;
+		list_add(&blk_inst->inputs_inst, &in_inst->block_inst_list);
 	}
 
-	next = blk->outputs;
-	while (next != NULL)
+	list_foreach(pos, &blk->outputs)
 	{
-		bio_t * out = next->data;
-
-		boutput_inst_t * out_inst = g_malloc0(sizeof(boutput_inst_t));
+		bio_t * out = list_entry(pos, bio_t, block_list);
+		boutput_inst_t * out_inst = malloc0(sizeof(boutput_inst_t));
 		out_inst->block_inst = blk_inst;
 		out_inst->output = out;
+		LIST_INIT(&out_inst->links);
 
-		g_hash_table_insert(blk_inst->outputs_inst, (char *)out->name, out_inst);
-		next = next->next;
+		list_add(&blk_inst->outputs_inst, &out_inst->block_inst_list);
 	}
 
 	io_constructor(blk, &blk_inst->userdata, args);
@@ -277,13 +271,12 @@ block_inst_t * io_newblock(block_t * blk, void ** args)
 void io_newcomplete(block_inst_t * inst)
 {
 	//check to make sure block has been properly created and routed
-	GHashTableIter itr;
+	list_t * pos;
 
 	//check inputs
-	binput_inst_t * in;
-	g_hash_table_iter_init(&itr, inst->inputs_inst);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&in))
+	list_foreach(pos, &inst->inputs_inst)
 	{
+		binput_inst_t * in = list_entry(pos, binput_inst_t, block_inst_list);
 		if (in->src_inst == NULL)
 		{
 			LOGK(LOG_WARN, "Unconnected input %s in block %s in module %s", in->input->name, in->block_inst->block->name, in->block_inst->block->module->path);
@@ -292,11 +285,10 @@ void io_newcomplete(block_inst_t * inst)
 	}
 
 	//check outputs
-	boutput_inst_t * out;
-	g_hash_table_iter_init(&itr, inst->outputs_inst);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&out))
+	list_foreach(pos, &inst->outputs_inst)
 	{
-		if (out->links == NULL)
+		boutput_inst_t * out = list_entry(pos, boutput_inst_t, block_inst_list);
+		if (list_isempty(&out->links))
 		{
 			LOGK(LOG_WARN, "Unconnected output %s in block %s in module %s", out->output->name, out->block_inst->block->name, out->block_inst->block->module->path);
 		}
@@ -347,22 +339,19 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 	in->copy_func = link_func;
 	in->src_inst = out;
 
-	out->links = list_append(out->links, in);
-	out->numlinks += 1;
+	list_add(&out->links, &in->boutput_inst_list);
 
 	return true;
 }
 
 void io_beforeblock(block_inst_t * block)
 {
-	GHashTableIter itr;
-	binput_inst_t * in_inst;
-
 	mutex_lock(io_lock);
 
-	g_hash_table_iter_init(&itr, block->inputs_inst);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&in_inst))
+	list_t * pos;
+	list_foreach(pos, &block->inputs_inst)
 	{
+		binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
 		if (in_inst->src_inst != NULL && in_inst->src_inst->copybuf != NULL)
 		{
 			in_inst->copy_func(in_inst->src_inst, in_inst);
@@ -374,24 +363,17 @@ void io_beforeblock(block_inst_t * block)
 
 void io_afterblock(block_inst_t * block)
 {
-	GHashTableIter itr;
-	boutput_inst_t * out_inst;
-
 	mutex_lock(io_lock);
 
-	g_hash_table_iter_init(&itr, block->outputs_inst);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&out_inst))
+	list_t * pos;
+	list_foreach(pos, &block->outputs_inst)
 	{
-		if (out_inst->data_modified)
-		{
-			//swap pointers
-			void * temp = out_inst->copybuf;
-			out_inst->copybuf = out_inst->data;
-			out_inst->data = temp;
+		boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
 
-			out_inst->data_modified = false;
-			out_inst->copybuf_modified = true;
-		}
+		//swap pointers
+		void * temp = out_inst->copybuf;
+		out_inst->copybuf = out_inst->data;
+		out_inst->data = temp;
 	}
 
 	mutex_unlock(io_lock);
@@ -399,7 +381,18 @@ void io_afterblock(block_inst_t * block)
 
 const void * io_doinput(block_inst_t * blk, const char * name)
 {
-	binput_inst_t * in = g_hash_table_lookup(blk->inputs_inst, name);
+	list_t * pos;
+	binput_inst_t * in = NULL;
+	list_foreach(pos, &blk->inputs_inst)
+	{
+		binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
+		if (strcmp(name, test->input->name) == 0)
+		{
+			in = test;
+			break;
+		}
+	}
+
 	if (in == NULL)
 	{
 		LOGK(LOG_WARN, "Input '%s' in block %s does not exist!", name, blk->block->name);
@@ -435,7 +428,18 @@ const void * io_input(const char * name)
 
 void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool docopy)
 {
-	boutput_inst_t * out = g_hash_table_lookup(blk->outputs_inst, name);
+	list_t * pos;
+	boutput_inst_t * out = NULL;
+	list_foreach(pos, &blk->outputs_inst)
+	{
+		boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
+		if (strcmp(name, test->output->name) == 0)
+		{
+			out = test;
+			break;
+		}
+	}
+
 	if (out == NULL)
 	{
 		LOGK(LOG_WARN, "Output %s in block %s does not exist!", name, blk->block->name);
@@ -473,8 +477,6 @@ void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool
 				return;
 		}
 	}
-
-	out->data_modified = true;
 }
 
 void io_output(const char * name, const void * value, bool docopy)
@@ -514,31 +516,16 @@ static void link_strcopy(boutput_inst_t * out, binput_inst_t * in)
 
 static void link_bufcopy(boutput_inst_t * out, binput_inst_t * in)
 {
-	if (out->numlinks == 1)
+	if (in->data != NULL && buffer_size(out->copybuf) == buffer_size(in->data))
 	{
-		//we are the only link, optimize by swapping pointers
-		if (out->copybuf_modified)
-		{
-			void * temp = in->data;
-			in->data = out->copybuf;
-			out->copybuf = temp;
-
-			out->copybuf_modified = false;
-		}
+		//buffers are the same size, just memcpy
+		memcpy(in->data, out->copybuf, buffer_size(in->data));
 	}
 	else
 	{
-		if (in->data != NULL && buffer_size(out->copybuf) == buffer_size(in->data))
-		{
-			//buffers are the same size, just memcpy
-			memcpy(in->data, out->copybuf, buffer_size(in->data));
-		}
-		else
-		{
-			//this is a very inefficient method!
-			buffer_free(in->data);
-			in->data = buffer_copy(out->copybuf);
-		}
+		//this is a very inefficient method!
+		buffer_free(in->data);
+		in->data = buffer_copy(out->copybuf);
 	}
 }
 

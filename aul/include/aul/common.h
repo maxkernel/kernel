@@ -2,6 +2,7 @@
 #define __AUL_COMMON_H
 
 #include <stdlib.h>
+#include <stddef.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdbool.h>

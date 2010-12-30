@@ -16,13 +16,16 @@ extern "C" {
 typedef struct __http_context http_context;
 typedef int http_connection;
 
-typedef void (*http_callback)(http_connection * conn, hashtable_t * headers, hashtable_t * parameters, const char * uri);
+typedef void (*http_callback)(http_connection * conn, http_context * ctx, const char * uri);
 
 typedef enum
 {
 	MATCH_ALL,
 	MATCH_PREFIX
 } http_match;
+
+const char * http_getheader(http_context * ctx, const char * name);
+const char * http_getparam(http_context * ctx, const char * name);
 
 http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error);
 void http_adduri(http_context * ctx, const char * uri, http_match match, http_callback cb, void * userdata);

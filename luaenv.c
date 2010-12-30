@@ -53,27 +53,23 @@ static void pushio(lua_State * L, const char * name, block_inst_t * blk_inst)
 
 static void setio(lua_State * L, block_inst_t * blk_inst)
 {
+	list_t * pos;
 	block_t * blk = blk_inst->block;
-	List * next = NULL;
 
-	next = blk->inputs;
-	while (next != NULL)
+	list_foreach(pos, &blk->inputs)
 	{
-		bio_t * in = next->data;
+		bio_t * in = list_entry(pos, bio_t, block_list);
 		LOGK(LOG_DEBUG, "Lua: adding '%s' block input %s", blk->name, in->name);
 
 		pushio(L, in->name, blk_inst);
-		next = next->next;
 	}
 
-	next = blk->outputs;
-	while (next != NULL)
+	list_foreach(pos, &blk->inputs)
 	{
-		bio_t * out = next->data;
+		bio_t * out = list_entry(pos, bio_t, block_list);
 		LOGK(LOG_DEBUG, "Lua: adding '%s' block output %s", blk->name, out->name);
 
 		pushio(L, out->name, blk_inst);
-		next = next->next;
 	}
 
 	lua_pushstring(L, "__blkinst");
@@ -114,7 +110,7 @@ static void * __getinput(lua_State * L, int index)
 	return input;
 }
 
-static List * __getgrouplist(lua_State * L, List * list, void * (*getter)(lua_State * L, int index), int index)
+static list_t * __getgrouplist(lua_State * L, list_t * list, void * (*getter)(lua_State * L, int index), int index)
 {
 	void * v = getter(L, index);
 	if (v != NULL)

@@ -1,3 +1,0 @@
-#!/bin/bash
-export LD_LIBRARY_PATH=..
-java -cp libmax.jar:. -Djava.library.path=. Test

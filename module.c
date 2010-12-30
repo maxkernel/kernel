@@ -9,9 +9,9 @@
 
 #define MODULE_KERNEL_NAME			"__kernel"
 
-extern List * modules;
+extern list_t modules;
+extern list_t calentries;
 extern GHashTable * syscalls;
-extern List * calentries;
 extern module_t * kernel_module;
 
 
@@ -26,12 +26,7 @@ static void module_destroy(void * object)
 	module_t * module = object;
 
 	//remove from modules list
-	unsigned int index = list_indexof(modules, module);
-	if (index >= 0)
-	{
-		List * nth = list_get(modules, index);
-		nth->data = NULL;
-	}
+	list_remove(&module->global_list);
 
 	if (module->destroy != NULL)
 	{
@@ -61,19 +56,17 @@ module_t * module_get(const char * name)
 		return NULL;
 	}
 
+	list_t * pos;
 	module_t * module = NULL;
 
-	List * next = modules;
-	while (next != NULL)
+	list_foreach(pos, &modules)
 	{
-		module_t * tester = next->data;
+		module_t * tester = list_entry(pos, module_t, global_list);
 		if (strcmp(tester->path, path) == 0)
 		{
 			module = tester;
 			break;
 		}
-
-		next = next->next;
 	}
 
 	FREES(path);
@@ -105,8 +98,7 @@ module_t * module_load(const char * name)
 		LOGK(LOG_DEBUG, "Resolved module %s to path %s", name, path);
 
 		meta_t * meta = NULL;
-		List * next;
-		GHashTableIter itr;
+		list_t * pos, * q;
 		
 		LOGK(LOG_DEBUG, "Loading module %s", name);
 		meta = meta_parse(path);
@@ -128,26 +120,29 @@ module_t * module_load(const char * name)
 		module->version = meta->version;
 		module->author = meta->author;
 		module->description = meta->description;
-		module->calentries = g_hash_table_new(g_str_hash, g_str_equal);
+		LIST_INIT(&module->syscalls);
+		LIST_INIT(&module->cfgentries);
+		LIST_INIT(&module->calentries);
+		LIST_INIT(&module->blocks);
+		LIST_INIT(&module->block_inst);
 
-		//load mod dependencies
-		next = meta->dependencies;
-		while (next != NULL)
+		// load mod dependencies
+		list_foreach_safe(pos, q, &meta->dependencies)
 		{
-			const char * modname = next->data;
-			LOGK(LOG_DEBUG, "Loading module dependency %s", modname);
-			if (!module_load(modname))
+			dependency_t * dep = list_entry(pos, dependency_t, module_list);
+
+			LOGK(LOG_DEBUG, "Loading module dependency %s", dep->modname);
+			if ((dep->module = module_load(dep->modname)) == NULL)
 			{
-				LOGK(LOG_ERR, "Failed to load module dependency %s!", modname);
+				LOGK(LOG_ERR, "Failed to load module dependency %s!", dep->modname);
 				return NULL;
 			}
-			
-			free(next->data);
-			next = next->next;
+
+			list_remove(&dep->module_list);
+			list_add(&module->dependencies, &dep->module_list);
 		}
-		list_free(meta->dependencies);
 		
-		//now load the mod
+		// now load the mod
 		module->module = dlopen(path, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 		if (!module->module)
 		{
@@ -155,7 +150,7 @@ module_t * module_load(const char * name)
 			//will exit program
 		}
 		
-		//load functions
+		// load functions
 		if (meta->initialize != NULL && !module_symbol(module->module, meta->initialize, (void **)&module->initialize))
 		{
 			LOGK(LOG_FATAL, "Could not read module initialize function %s for module %s", meta->initialize, name);
@@ -181,58 +176,51 @@ module_t * module_load(const char * name)
 		g_free(meta->postactivate);
 		g_free(meta->destroy);
 
-		//call preactivate
+		// call preactivate
 		if (module->preactivate != NULL)
 		{
 			LOG(LOG_DEBUG, "Calling registered pre-activation function on module %s", name);
 			module->preactivate();
 		}
 
-		//register syscalls
-		next = meta->syscalls;
-		while (next != NULL)
+		// register syscalls
+		list_foreach_safe(pos, q, &meta->syscalls)
 		{
-			syscall_t * syscall = next->data;
-			
+			syscall_t * syscall = list_entry(pos, syscall_t, module_list);
+			syscall->module = module;
+
 			LOGK(LOG_DEBUG, "Registering syscall %s with sig %s", syscall->name, syscall->sig);
-			
 			if (!module_symbol(module->module, syscall->name, (void **)&syscall->func))
 			{
 				LOGK(LOG_FATAL, "Could not read syscall module symbol for syscall %s", syscall->name);
 				//will exit program
 			}
-			
-			syscall->module = module;
-			module->syscalls = list_append(module->syscalls, syscall);
+
+			list_remove(&syscall->module_list);
+			list_add(&module->syscalls, &syscall->module_list);
 
 			syscall_reg(syscall);
-			
-			next = next->next;
 		}
-		list_free(meta->syscalls);
 		
-		//register config entries
-		next = meta->cfgentries;
-		while (next != NULL)
+		// register config entries
+		list_foreach_safe(pos, q, &meta->cfgentries)
 		{
-			cfgentry_t * cfg = next->data;
+			cfgentry_t * cfg = list_entry(pos, cfgentry_t, module_list);
 			cfg->module = module;
 
 			LOGK(LOG_DEBUG, "Registering configuration entry '%s' with sig %c", cfg->name, cfg->type);
-
 			if (!module_symbol(module->module, cfg->name, (void **)&cfg->variable))
 			{
 				LOGK(LOG_FATAL, "Could not read configuration module symbol for entry %s", cfg->name);
 				//will exit program
 			}
 
-			next = next->next;
+			list_remove(&meta->cfgentries);
+			list_add(&module->cfgentries, &cfg->module_list);
 		}
-		module->cfgentries = meta->cfgentries;
 
-		//register calibration entries
-		next = meta->calentries;
-		while (next != NULL)
+		// register calibration entries
+		list_foreach_safe(pos, q, &meta->calentries)
 		{
 			if (meta->calupdate == NULL)
 			{
@@ -240,17 +228,16 @@ module_t * module_load(const char * name)
 				//will exit
 			}
 
-			calentry_t * cal = next->data;
+			calentry_t * cal = list_entry(pos, calentry_t, module_list);
 			cal->module = module;
-			
+
 			LOGK(LOG_DEBUG, "Registering calibration entry %s with sig %s", cal->name, cal->sig);
-			
 			if (!module_symbol(module->module, cal->name, (void **)&cal->active))
 			{
 				LOGK(LOG_FATAL, "Could not read calibration module symbol for entry %s", cal->name);
 				//will exit program
 			}
-			
+
 			calparam_t * value = cal_getparam(cal->name, cal->sig);
 			switch (cal->sig[0])
 			{
@@ -275,15 +262,12 @@ module_t * module_load(const char * name)
 			{
 				cal_freeparam(value);
 			}
-			
-			g_hash_table_insert(module->calentries, cal->name, cal);
-			calentries = list_append(calentries, cal);
-			
-			next = next->next;
+
+			list_add(&module->calentries, &cal->module_list);
+			list_add(&calentries, &cal->global_list);
 		}
-		list_free(meta->calentries);
 		
-		//register calibration update function
+		// register calibration update function
 		{
 			char * update = meta->calupdate;
 
@@ -301,46 +285,15 @@ module_t * module_load(const char * name)
 			}
 		}
 
-		/*
-		//register clocks
-		next = meta->clocks;
-		while (next != NULL)
+		// register blocks
+		list_foreach_safe(pos, q, &meta->blocks)
 		{
-			mclock_t * clock = next->data;
-			clock->update_freq_hz = math_eval(clock->update_freq_str);
-
-			handler_f updatefunc;
-
-			LOGK(LOG_DEBUG, "Registering module clock with function %s and update %f hertz", clock->updatefunc, clock->update_freq_hz);
-
-			if (!module_symbol(module->module, clock->updatefunc, (void **)&updatefunc))
-			{
-				LOGK(LOG_FATAL, "Could not read clock function module symbol %s", clock->updatefunc);
-				//will exit program
-			}
-
-			GString * namestr = g_string_new("");
-			g_string_printf(namestr, "Clock calling %s->%s", name, clock->updatefunc);
-
-			trigger_t * trigger = trigger_newclock(name, clock->update_freq_hz);
-			runnable_t * runnable = exec_newfunction(name, updatefunc, NULL);
-			kthread_t * kth = kthread_new(g_string_free(namestr, false), trigger, runnable, 0);
-			kthread_schedule(kth);
-
-			next = next->next;
-		}
-		*/
-
-		//register blocks
-		g_hash_table_iter_init(&itr, meta->blocks);
-		block_t * block;
-		while (g_hash_table_iter_next(&itr, NULL, (gpointer *)&block))
-		{
-			GString * obj_name = g_string_new("");
-			g_string_printf(obj_name, "%s:%s", module->kobject.obj_name, block->name);
+			list_t * pos2;
+			block_t * block = list_entry(pos, block_t, module_list);
+			String obj_name = string_new("%s:%s", module->kobject.obj_name, block->name);
 
 			block->module = module;
-			block->kobject.obj_name = g_string_free(obj_name, false);
+			block->kobject.obj_name = strdup(obj_name.string);
 			block->kobject.info = io_blockinfo;
 			block->kobject.destructor = io_blockfree;
 
@@ -371,35 +324,30 @@ module_t * module_load(const char * name)
 				}
 			}
 
-			//reg inputs
-			next = block->inputs;
-			while (next != NULL)
+			// reg inputs
+			list_foreach(pos2, &block->inputs)
 			{
-				bio_t * in = next->data;
+				bio_t * in = list_entry(pos2, bio_t, block_list);
 
 				in->block = block;
 				LOGK(LOG_DEBUG, "Registering input %s of type '%c' to block %s in module %s", in->name, in->sig, block->name, name);
-
-				next = next->next;
 			}
 
 			//reg outputs
-			next = block->outputs;
-			while (next != NULL)
+			list_foreach(pos2, &block->outputs)
 			{
-				bio_t * out = next->data;
+				bio_t * out = list_entry(pos2, bio_t, block_list);
 
 				out->block = block;
 				LOGK(LOG_DEBUG, "Registering output %s of type '%c', to block %s in module %s", out->name, out->sig, block->name, name);
-
-				next = next->next;
 			}
 
 			if (strcmp(block->name, STATIC_STR) == 0)
 			{
-				//this is a global (static) block, set it up now
+				// this is a global (static) block, set it up now
 				LOGK(LOG_DEBUG, "Initializing global block in module %s", name);
 
+				// TODO - is this the best place to initialize the static block??
 				block_inst_t * blk_inst = io_newblock(block, NULL);
 				if (blk_inst == NULL)
 				{
@@ -407,13 +355,15 @@ module_t * module_load(const char * name)
 					//will exit
 				}
 
-				module->block_global = block;
-				module->block_global_inst = blk_inst;
+				// TODO - do we need to save the static block seperately?
+				//module->block_static = block;
+				//module->block_static_inst = blk_inst;
 			}
 
 			kobj_register((kobject_t *)block);
+			list_remove(&block->module_list);
+			list_add(&module->blocks, &block->module_list);
 		}
-		module->blocks = meta->blocks;
 
 		//call postactivate
 		if (module->postactivate != NULL)
@@ -422,7 +372,7 @@ module_t * module_load(const char * name)
 			module->postactivate();
 		}
 
-		modules = list_append(modules, module);
+		list_add(&modules, &module->global_list);
 
 end:
 		if (meta != NULL)
@@ -445,11 +395,14 @@ void module_kernelinit()
 	module->version = strdup("0");
 	module->author = strdup("");
 	module->description = strdup("");
-	module->calentries = g_hash_table_new(g_str_hash, g_str_equal);
-	module->blocks = g_hash_table_new(g_str_hash, g_str_equal);
+	LIST_INIT(&module->syscalls);
+	LIST_INIT(&module->cfgentries);
+	LIST_INIT(&module->calentries);
+	LIST_INIT(&module->blocks);
+	LIST_INIT(&module->block_inst);
 
 	kernel_module = module;
-	modules = list_append(modules, module);
+	list_add(&modules, &module->global_list);
 }
 
 void module_init(const module_t * module)

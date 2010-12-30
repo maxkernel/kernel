@@ -1,4 +1,4 @@
-SRCS		= error.c log.c net.c serial.c string.c list.c mainloop.c hashtable.c queue.c
+SRCS		= error.c log.c net.c serial.c string.c mainloop.c hashtable.c queue.c
 OBJS		= $(SRCS:.c=.o)
 
 INCLUDES	= -Iinclude
@@ -142,20 +142,6 @@ string.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
 string.o: /usr/include/alloca.h include/aul/common.h /usr/include/inttypes.h
 string.o: /usr/include/stdint.h /usr/include/bits/wchar.h
 string.o: /usr/include/string.h include/aul/string.h
-list.o: /usr/include/stdlib.h /usr/include/features.h
-list.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-list.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-list.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-list.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-list.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-list.o: /usr/include/xlocale.h /usr/include/sys/types.h
-list.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-list.o: /usr/include/time.h /usr/include/sys/select.h
-list.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-list.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-list.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-list.o: include/aul/common.h /usr/include/inttypes.h /usr/include/stdint.h
-list.o: /usr/include/bits/wchar.h /usr/include/string.h include/aul/list.h
 mainloop.o: /usr/include/stdlib.h /usr/include/features.h
 mainloop.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 mainloop.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -179,13 +165,12 @@ mainloop.o: /usr/include/stdint.h /usr/include/bits/wchar.h
 mainloop.o: include/aul/error.h include/aul/string.h include/aul/mainloop.h
 mainloop.o: include/aul/mutex.h /usr/include/pthread.h /usr/include/sched.h
 mainloop.o: /usr/include/bits/sched.h /usr/include/signal.h
-mainloop.o: /usr/include/bits/setjmp.h include/aul/list.h
-mainloop.o: include/aul/contrib/list.h
+mainloop.o: /usr/include/bits/setjmp.h include/aul/contrib/list.h
 hashtable.o: /usr/include/string.h /usr/include/features.h
 hashtable.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 hashtable.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
 hashtable.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h
-hashtable.o: include/aul/log.h include/aul/common.h /usr/include/stdlib.h
+hashtable.o: include/aul/common.h /usr/include/stdlib.h
 hashtable.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
 hashtable.o: /usr/include/endian.h /usr/include/bits/endian.h
 hashtable.o: /usr/include/bits/byteswap.h /usr/include/sys/types.h
@@ -195,7 +180,7 @@ hashtable.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
 hashtable.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
 hashtable.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
 hashtable.o: /usr/include/inttypes.h /usr/include/stdint.h
-hashtable.o: /usr/include/bits/wchar.h include/aul/error.h
+hashtable.o: /usr/include/bits/wchar.h include/aul/log.h include/aul/error.h
 hashtable.o: include/aul/string.h include/aul/hashtable.h
 hashtable.o: include/aul/contrib/list.h
 queue.o: include/aul/queue.h include/aul/common.h /usr/include/stdlib.h

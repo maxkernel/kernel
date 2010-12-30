@@ -5,7 +5,6 @@
 
 #include <aul/common.h>
 #include <aul/mutex.h>
-#include <aul/list.h>
 
 #include <aul/contrib/list.h>
 
@@ -36,7 +35,7 @@ typedef struct
 	volatile bool running;
 	mutex_t runlock;
 	
-	struct list_head list;
+	list_t list;
 	int numwatches, maxfd;
 
 	fd_set readset, writeset, errorset;

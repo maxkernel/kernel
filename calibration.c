@@ -75,7 +75,19 @@ void cal_setparam(const char * module, const char * name, const char * value)
 		return;
 	}
 
-	calentry_t * cal = g_hash_table_lookup(mod->calentries, name);
+	list_t * pos;
+	calentry_t * cal = NULL;
+	list_foreach(pos, &mod->calentries)
+	{
+		calentry_t * test = list_entry(pos, calentry_t, module_list);
+		if (strcmp(name, test->name) == 0)
+		{
+			// found the entry
+			cal = test;
+			break;
+		}
+	}
+
 	if (cal == NULL)
 	{
 		LOGK(LOG_WARN, "Could not set calibration parameter. Entry %s in module %s doesn't exist", name, module);
