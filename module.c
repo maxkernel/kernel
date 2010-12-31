@@ -30,7 +30,7 @@ static void module_destroy(void * object)
 
 	if (module->destroy != NULL)
 	{
-		LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->path);
+		LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.obj_name);
 		module->destroy();
 	}
 
@@ -50,7 +50,13 @@ static bool module_symbol(void * module, const char * name, void ** function_ptr
 
 module_t * module_get(const char * name)
 {
-	const char * path = resolvepath(name);
+	String sname = string_new("%s", name);
+	if (!strsuffix(sname.string, ".mo"))
+	{
+		string_append(&sname, ".mo");
+	}
+
+	const char * path = resolvepath(sname.string, PATH_FILE);
 	if (path == NULL)
 	{
 		return NULL;
@@ -80,7 +86,13 @@ bool module_exists(const char * name)
 
 module_t * module_load(const char * name)
 {
-	const char * path = resolvepath(name);
+	String sname = string_new("%s", name);
+	if (!strsuffix(sname.string, ".mo"))
+	{
+		string_append(&sname, ".mo");
+	}
+
+	const char * path = resolvepath(sname.string, PATH_FILE);
 	if (path == NULL)
 	{
 		return NULL;
@@ -95,12 +107,12 @@ module_t * module_load(const char * name)
 
 	if (path != NULL)
 	{
-		LOGK(LOG_DEBUG, "Resolved module %s to path %s", name, path);
+		LOGK(LOG_DEBUG, "Resolved module %s to path %s", sname.string, path);
 
 		meta_t * meta = NULL;
 		list_t * pos, * q;
 		
-		LOGK(LOG_DEBUG, "Loading module %s", name);
+		LOGK(LOG_DEBUG, "Loading module %s", sname.string);
 		meta = meta_parse(path);
 		
 		if (meta == NULL)
@@ -122,6 +134,7 @@ module_t * module_load(const char * name)
 		module->description = meta->description;
 		LIST_INIT(&module->syscalls);
 		LIST_INIT(&module->cfgentries);
+		LIST_INIT(&module->dependencies);
 		LIST_INIT(&module->calentries);
 		LIST_INIT(&module->blocks);
 		LIST_INIT(&module->block_inst);
@@ -215,7 +228,7 @@ module_t * module_load(const char * name)
 				//will exit program
 			}
 
-			list_remove(&meta->cfgentries);
+			list_remove(&cfg->module_list);
 			list_add(&module->cfgentries, &cfg->module_list);
 		}
 
@@ -397,6 +410,7 @@ void module_kernelinit()
 	module->description = strdup("");
 	LIST_INIT(&module->syscalls);
 	LIST_INIT(&module->cfgentries);
+	LIST_INIT(&module->dependencies);
 	LIST_INIT(&module->calentries);
 	LIST_INIT(&module->blocks);
 	LIST_INIT(&module->block_inst);

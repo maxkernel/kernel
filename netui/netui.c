@@ -50,9 +50,9 @@ static void handle_calget__itrd(void * udata, char * module, char * name, char t
 	http_printf(conn, T_CALGET_ITEM, module, name, type, desc, value, min, max, stride);
 }
 
-static void handle_calget(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
+static void handle_calget(http_connection * conn, http_context * ctx, const char * uri)
 {
-	char * revert = hashtable_get(params, "revert");
+	char * revert = http_getparam(ctx, "revert");
 	if (revert != NULL && strcmp(revert, "1") == 0)
 	{
 		cal_revert();
@@ -66,21 +66,21 @@ static void handle_calget(http_connection * conn, hashtable_t * headers, hashtab
 	http_printf(conn, T_CALGET_TAIL);
 }
 
-static void handle_calset(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
+static void handle_calset(http_connection * conn, http_context * ctx, const char * uri)
 {
-	cal_setparam(hashtable_get(params, "module"), hashtable_get(params, "name"), hashtable_get(params, "value"));
+	cal_setparam(http_getparam(ctx, "module"), http_getparam(ctx, "name"), http_getparam(ctx, "value"));
 	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
 	http_printf(conn, T_CALSET);
 }
 
-static void handle_calsave(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
+static void handle_calsave(http_connection * conn, http_context * ctx, const char * uri)
 {
-	cal_merge(hashtable_get(params, "comment"));
+	cal_merge(http_getparam(ctx, "comment"));
 	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
 	http_printf(conn, T_CALSAVE);
 }
 
-static void handle_root(http_connection * conn, hashtable_t * headers, hashtable_t * params, const char * uri)
+static void handle_root(http_connection * conn, http_context * ctx, const char * uri)
 {
 	struct stat statbuf;
 

@@ -25,9 +25,9 @@ typedef int (*list_compare_f)(const void * a, const void * b);
  */
 static inline void __list_append(list_t *new, list_t *prev, list_t *next)
 {
-	next->prev = new;
 	new->next = next;
 	new->prev = prev;
+	next->prev = new;
 	prev->next = new;
 }
 

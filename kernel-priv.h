@@ -227,11 +227,11 @@ typedef struct
 typedef struct __block_inst_t
 {
 	kobject_t kobject;
-	list_t module_list;
 
 	handler_f runfunc;
 	handler_f stopfunc;
 
+	list_t module_list;
 	block_t * block;
 	blk_destroy_f ondestroy;
 	gpointer userdata;
@@ -299,12 +299,13 @@ typedef struct
 #define LOGBUF_SIZE				(200 * 1024)		/* 200 KB */
 #define CACHESTR_SIZE			(1024)				/* 1 KB */
 
-#define PATH_MAX_SIZE			1024
-#define PATH_MAX_ENTRIES		50
+#define PATH_MAX_SIZE			2048
+#define PATH_FILE				(1 << 0)
+#define PATH_DIRECTORY			(1 << 1)
 void setpath(const char * newpath);
 void appendpath(const char * newentry);
 const char * getpath();
-const char * resolvepath(const char * name);
+const char * resolvepath(const char * name, int etype);
 meta_t * meta_parse(const char * path);
 module_t * module_get(const char * name);
 bool module_exists(const char * name);

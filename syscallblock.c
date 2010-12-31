@@ -105,6 +105,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		blk->name = string_copy(&blkname);
 		blk->desc = string_copy(&blkdesc);
 		blk->module = kernel_module;
+		LIST_INIT(&blk->inputs);
 		LIST_INIT(&blk->outputs);
 
 		String pname;

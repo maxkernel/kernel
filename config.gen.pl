@@ -29,7 +29,7 @@ config("discovery", "enable_discovery", 1)
 
 
 # now execute a stage 2 script
-execlua("stitcher.lua")
+execdirectory("stitcher")
 
 # EOF
 END

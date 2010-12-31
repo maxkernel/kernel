@@ -30,7 +30,7 @@ typedef struct
 	list_t buckets[AUL_HASHTABLE_BUCKETS];
 } hashtable_t;
 
-#define HASHTABLE_INIT(ptr, hashfunc, equalfunc) do { \
+#define HASHTABLE_INIT(ptr, hashfunc, equalsfunc) do { \
 	(ptr)->hasher = (hashfunc); (ptr)->equals = (equalsfunc); \
 	(ptr)->numbuckets = AUL_HASHTABLE_BUCKETS; \
 	LIST_INIT(&(ptr)->iterator); \

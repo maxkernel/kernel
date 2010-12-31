@@ -4,17 +4,15 @@
 #include "kernel.h"
 #include "kernel-priv.h"
 
-extern GHashTable * modules;
-
-cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname)
+cfgentry_t * cfg_getparam(const char * modname, const char * cfgname)
 {
 	list_t * pos;
 	module_t * module = module_get(modname);
 
-	list_foreach(pos, &module->calentries)
+	list_foreach(pos, &module->cfgentries)
 	{
 		cfgentry_t * cfg = list_entry(pos, cfgentry_t, module_list);
-		if (strcmp(cfg->name, cfgname) == 0)
+		if (strcmp(cfgname, cfg->name) == 0)
 		{
 			return cfg;
 		}
@@ -23,7 +21,7 @@ cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname)
 	return NULL;
 }
 
-void cfg_setparam(const gchar * modname, const gchar * cfgname, const gchar * value)
+void cfg_setparam(const char * modname, const char * cfgname, const char * value)
 {
 	module_t * module = module_get(modname);
 

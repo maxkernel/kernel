@@ -2,182 +2,138 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include <glib.h>
 
 #include "kernel.h"
 #include "kernel-priv.h"
-#include "serialize.h"
 
-extern char ** path;
+#define KENTRY_NAMELEN		50
+#define GROUP_MAX		20
 
-#define checkparams(L, func, types, param_len)		checkparams2(L, func, types, param_len, param_len)
-static void checkparams2(lua_State * L, const char * func, int * types, size_t minparams, size_t maxparams)
+#define K_MODULE			1
+#define K_BLOCKINST			2
+
+typedef struct
 {
-	if (lua_gettop(L) < minparams || lua_gettop(L) > maxparams)
+	unsigned short type;
+	char name[KENTRY_NAMELEN];
+	const void * data;
+} kernentry_t;
+
+
+/* -------------------------- Prototypes ------------------------ */
+static int mt_kernentry_index(lua_State * L);
+static int mt_config_index(lua_State * L);
+static int mt_config_newindex(lua_State * L);
+static int l_newblock(lua_State * L);
+
+
+static int mt_kernentry_index(lua_State * L)
+{
+	kernentry_t * entry = luaL_checkudata(L, 1, "MaxKernel.kernentry");
+	const char * key = luaL_checkstring(L, 2);
+
+	if (entry->type == K_MODULE && strcmp("new", key) == 0)
 	{
-		if (minparams == maxparams)
+		// Return a closure to the function l_newblock, the block will be instantiated there
+		const module_t * module = entry->data;
+		block_t * block = NULL;
+
+		list_t * pos;
+		list_foreach(pos, &module->blocks)
 		{
-			luaL_error(L, "Invalid parameter length for function '%s'. Expected %d, got %d", func, minparams, lua_gettop(L));
+			block_t * test = list_entry(pos, block_t, module_list);
+			if (strcmp(entry->name, test->name) == 0)
+			{
+				// Found the block
+				block = test;
+				break;
+			}
 		}
-		else
+
+		if (block == NULL)
 		{
-			luaL_error(L, "Invalid parameter length for function '%s'. Expected %d to %d, got %d", func, minparams, maxparams, lua_gettop(L));
+			luaL_error(L, "Module %s has no member block named %s", module->path, entry->name);
 		}
+
+		lua_pushlightuserdata(L, block);
+		lua_pushcclosure(L, l_newblock, 1);
+
+		return 1;
 	}
-
-	size_t i = 1;
-	for (; i<=lua_gettop(L); i++)
+	else if (entry->type == K_BLOCKINST && strlen(entry->name) == 0)
 	{
-		if (lua_type(L, i) != types[i-1])
-		{
-			luaL_error(L, "Parameter %d invalid for function '%s'. Expected %s, got %s", i, func, lua_typename(L, types[i-1]), lua_typename(L, lua_type(L, i)));
-		}
-	}
-}
+		// New block instance, push it back with desired key
+		kernentry_t * newentry = lua_newuserdata(L, sizeof(kernentry_t));
+		newentry->type = K_BLOCKINST;
+		memcpy(newentry->name, key, strlen(key)+1);
+		newentry->data = entry->data;
 
-static void pushio(lua_State * L, const char * name, block_inst_t * blk_inst)
-{
-	lua_pushstring(L, name);
-	lua_newtable(L);
+		luaL_getmetatable(L, "MaxKernel.kernentry");
+		lua_setmetatable(L, -2);
 
-	lua_pushstring(L, "name");
-	lua_pushstring(L, name);
-	lua_settable(L, -3);
-
-	lua_pushstring(L, "__ioblkinst");
-	lua_pushlightuserdata(L, blk_inst);
-	lua_settable(L, -3);
-
-	lua_settable(L, -3);
-}
-
-static void setio(lua_State * L, block_inst_t * blk_inst)
-{
-	list_t * pos;
-	block_t * blk = blk_inst->block;
-
-	list_foreach(pos, &blk->inputs)
-	{
-		bio_t * in = list_entry(pos, bio_t, block_list);
-		LOGK(LOG_DEBUG, "Lua: adding '%s' block input %s", blk->name, in->name);
-
-		pushio(L, in->name, blk_inst);
-	}
-
-	list_foreach(pos, &blk->inputs)
-	{
-		bio_t * out = list_entry(pos, bio_t, block_list);
-		LOGK(LOG_DEBUG, "Lua: adding '%s' block output %s", blk->name, out->name);
-
-		pushio(L, out->name, blk_inst);
-	}
-
-	lua_pushstring(L, "__blkinst");
-	lua_pushlightuserdata(L, blk_inst);
-	lua_settable(L, -3);
-}
-
-static void * __getblkinst(lua_State * L, int index)
-{
-	block_inst_t * inst = NULL;
-
-	lua_getfield(L, index, "__blkinst");
-	if (!lua_isnil(L, -1))
-	{
-		inst = lua_touserdata(L, -1);
-	}
-
-	lua_pop(L, 1);
-	return inst;
-}
-
-static void * __getinput(lua_State * L, int index)
-{
-	binput_inst_t * input = NULL;
-
-	lua_getfield(L, index, "name");
-	lua_getfield(L, index, "__ioblkinst");
-
-	if (!lua_isnil(L, -2) && !lua_isnil(L, -1))
-	{
-		const char * name = lua_tostring(L, -2);
-		block_inst_t * inst = lua_touserdata(L, -1);
-
-		input = g_hash_table_lookup(inst->inputs_inst, name);
-	}
-
-	lua_pop(L, 2);
-	return input;
-}
-
-static list_t * __getgrouplist(lua_State * L, list_t * list, void * (*getter)(lua_State * L, int index), int index)
-{
-	void * v = getter(L, index);
-	if (v != NULL)
-	{
-		list = list_append(list, v);
+		return 1;
 	}
 	else
 	{
-		int onindex = 0;
+		luaL_error(L, "%s entry '%s' has no member '%s'", (entry->type == K_MODULE)? "Module" : "Block", entry->name, key);
+		return 0;
+	}
+}
 
+static int mt_config_index(lua_State * L)
+{
+	kernentry_t * entry = luaL_checkudata(L, 1, "MaxKernel.config");
+	const char * key = luaL_checkstring(L, 2);
+
+	cfgentry_t * cfg = cfg_getparam(entry->name, key);
+	if (cfg == NULL)
+	{
 		lua_pushnil(L);
-		while (lua_next(L, index))
+	}
+	else
+	{
+		switch (cfg->type)
 		{
-			if (!lua_istable(L, -1))
-			{
-				luaL_error(L, "Encountered unknown value in group table (%s)", lua_typename(L, lua_type(L, -1)));
-			}
+			case T_BOOLEAN:
+				lua_pushboolean(L, *(bool *)cfg->variable);
+				break;
 
-			list = __getgrouplist(L, list, getter, lua_gettop(L));
-			onindex = lua_tointeger(L, -2);
-			lua_pop(L, 1);
+			case T_INTEGER:
+				lua_pushinteger(L, *(int *)cfg->variable);
+				break;
+
+			case T_DOUBLE:
+				lua_pushnumber(L, *(double *)cfg->variable);
+				break;
+
+			case T_STRING:
+				lua_pushstring(L, *(char **)cfg->variable);
+				break;
+
+			case T_CHAR:
+				lua_pushlstring(L, (char *)cfg->variable, 1);
+				break;
 		}
 	}
 
-	return list;
+	return 1;
 }
 
-static block_inst_t ** getinsts(lua_State * L, int tableindex)
+static int mt_config_newindex(lua_State * L)
 {
-	List * list = __getgrouplist(L, NULL, __getblkinst, tableindex);
+	kernentry_t * entry = luaL_checkudata(L, 1, "MaxKernel.config");
+	const char * key = luaL_checkstring(L, 2);
+	const char * value = luaL_checkstring(L, 3);
 
-	block_inst_t ** insts = g_malloc0(sizeof(block_inst_t *) * (list_length(list) + 1));
+	cfg_setparam(entry->name, key, value);
 
-	List * next = list;
-	int index = 0;
-
-	while (next != NULL)
-	{
-		insts[index++] = next->data;
-		next = next->next;
-	}
-
-	list_free(list);
-	return insts;
+	return 0;
 }
 
-static binput_inst_t ** getinput(lua_State * L, int tableindex)
-{
-	List * list = __getgrouplist(L, NULL, __getinput, tableindex);
-
-	binput_inst_t ** inputs = g_malloc0(sizeof(binput_inst_t *) * (list_length(list) + 1));
-
-	List * next = list;
-	int index = 0;
-
-	while (next != NULL)
-	{
-		inputs[index++] = next->data;
-		next = next->next;
-	}
-
-	list_free(list);
-	return inputs;
-}
 
 static int l_log(lua_State * L)
 {
+	// TODO - make these something other than "module" logs
 	LOG(LOG_INFO, "Lua: %s", lua_tostring(L, 1));
 	return 0;
 }
@@ -196,29 +152,34 @@ static int l_debug(lua_State * L)
 
 static int l_include(lua_State * L)
 {
-	int p[] = { LUA_TSTRING };
-	checkparams(L, "include", p, 1);
-
-	const char * file = lua_tostring(L, 1);
-
+	// Resync the path variable
 	lua_getglobal(L, "path");
 	const char * newpath = lua_tostring(L, -1);
 	setpath(newpath);
 
-	const char * filepath = resolvepath(file);
+	// Resolve the file
+	const char * file = luaL_checkstring(L, 1);
+	const char * filepath = resolvepath(file, PATH_FILE);
 	if (filepath == NULL)
 	{
 		luaL_error(L, "Include: Could not resolve file %s", file);
 	}
 	else
 	{
-		if (luaL_loadfile(L, filepath) || lua_pcall(L, 0,0,0))
-		{
-			luaL_error(L, "%s", lua_tostring(L, -1));
-			lua_pop(L, 1);
-		}
+		// Load the file and the free the filepath
+		int result = luaL_loadfile(L, filepath);
 		FREES(filepath);
+
+		if (result == 0)
+		{
+			lua_call(L, 0,0);
+		}
+		else
+		{
+			luaL_error(L, "Lua could not execute file %s: %s", file, lua_tostring(L, -1));
+		}
 	}
+
 
 	return 0;
 }
@@ -228,45 +189,48 @@ static int l_newblock(lua_State * L)
 	block_t * blk = lua_touserdata(L, lua_upvalueindex(1));
 	const char * sig = blk->new_sig;
 
-	void ** params = g_malloc(sizeof(void *) * strlen(sig));
+	void ** params = malloc0(sizeof(void *) * strlen(sig));
 
 	//build constructor args
-	int stack = 1;
-	int index = 0;
-	for (; index < strlen(sig); index++)
+	int stack = 1, index = 0;
+	for (; index < strlen(sig); ++index, ++stack)
 	{
+		void * value = NULL;
 		switch (sig[index])
 		{
-			#define __l_newblock_elem(t1, t2, t, f) \
-				case t1: { \
-					if (lua_isnone(L, stack)) { \
-						luaL_error(L, "Parameter %d of block %s in module %s must be of type %s", stack, blk->name, blk->module->path, t);\
-					} \
-					t2 * v = g_malloc(sizeof(t2)); \
-					*v = (t2) f(L, stack); \
-					params[index] = v; \
-					break; }
-
-			__l_newblock_elem(T_BOOLEAN, bool, "boolean", lua_toboolean)
-			__l_newblock_elem(T_INTEGER, int, "integer", lua_tointeger)
-			__l_newblock_elem(T_DOUBLE, double, "double", lua_tonumber)
-			__l_newblock_elem(T_STRING, char *, "string", lua_tostring)
-
+			case T_BOOLEAN:
+			{
+				value = malloc0(sizeof(bool));
+				*(bool *)value = lua_toboolean(L, stack);
+				break;
+			}
+			case T_INTEGER:
+			{
+				value = malloc0(sizeof(int));
+				*(int *)value = luaL_checkinteger(L, stack);
+				break;
+			}
+			case T_DOUBLE:
+			{
+				value = malloc0(sizeof(double));
+				*(int *)value = luaL_checknumber(L, stack);
+				break;
+			}
+			case T_STRING:
+			{
+				value = malloc0(sizeof(char *));
+				*(const char **)value = luaL_checkstring(L, stack);
+				break;
+			}
 			case T_CHAR:
 			{
-				if (lua_isnone(L, stack))
-				{
-					luaL_error(L, "Parameter %d of block %s must be of type string", stack, blk->name);
-				}
-
-				char * v = g_malloc(sizeof(char));
-				*v = lua_tostring(L, stack)[0];
-				params[index] = v;
+				value = malloc0(sizeof(char));
+				*(char *)value = luaL_checkstring(L, stack)[0];
 				break;
 			}
 		}
 
-		stack++;
+		params[index] = value;
 	}
 
 	block_inst_t * blk_inst = io_newblock(blk, params);
@@ -277,183 +241,111 @@ static int l_newblock(lua_State * L)
 
 	for (index=0; index<strlen(sig); index++)
 	{
-		g_free(params[index]);
+		free(params[index]);
 	}
-	g_free(params);
+	free(params);
 
-	lua_newtable(L);
-	setio(L, blk_inst);
+	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));
+	entry->type = K_BLOCKINST;
+	entry->name[0] = '\0';
+	entry->data = blk_inst;
+
+	luaL_getmetatable(L, "MaxKernel.kernentry");
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
 
-static int l_config__index(lua_State * L)
+static int mt_module_index(lua_State * L)
 {
-	lua_pushstring(L, "__modulepath");
-	lua_gettable(L, 1);
+	module_t ** module = luaL_checkudata(L, 1, "MaxKernel.module");
+	const char * key = luaL_checkstring(L, 2);
 
-	const char * modname = lua_tostring(L, -1);
-	const char * key = lua_tostring(L, 2);
+	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));
+	entry->type = K_MODULE;
+	memcpy(entry->name, key, strlen(key)+1);
+	entry->data = *module;
 
-	cfgentry_t * cfg = cfg_getparam(modname, key);
-	if (cfg == NULL)
+	if (strcmp("config", key) == 0)
 	{
-		lua_pushnil(L);
+		luaL_getmetatable(L, "MaxKernel.config");
+		lua_setmetatable(L, -2);
 	}
 	else
 	{
-		switch (cfg->type)
-		{
-			#define __l_config__index_elem(t1, t2, f) \
-				case t1: \
-					f(L, *(t2 *)cfg->variable);\
-					break;
-
-			__l_config__index_elem(T_BOOLEAN, bool, lua_pushboolean)
-			__l_config__index_elem(T_INTEGER, int, lua_pushinteger)
-			__l_config__index_elem(T_DOUBLE, double, lua_pushnumber)
-			__l_config__index_elem(T_STRING, char *, lua_pushstring)
-
-			case T_CHAR:
-			{
-				char str[2] = { *(char *)cfg->variable, '\0' };
-				lua_pushstring(L, str);
-				break;
-			}
-		}
+		luaL_getmetatable(L, "MaxKernel.kernentry");
+		lua_setmetatable(L, -2);
 	}
 
 	return 1;
-}
-
-static int l_config__newindex(lua_State * L)
-{
-	lua_pushstring(L, "__modulepath");
-	lua_gettable(L, 1);
-
-	const char * modname = lua_tostring(L, -1);
-	const char * key = lua_tostring(L, 2);
-	const char * value = lua_tostring(L, 3);
-
-	cfg_setparam(modname, key, value);
-
-	return 0;
 }
 
 static int l_loadmodule(lua_State * L)
 {
-	int p[] = { LUA_TSTRING };
-	checkparams(L, "loadmodule", p, 1);
-
-	const char * modname = lua_tostring(L, 1);
-
+	// Resync the path variable
 	lua_getglobal(L, "path");
 	const char * newpath = lua_tostring(L, -1);
 	setpath(newpath);
 
-	module_t * mod = module_load(modname);
-	if (mod == NULL)
-	{
-		LOGK(LOG_FATAL, "Lua: Load Module: Could not load module %s", modname);
-		return 0;
-	}
+	// Load the module
+	const char * modname = luaL_checkstring(L, 1);
+	module_t * module = module_load(modname);
 
-	lua_newtable(L);	//return value
-
-	//set module entry
-	lua_pushstring(L, "__module");
-	lua_pushlightuserdata(L, mod);
-	lua_settable(L, -3);
-
-	//add global block io
-	if (mod->block_global_inst != NULL)
-	{
-		setio(L, mod->block_global_inst);
-	}
-
-	//add instance block constructors
-	{
-		GHashTableIter itr;
-		block_t * blk;
-
-		g_hash_table_iter_init(&itr, mod->blocks);
-		while (g_hash_table_iter_next(&itr, NULL, (gpointer *)&blk))
-		{
-			LOGK(LOG_DEBUG, "Lua: adding block constructor for %s", blk->name);
-			lua_pushstring(L, blk->name);
-			lua_newtable(L);
-
-			lua_pushstring(L, "new");
-			lua_pushlightuserdata(L, blk);
-			lua_pushcclosure(L, l_newblock, 1);
-			lua_settable(L, -3);
-
-			lua_settable(L, -3);
-		}
-	}
-
-	//set config table (as proxy w/ meta table)
-	lua_pushstring(L, "config");
-	lua_newtable(L);
-
-	//set config["__modulepath"]
-	lua_pushstring(L, "__modulepath");
-	lua_pushstring(L, modname);
-	lua_settable(L, -3);
-
-	lua_newtable(L); //meta table
-	lua_pushstring(L, "__index");
-	lua_pushcfunction(L, l_config__index);
-	lua_settable(L, -3);
-	lua_pushstring(L, "__newindex");
-	lua_pushcfunction(L, l_config__newindex);
-	lua_settable(L, -3);
+	// Create the lua module object
+	module_t ** modobject = lua_newuserdata(L, sizeof(module_t *));
+	*modobject = module;
+	luaL_getmetatable(L, "MaxKernel.module");
 	lua_setmetatable(L, -2);
-
-	//attach config table
-	lua_settable(L, -3);
-
 
 	return 1;
 }
 
 static int l_route(lua_State * L)
 {
-	int p[] = { LUA_TTABLE, LUA_TTABLE };
-	checkparams(L, "route", p, 2);
+	kernentry_t * out = luaL_checkudata(L, 1, "MaxKernel.kernentry");
+	kernentry_t * in = luaL_checkudata(L, 2, "MaxKernel.kernentry");
+	const block_inst_t * out_inst = out->data;
+	const block_inst_t * in_inst = in->data;
 
-	lua_getfield(L, 1, "__ioblkinst");
-	lua_getfield(L, 2, "__ioblkinst");
-	block_inst_t * out_inst = lua_touserdata(L, -2);
-	block_inst_t * in_inst = lua_touserdata(L, -1);
+	// Find the input_inst and output_inst
+	list_t * pos;
+	boutput_inst_t * bout = NULL;
+	binput_inst_t * bin = NULL;
 
-	lua_getfield(L, 1, "name");
-	lua_getfield(L, 2, "name");
-	const char * out = lua_tostring(L, -2);
-	const char * in = lua_tostring(L, -1);
-
-	if (out_inst == NULL || in_inst == NULL)
+	list_foreach(pos, &out_inst->outputs_inst)
 	{
-		luaL_error(L, "Could not route IO, invalid Block instance");
+		boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
+		if (strcmp(out->name, test->output->name) == 0)
+		{
+			bout = test;
+			break;
+		}
 	}
 
-	boutput_inst_t * bout = g_hash_table_lookup(out_inst->outputs_inst, out);
-	binput_inst_t * bin = g_hash_table_lookup(in_inst->inputs_inst, in);
+	list_foreach(pos, &in_inst->inputs_inst)
+	{
+		binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
+		if (strcmp(in->name, test->input->name) == 0)
+		{
+			bin = test;
+			break;
+		}
+	}
 
+	// Do some error checking
 	if (bout == NULL)
 	{
-		luaL_error(L, "Could not route %s.%s, Not an output!", out_inst->block->name, out);
+		luaL_error(L, "Could not route %s.%s, Not an output!", out_inst->block->name, out->name);
 	}
-
 	if (bin == NULL)
 	{
-		luaL_error(L, "Could not route %s.%s, Not an input!", in_inst->block->name, in);
+		luaL_error(L, "Could not route %s.%s, Not an input!", in_inst->block->name, in->name);
 	}
 
-
+	// Now route it
 	if (!io_route(bout, bin))
 	{
-		luaL_error(L, "Failed to route IO %s.%s to %s.%s", out_inst->block->name, out, in_inst->block->name, in);
+		luaL_error(L, "Failed to route IO %s.%s to %s.%s", out_inst->block->name, out->name, in_inst->block->name, in->name);
 	}
 
 	return 0;
@@ -461,113 +353,60 @@ static int l_route(lua_State * L)
 
 static int l_newrategroup(lua_State * L)
 {
-	int p[] = { LUA_TSTRING, LUA_TTABLE, LUA_TNUMBER };
-	checkparams(L, "rategroup", p, 3);
+	const char * name = luaL_checkstring(L, 1);
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be a table");
+	double freq_hz = luaL_checknumber(L, 3);
 
-	const char * name = lua_tostring(L, 1);
-	double freq_hz = lua_tonumber(L, 3);
+	// Get all the block instances
+	block_inst_t ** insts = malloc0(sizeof(block_inst_t *) * (GROUP_MAX+1));
+	size_t index = 0;
 
-	//get all the block instances
-	block_inst_t ** insts = getinsts(L, 2);
+	luaL_getmetatable(L, "MaxKernel.kernentry");
+	lua_pushnil(L);
+	while (lua_next(L, 2) != 0)
+	{
+		if (index == GROUP_MAX)
+		{
+			luaL_error(L, "Too many rategroup items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+		}
 
-	//print some debug info
+		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1) || !lua_rawequal(L, -1, -4))
+		{
+			luaL_error(L, "Encountered unknown value for item %s in rategroup table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
+		}
+		lua_pop(L, 1);
+
+		kernentry_t * entry = lua_touserdata(L, -1);
+		if (entry->type != K_BLOCKINST || strlen(entry->name) != 0)
+		{
+			luaL_error(L, "Invalid type for item %s in rategroup table", lua_tostring(L, -2));
+		}
+
+		insts[index++] = (block_inst_t *)entry->data;
+
+		lua_pop(L, 1);
+	}
+
+	// Print some debug info
 	if (insts[0] != NULL)
 	{
-		String str = string_new("Creating new rategroup %s with update @ %f Hz and members: %s", name, freq_hz, insts[0]->block->name);
-
+		String str = string_new("Creating new rategroup with update @ %f Hz and members: %s", freq_hz, insts[0]->block->name);
 		size_t i = 1;
 		while (insts[i] != NULL)
 		{
 			string_append(&str, ", %s", insts[i]->block->name);
 			i++;
 		}
-
 		LOGK(LOG_DEBUG, "%s", str.string);
 	}
 	else
 	{
 		LOGK(LOG_WARN, "Cannot create rategroup %s with no members", name);
+		free(insts);
 		return 0;
 	}
 
-	//create new rate group
-	runnable_t * rungrp = exec_newrungroup(name, (runnable_t **)insts);
-	trigger_t * trigger = trigger_newclock(name, freq_hz);
-
-	String name_str = string_new("%s rategroup", name);
-	kthread_t * kth = kthread_new(string_copy(&name_str), trigger, rungrp, 0);
-	kthread_schedule(kth);
-
-	return 0;
-}
-
-static int l_newvrategroup(lua_State * L)
-{
-	if (lua_isnoneornil(L, 3))
-	{
-		int p[] = { LUA_TSTRING, LUA_TTABLE, LUA_TNIL, LUA_TNUMBER };
-		checkparams2(L, "varrategroup", p, 2, 4);
-	}
-	else
-	{
-		int p[] = { LUA_TSTRING, LUA_TTABLE, LUA_TTABLE, LUA_TNUMBER };
-		checkparams2(L, "varrategroup", p, 3, 4);
-	}
-
-	const char * name = lua_tostring(L, 1);
-	double freq_hz = lua_tonumber(L, 4);
-	boutput_inst_t * out = NULL;
-
-	if (!lua_isnoneornil(L, 3))
-	{
-		lua_getfield(L, 3, "__ioblkinst");
-		lua_getfield(L, 3, "name");
-		if (!lua_isnil(L, -2) && !lua_isnil(L, -1))
-		{
-			block_inst_t * out_inst = lua_touserdata(L, -2);
-			const char * outname = lua_tostring(L, -1);
-
-			if (out_inst == NULL)
-			{
-				luaL_error(L, "Invalid Block instance");
-			}
-
-			out = g_hash_table_lookup(out_inst->outputs_inst, outname);
-
-			if (out == NULL)
-			{
-				luaL_error(L, "Error: %s.%s is not an output!", out_inst->block->name, outname);
-			}
-		}
-		else
-		{
-			luaL_error(L, "Invalid rategroup rate-controlling output (param 3)");
-		}
-		lua_pop(L, 2);
-	}
-
-	//get all the block instances
-	block_inst_t ** insts = getinsts(L, 2);
-
-	//print some debug info
-	if (insts[0] != NULL)
-	{
-		String str = string_new("Creating new vrategroup with initial update @ %f Hz and members: %s", freq_hz, insts[0]->block->name);
-		size_t i = 1;
-		while (insts[i] != NULL)
-		{
-			string_append(&str, ", %s", insts[i]->block->name);
-			i++;
-		}
-		LOGK(LOG_DEBUG, "%s", str.string);
-	}
-	else
-	{
-		LOGK(LOG_WARN, "Cannot create vrategroup %s with no members", name);
-		return 0;
-	}
-
-	//create new rate group
+	// Create new rate group
 	runnable_t * rungrp = exec_newrungroup(name, (runnable_t **)insts);
 	trigger_t * trigger = trigger_newvarclock(name, freq_hz);
 
@@ -576,72 +415,149 @@ static int l_newvrategroup(lua_State * L)
 
 	kthread_schedule(kth);
 
-	if (out != NULL)
-	{
-		io_route(out, trigger_varclock_getrateinput(trigger));
-	}
+	// Return the rate block_inst
+	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));
+	entry->type = K_BLOCKINST;
+	entry->name[0] = '\0';
+	entry->data = trigger_varclock_getblockinst(trigger);
 
-	lua_newtable(L);
-	setio(L, trigger_varclock_getblockinst(trigger));
+	luaL_getmetatable(L, "MaxKernel.kernentry");
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
 
 static int l_newsyscall(lua_State * L)
 {
-	int p[] = { LUA_TSTRING, LUA_TTABLE, LUA_TSTRING };
-	checkparams2(L, "newsyscall", p, 2, 3);
-
-	const char * name = lua_tostring(L, 1);
+	const char * name = luaL_checkstring(L, 1);
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be a table");
 	const char * initial_desc = lua_tostring(L, 3);
 
-	//get the syscall parameters
-	binput_inst_t ** inputs = getinput(L, 2);
-	if (inputs[0] == NULL)
+	// Get the syscall parameters
+	size_t index = 0;
+	binput_inst_t ** inputs = malloc0(sizeof(block_inst_t *) * (GROUP_MAX+1));
+
+	luaL_getmetatable(L, "MaxKernel.kernentry");
+	lua_pushnil(L);
+	while (lua_next(L, 2) != 0)
 	{
-		luaL_error(L, "Empty group table");
+		if (index == GROUP_MAX)
+		{
+			luaL_error(L, "Too many syscall member items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+		}
+
+		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1) || !lua_rawequal(L, -1, -4))
+		{
+			luaL_error(L, "Encountered unknown value for item %s in syscall table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
+		}
+		lua_pop(L, 1);
+
+		kernentry_t * entry = lua_touserdata(L, -1);
+		const block_inst_t * in_inst = entry->data;
+		if (entry->type != K_BLOCKINST || strlen(entry->name) == 0)
+		{
+			luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
+		}
+
+		list_t * pos;
+		binput_inst_t * bin = NULL;
+		list_foreach(pos, &in_inst->inputs_inst)
+		{
+			binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
+			if (strcmp(entry->name, test->input->name) == 0)
+			{
+				bin = test;
+				break;
+			}
+		}
+
+		if (bin == NULL)
+		{
+			luaL_error(L, "Invalid syscall input %s.%s for syscall %s", in_inst->block->name, entry->name, name);
+		}
+
+		inputs[index++] = bin;
+
+		lua_pop(L, 1);
 	}
 
-	GString * desc = g_string_new(initial_desc != NULL? initial_desc : "[no description]");
-	g_string_append_printf(desc, " ::");
+	//binput_inst_t ** inputs = getinput(L, 2);
 
-	size_t i=0;
-	while (inputs[i] != NULL)
+	String desc = string_blank();
+	if (inputs[0] != NULL)
 	{
-		const char * idesc = inputs[i]->input->desc;
-		g_string_append_printf(desc, " P%zu (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), idesc != NULL? idesc : "(no desc)");
-		i++;
+		string_append(&desc, "%s ::", (initial_desc != NULL)? initial_desc : "[no description]");
+		size_t i = 0;
+		while (inputs[i] != NULL)
+		{
+			const char * idesc = inputs[i]->input->desc;
+			string_append(&desc, " P%zu (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), (idesc != NULL)? idesc : "(no desc)");
+			i++;
+		}
+	}
+	else
+	{
+		LOGK(LOG_WARN, "Cannot create syscall %s with empty group table", name);
+		free(inputs);
+		return 0;
 	}
 
-	syscallblock_t * sb = syscallblock_new(name, inputs, desc->str);
+	syscallblock_t * sb = syscallblock_new(name, inputs, desc.string);
+	free(inputs);
 
-	g_string_free(desc, true);
-	g_free(inputs);
+	// Return the syscall block_inst
+	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));
+	entry->type = K_BLOCKINST;
+	entry->name[0] = '\0';
+	entry->data = syscallblock_getblockinst(sb);
 
-	lua_newtable(L);
-	setio(L, syscallblock_getblockinst(sb));
+	luaL_getmetatable(L, "MaxKernel.kernentry");
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
 
-bool lua_execfile(const char * name)
+
+static const struct luaL_Reg module_mt[] = {
+	{"__index", mt_module_index},
+	{NULL, NULL}
+};
+
+static const struct luaL_Reg kernentry_mt[] = {
+	{"__index", mt_kernentry_index},
+	{NULL, NULL}
+};
+
+static const struct luaL_Reg config_mt[] = {
+	{"__index", mt_config_index},
+	{"__newindex", mt_config_newindex},
+	{NULL, NULL}
+};
+
+bool lua_execfile(const char * path)
 {
 	bool ret = true;
-	const char * filepath = resolvepath(name);
-	if (filepath == NULL)
-	{
-		LOGK(LOG_FATAL, "Could not execute lua file %s", name);
-	}
 
 	LOGK(LOG_DEBUG, "Creating lua environment");
 	lua_State * L = luaL_newstate();
 	luaL_openlibs(L);
 
-	//add path var
+	// TODO - add lua_atpanic
+
+	// Creating the metatables
+	luaL_newmetatable(L, "MaxKernel.module");
+	luaL_register(L, NULL, module_mt);
+	luaL_newmetatable(L, "MaxKernel.kernentry");
+	luaL_register(L, NULL, kernentry_mt);
+	luaL_newmetatable(L, "MaxKernel.config");
+	luaL_register(L, NULL, config_mt);
+
+	// Add path variable
 	const char * bigpath = getpath();
 	lua_pushstring(L, bigpath);
 	lua_setglobal(L, "path");
 
+	// Register the functions
 	lua_register(L, "log", l_log);
 	lua_register(L, "print", l_log);
 	lua_register(L, "warn", l_warn);
@@ -651,18 +567,15 @@ bool lua_execfile(const char * name)
 	lua_register(L, "loadmodule", l_loadmodule);
 	lua_register(L, "route", l_route);
 	lua_register(L, "newrategroup", l_newrategroup);
-	lua_register(L, "newvrategroup", l_newvrategroup);
 	lua_register(L, "newsyscall", l_newsyscall);
 
-	LOGK(LOG_DEBUG, "Executing lua file %s", filepath);
-	if (luaL_loadfile(L, filepath) || lua_pcall(L, 0,0,0))
+	LOGK(LOG_INFO, "Executing lua file %s", path);
+	if (luaL_loadfile(L, path) || lua_pcall(L, 0,0,0))
 	{
 		LOGK(LOG_ERR, "Lua: %s", lua_tostring(L, -1));
-		lua_pop(L, 1);
 		ret = false;
 	}
 
-	FREES(filepath);
 	lua_close(L);
 	return ret;
 }

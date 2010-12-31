@@ -34,8 +34,8 @@ void send_init()
 	mutex_init(&listlock, M_RECURSIVE);
 	cond_init(&barrier);
 
-	INIT_LIST(&packets_queue);
-	INIT_LIST(&packets_free);
+	LIST_INIT(&packets_queue);
+	LIST_INIT(&packets_free);
 
 	size_t i=0;
 	for (; i<SERVICE_PACKETS_MAX; i++)
@@ -55,7 +55,7 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 	size_t onpacket;
 
 	list_t packets;
-	INIT_LIST(&packets);
+	LIST_INIT(&packets);
 
 	mutex_lock(&listlock);
 	{

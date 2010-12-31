@@ -10,11 +10,18 @@ static char path[PATH_MAX_SIZE] = {0};
 
 static GRegex * meta_regex = NULL;
 
-static bool file_exists(const char * path)
+static inline bool file_exists(const char * path)
 {
 	struct stat buf;
 	int i = stat(path, &buf);
 	return i == 0 && S_ISREG(buf.st_mode);
+}
+
+static inline bool dir_exists(const char * path)
+{
+	struct stat buf;
+	int i = stat(path, &buf);
+	return i == 0 && S_ISDIR(buf.st_mode);
 }
 
 void setpath(const char * newpath)
@@ -43,63 +50,44 @@ const char * getpath()
 	return path;
 }
 
-const char * resolvepath(const char * name)
+const char * resolvepath(const char * name, int etype)
 {
 	const char * filepath = NULL;
 
 	if (name[0] == '/')
 	{
 		//absolute path
-		if (file_exists(name))
+		if ((etype & PATH_FILE && file_exists(name)) || (etype & PATH_DIRECTORY && dir_exists(name)))
 		{
 			filepath = strdup(name);
 		}
 	}
 	else
 	{
-		size_t pathlen = strlen(path);
-		if (pathlen > 0)
+		String abspath;
+		char pathbuf[PATH_MAX_SIZE];
+		memcpy(pathbuf, path, sizeof(pathbuf));
+
+		char * start = pathbuf, * end;
+		do
 		{
-			size_t i = 0, arrayi = 0;
-			char pathbuf[PATH_MAX_SIZE];
-			char * patharray[PATH_MAX_ENTRIES];
-			memcpy(pathbuf, path, pathlen+1);
-
-			//break up path variable into array of strings
-			for (; i<pathlen; i++)
+			end = strchr(start, ':');
+			if (end != NULL)
 			{
-				if (pathbuf[i] == ':')
-				{
-					pathbuf[i] = 0;
-					patharray[arrayi++] = &pathbuf[i+1];
-				}
-
-				if (arrayi == PATH_MAX_ENTRIES)
-				{
-					LOGK(LOG_ERR, "Max path entries of %d exceeded.", PATH_MAX_ENTRIES);
-					break;
-				}
+				*end++ = '\0';
 			}
 
-			//iterate over array and check for file in each entry
-			String abspath;
 			string_clear(&abspath);
-			for (i=0; i<arrayi; i++)
-			{
-				string_append(&abspath, "%s/%s", patharray[i], name);
-				if (strchr(name, '.') == NULL)
-				{
-					string_append(&abspath, ".mo");
-				}
+			string_append(&abspath, "%s/%s", start, name);
 
-				if (file_exists(abspath.string))
-				{
-					filepath = string_copy(&abspath);
-					break;
-				}
-				string_clear(&abspath);
+			if ((etype & PATH_FILE && file_exists(abspath.string)) || (etype & PATH_DIRECTORY && dir_exists(abspath.string)))
+			{
+				filepath = string_copy(&abspath);
+				break;
 			}
-		}
+
+			start = end;
+		} while (start != NULL);
 	}
 
 	if (filepath == NULL)

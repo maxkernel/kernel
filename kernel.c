@@ -5,8 +5,10 @@
 #include <time.h>
 #include <argp.h>
 #include <malloc.h>
+#include <dirent.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <pthread.h>
 #include <bfd.h>
 #include <confuse.h>
@@ -132,6 +134,70 @@ static struct argp argp = { arg_opts, parse_args, 0, 0 };
 
 
 /*---------------------- CONFUSE ----------------------*/
+static inline int cfg_runfile(const char * name)
+{
+	int ret = -1;
+	bool (*execfunc)(const char * path) = NULL;
+
+	const char * filepath = resolvepath(name, PATH_FILE);
+	if (filepath == NULL)
+	{
+		LOGK(LOG_ERR, "Could not execute file %s. It does not exist!", name);
+		goto end;
+	}
+
+	if (strsuffix(filepath, ".lua"))
+	{
+		execfunc = lua_execfile;
+	}
+	else
+	{
+		LOGK(LOG_WARN, "Could not determine how interpret file %s", filepath);
+		goto end;
+	}
+
+	ret = execfunc(filepath)? 0 : -1;
+
+end:
+	FREES(filepath);
+	return ret;
+}
+
+static inline int cfg_rundir(const char * dir)
+{
+	int ret = 0;
+
+	const char * dirpath = resolvepath(dir, PATH_DIRECTORY);
+	if (dirpath == NULL)
+	{
+		LOGK(LOG_ERR, "Could not execute directory %s. It does not exist!", dir);
+		ret = -1;
+		goto end;
+	}
+
+	String abspath;
+	DIR * d = opendir(dirpath);
+	struct dirent * entry;
+	while ((entry = readdir(d)) != NULL)
+	{
+		if (entry->d_name[0] == '.')
+		{
+			// Do not execute hidden files (also avoids . and ..)
+			continue;
+		}
+
+		string_clear(&abspath);
+		string_append(&abspath, "%s/%s", dirpath, entry->d_name);
+
+		ret |= cfg_runfile(abspath.string);
+	}
+	closedir(d);
+
+end:
+	FREES(dirpath);
+	return ret;
+}
+
 static int cfg_loadmodule(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 {
 	if (argc < 1)
@@ -167,11 +233,11 @@ static int cfg_config(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 	return 0;
 }
 
-static int cfg_execlua(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
+static int cfg_execdir(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 {
 	if (argc < 1)
 	{
-		cfg_error(cfg, "Invalid argument length for execlua function");
+		cfg_error(cfg, "Invalid argument length for execdirectory function");
 		return -1;
 	}
 
@@ -180,10 +246,26 @@ static int cfg_execlua(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 	int i=0;
 	for (; i<argc; i++)
 	{
-		if (!lua_execfile(argv[i]))
-		{
-			LOGK(LOG_FATAL, "lua_execfile failed");
-		}
+		cfg_rundir(argv[i]);
+	}
+
+	return 0;
+}
+
+static int cfg_execfile(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
+{
+	if (argc < 1)
+	{
+		cfg_error(cfg, "Invalid argument length for execfile function");
+		return -1;
+	}
+
+	setpath(cfg_getstr(cfg, "path"));
+
+	int i=0;
+	for (; i<argc; i++)
+	{
+		cfg_runfile(argv[i]);
 	}
 
 	return 0;
@@ -256,7 +338,7 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 void kobj_register(kobject_t * object)
 {
 	mutex_lock(&kobj_mutex);
-	list_add(&objects, &object->kobjdb);
+	list_push(&objects, &object->kobjdb);
 	mutex_unlock(&kobj_mutex);
 }
 
@@ -367,10 +449,10 @@ static void * kthread_dothread(void * object)
 				profile_addthreadcputime(kth, cpudiff);
 			}
 #endif
-		}
 
-		//yield before the next round
-		sched_yield();
+			//yield before the next round
+			sched_yield();
+		}
 	}
 
 	kth->running = false;
@@ -728,7 +810,8 @@ int main(int argc, char * argv[])
 		CFG_STR(	"installed",	"0",					CFGF_NONE	),
 		CFG_FUNC(	"loadmodule",	cfg_loadmodule			),
 		CFG_FUNC(	"config",		cfg_config				),
-		CFG_FUNC(	"execlua",		cfg_execlua				),
+		CFG_FUNC(	"execfile",		cfg_execfile			),
+		CFG_FUNC(	"execdirectory",cfg_execdir				),
 		CFG_END()
 	};
 	
