@@ -52,7 +52,7 @@ static void handle_calget__itrd(void * udata, char * module, char * name, char t
 
 static void handle_calget(http_connection * conn, http_context * ctx, const char * uri)
 {
-	char * revert = http_getparam(ctx, "revert");
+	const char * revert = http_getparam(ctx, "revert");
 	if (revert != NULL && strcmp(revert, "1") == 0)
 	{
 		cal_revert();

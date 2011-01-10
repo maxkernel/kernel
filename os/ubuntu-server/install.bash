@@ -53,8 +53,8 @@ libv4l-dev
 libdc1394-22-dev
 zlib1g-dev
 libtar-dev
-sqlite
-libsqlite-dev
+sqlite3
+libsqlite3-dev
 sun-java6-jdk
 lua5.1
 liblua5.1-dev

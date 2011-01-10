@@ -276,6 +276,7 @@ module_t * module_load(const char * name)
 				cal_freeparam(value);
 			}
 
+			list_remove(&cal->module_list);
 			list_add(&module->calentries, &cal->module_list);
 			list_add(&calentries, &cal->global_list);
 		}
@@ -429,10 +430,10 @@ void module_init(const module_t * module)
 	module->initialize();
 }
 
-int module_compare(const void * a, const void * b)
+int module_compare(list_t * a, list_t * b)
 {
-	const module_t * ma = a;
-	const module_t * mb = b;
+	module_t * ma = list_entry(a, module_t, global_list);
+	module_t * mb = list_entry(b, module_t, global_list);
 	return strcmp(ma->kobject.obj_name, mb->kobject.obj_name);
 }
 

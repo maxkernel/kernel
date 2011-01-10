@@ -36,6 +36,9 @@ void http_write(http_connection * conn, const void * buf, size_t len);
 
 void http_destroy(http_context * ctx);
 
+// Helper functions
+void http_urldecode(char * string);
+
 #ifdef __cplusplus
 }
 #endif

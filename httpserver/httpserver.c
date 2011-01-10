@@ -7,14 +7,14 @@
 
 #include "httpserver.h"
 #include <aul/net.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 #include <kernel.h>
 
 MOD_PREACT(module_preact);
 
 #define NUM_BUFFERS		10
 #define NUM_KEYVALUES	30
-#define BUFFER_LEN		500
+#define BUFFER_LEN		1000
 
 static regex_t get_match;
 static regex_t params_match;
@@ -67,6 +67,29 @@ static inline String addr2string(uint32_t ip)
 	return string_new("%d.%d.%d.%d", a1, a2, a3, a4);
 }
 
+void http_urldecode(char * string)
+{
+	char * i = NULL;
+	while ((i = strchr(string, '%')) != NULL)
+	{
+		size_t len = 0;
+		if ((len = strlen(i)) < 3)
+		{
+			break;
+		}
+
+		// Parse the value
+		const char x[] = { i[1], i[2], '\0' };
+		long v = strtol(x, NULL, 16);
+
+		// Collapse the string
+		memcpy(&i[1], &i[3], len-2);
+
+		// Set the value
+		i[0] = (char)v;
+	}
+}
+
 static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 {
 	http_buffer * buffer = userdata;
@@ -108,6 +131,9 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 
 						char * value = params + offset + match[2].rm_so;
 						value[match[2].rm_eo - match[2].rm_so] = '\0';
+
+						http_urldecode(key);
+						http_urldecode(value);
 
 						http_keyvalue * kv = &buffer->ctx->keyvalues[keyvalue_index++];
 						kv->key = key;

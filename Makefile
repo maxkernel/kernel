@@ -7,19 +7,20 @@ else
 INSTALL		= /usr/lib/maxkernel
 endif
 LOGDIR		= /var/log/maxkernel
-DBNAME		= kern.db
+DBNAME		= kern-1.db
 CONFIG		= max.conf
+MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= ALPHA
 
 MODULES		= netui discovery console service httpserver network map maxpod jpegcompress webcam gps test
 HEADERS		= kernel.h buffer.h array.h serialize.h 
 
-SRCS		= kernel.c meta.c module.c profile.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c
+SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c
 OBJS		= $(SRCS:.c=.o)
-PACKAGES	= libconfuse libffi glib-2.0 gnet-2.0 gmodule-2.0 sqlite lua5.1 libmatheval
+PACKAGES	= libconfuse libffi glib-2.0 gnet-2.0 gmodule-2.0 sqlite3 lua5.1 libmatheval
 INCLUDES	= -I. -Iaul/include $(shell pkg-config --cflags-only-I $(PACKAGES))
-DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMODEL="\"$(MODEL)\""
+DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\"" -DMODEL="\"$(MODEL)\""
 CFLAGS		= -pipe -ggdb3 -Wall $(shell pkg-config --cflags-only-other $(PACKAGES))
 LIBS		= $(shell pkg-config --libs $(PACKAGES)) -lbfd -ldl -lrt -laul -Laul
 LFLAGS		= 
@@ -49,7 +50,7 @@ all: prepare prereq $(TARGET)
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In utils" >>buildlog && $(MAKE) -C utils 2>>buildlog) || ( cat buildlog && false )
-	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite $(DBNAME) 2>>buildlog ) || ( cat buildlog && false )
+	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
 	cat buildlog
 
 $(TARGET): $(OBJS)
@@ -57,17 +58,15 @@ $(TARGET): $(OBJS)
 
 install:
 	mkdir -p $(INSTALL) $(LOGDIR) $(INSTALL)/modules $(INSTALL)/deploy /usr/include/max
-	cp -f $(TARGET) stitcher.lua $(INSTALL)
+	cp -f $(TARGET) $(INSTALL)
 	( [ -e $(INSTALL)/$(DBNAME) ] || cp -f $(DBNAME) $(INSTALL) )
-	cp -rf debug $(INSTALL)
+	cp -rf debug stitcher $(INSTALL)
 	cp -f $(HEADERS) /usr/include/max
 	perl config.gen.pl -install '$(INSTALL)' >$(INSTALL)/$(CONFIG)
 	$(foreach module,$(MODULES),$(MAKE) -C $(module) install && ( [ -e $(module)/install.part.bash ] && ( cd $(module) && bash install.part.bash ) || true ) &&) true
 	$(MAKE) -C aul install
 	$(MAKE) -C libmax install
 	$(MAKE) -C utils install
-	#cp -f $(foreach util,$(UTILS),utils/$(util)) $(INSTALL)
-	#$(foreach util,$(UTILS),ln -fs $(INSTALL)/$(util) /usr/bin &&) true
 	cat maxkernel.initd | sed "s|\(^INSTALL=\)\(.*\)$$|\1$(INSTALL)|" >/etc/init.d/maxkernel && chmod +x /etc/init.d/maxkernel
 	update-rc.d -f maxkernel start 95 2 3 4 5 . stop 95 0 1 6 .
 	$(INSTALL)/max-autostart -c
@@ -171,17 +170,18 @@ kernel.o: /usr/include/errno.h /usr/include/bits/errno.h
 kernel.o: /usr/include/linux/errno.h /usr/include/asm/errno.h
 kernel.o: /usr/include/asm-generic/errno.h
 kernel.o: /usr/include/asm-generic/errno-base.h /usr/include/malloc.h
+kernel.o: /usr/include/dirent.h /usr/include/bits/dirent.h
 kernel.o: /usr/include/sys/mman.h /usr/include/bits/mman.h
 kernel.o: /usr/include/sys/time.h /usr/include/pthread.h /usr/include/sched.h
 kernel.o: /usr/include/bits/sched.h /usr/include/signal.h
 kernel.o: /usr/include/bits/setjmp.h /usr/include/bfd.h
 kernel.o: /usr/include/ansidecl.h /usr/include/symcat.h
-kernel.o: /usr/include/confuse.h /usr/include/sqlite.h
+kernel.o: /usr/include/confuse.h /usr/include/sqlite3.h
 kernel.o: aul/include/aul/common.h /usr/include/inttypes.h
 kernel.o: /usr/include/stdint.h /usr/include/bits/wchar.h
-kernel.o: aul/include/aul/contrib/list.h aul/include/aul/mainloop.h
-kernel.o: aul/include/aul/mutex.h aul/include/aul/list.h kernel.h
-kernel.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
+kernel.o: aul/include/aul/list.h aul/include/aul/mainloop.h
+kernel.o: aul/include/aul/mutex.h kernel.h /usr/include/glib-2.0/glib.h
+kernel.o: /usr/include/glib-2.0/glib/galloca.h
 kernel.o: /usr/include/glib-2.0/glib/gtypes.h
 kernel.o: /usr/lib/glib-2.0/include/glibconfig.h
 kernel.o: /usr/include/glib-2.0/glib/gmacros.h
@@ -319,8 +319,8 @@ meta.o: /usr/include/glib-2.0/glib/gvarianttype.h
 meta.o: /usr/include/glib-2.0/glib/gvariant.h /usr/include/glib-2.0/gmodule.h
 meta.o: aul/include/aul/common.h aul/include/aul/log.h
 meta.o: aul/include/aul/error.h aul/include/aul/string.h
-meta.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-meta.o: /usr/include/bits/sched.h aul/include/aul/list.h
+meta.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+meta.o: /usr/include/bits/sched.h
 module.o: /usr/include/stdlib.h /usr/include/features.h
 module.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 module.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -401,9 +401,8 @@ module.o: /usr/include/glib-2.0/glib/gvarianttype.h
 module.o: /usr/include/glib-2.0/glib/gvariant.h
 module.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 module.o: aul/include/aul/log.h aul/include/aul/error.h
-module.o: aul/include/aul/string.h aul/include/aul/contrib/list.h
-module.o: kernel-priv.h /usr/include/sched.h /usr/include/bits/sched.h
-module.o: aul/include/aul/list.h
+module.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
+module.o: /usr/include/sched.h /usr/include/bits/sched.h
 profile.o: /usr/include/inttypes.h /usr/include/features.h
 profile.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 profile.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -484,8 +483,99 @@ profile.o: /usr/include/glib-2.0/glib/gvariant.h
 profile.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 profile.o: /usr/include/string.h aul/include/aul/log.h
 profile.o: aul/include/aul/error.h aul/include/aul/string.h
-profile.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-profile.o: /usr/include/bits/sched.h aul/include/aul/list.h
+profile.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+profile.o: /usr/include/bits/sched.h
+memfs.o: /usr/include/unistd.h /usr/include/features.h
+memfs.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
+memfs.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
+memfs.o: /usr/include/gnu/stubs-64.h /usr/include/bits/posix_opt.h
+memfs.o: /usr/include/bits/environments.h /usr/include/bits/types.h
+memfs.o: /usr/include/bits/typesizes.h /usr/include/bits/confname.h
+memfs.o: /usr/include/getopt.h /usr/include/errno.h /usr/include/bits/errno.h
+memfs.o: /usr/include/linux/errno.h /usr/include/asm/errno.h
+memfs.o: /usr/include/asm-generic/errno.h
+memfs.o: /usr/include/asm-generic/errno-base.h /usr/include/fcntl.h
+memfs.o: /usr/include/bits/fcntl.h /usr/include/sys/types.h
+memfs.o: /usr/include/time.h /usr/include/endian.h /usr/include/bits/endian.h
+memfs.o: /usr/include/bits/byteswap.h /usr/include/sys/select.h
+memfs.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
+memfs.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
+memfs.o: /usr/include/bits/pthreadtypes.h /usr/include/bits/uio.h
+memfs.o: /usr/include/sys/stat.h /usr/include/bits/stat.h
+memfs.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
+memfs.o: /usr/include/bits/waitstatus.h /usr/include/xlocale.h
+memfs.o: /usr/include/alloca.h /usr/include/sys/mount.h
+memfs.o: /usr/include/sys/ioctl.h /usr/include/bits/ioctls.h
+memfs.o: /usr/include/asm/ioctls.h /usr/include/asm-generic/ioctls.h
+memfs.o: /usr/include/linux/ioctl.h /usr/include/asm/ioctl.h
+memfs.o: /usr/include/asm-generic/ioctl.h /usr/include/bits/ioctl-types.h
+memfs.o: /usr/include/sys/ttydefaults.h aul/include/aul/string.h
+memfs.o: /usr/include/string.h aul/include/aul/common.h
+memfs.o: /usr/include/inttypes.h /usr/include/stdint.h
+memfs.o: /usr/include/bits/wchar.h aul/include/aul/error.h kernel.h
+memfs.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
+memfs.o: /usr/include/glib-2.0/glib/gtypes.h
+memfs.o: /usr/lib/glib-2.0/include/glibconfig.h
+memfs.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
+memfs.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
+memfs.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
+memfs.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+memfs.o: /usr/include/glib-2.0/glib/garray.h
+memfs.o: /usr/include/glib-2.0/glib/gasyncqueue.h
+memfs.o: /usr/include/glib-2.0/glib/gthread.h
+memfs.o: /usr/include/glib-2.0/glib/gerror.h
+memfs.o: /usr/include/glib-2.0/glib/gquark.h
+memfs.o: /usr/include/glib-2.0/glib/gutils.h
+memfs.o: /usr/include/glib-2.0/glib/gatomic.h
+memfs.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
+memfs.o: /usr/include/glib-2.0/glib/gbase64.h
+memfs.o: /usr/include/glib-2.0/glib/gbitlock.h
+memfs.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
+memfs.o: /usr/include/glib-2.0/glib/gcache.h
+memfs.o: /usr/include/glib-2.0/glib/glist.h /usr/include/glib-2.0/glib/gmem.h
+memfs.o: /usr/include/glib-2.0/glib/gslice.h
+memfs.o: /usr/include/glib-2.0/glib/gchecksum.h
+memfs.o: /usr/include/glib-2.0/glib/gcompletion.h
+memfs.o: /usr/include/glib-2.0/glib/gconvert.h
+memfs.o: /usr/include/glib-2.0/glib/gdataset.h
+memfs.o: /usr/include/glib-2.0/glib/gdate.h /usr/include/glib-2.0/glib/gdir.h
+memfs.o: /usr/include/glib-2.0/glib/gfileutils.h
+memfs.o: /usr/include/glib-2.0/glib/ghash.h
+memfs.o: /usr/include/glib-2.0/glib/ghook.h
+memfs.o: /usr/include/glib-2.0/glib/ghostutils.h
+memfs.o: /usr/include/glib-2.0/glib/giochannel.h
+memfs.o: /usr/include/glib-2.0/glib/gmain.h
+memfs.o: /usr/include/glib-2.0/glib/gpoll.h
+memfs.o: /usr/include/glib-2.0/glib/gslist.h
+memfs.o: /usr/include/glib-2.0/glib/gstring.h
+memfs.o: /usr/include/glib-2.0/glib/gunicode.h
+memfs.o: /usr/include/glib-2.0/glib/gkeyfile.h
+memfs.o: /usr/include/glib-2.0/glib/gmappedfile.h
+memfs.o: /usr/include/glib-2.0/glib/gmarkup.h
+memfs.o: /usr/include/glib-2.0/glib/gmessages.h
+memfs.o: /usr/include/glib-2.0/glib/gnode.h
+memfs.o: /usr/include/glib-2.0/glib/goption.h
+memfs.o: /usr/include/glib-2.0/glib/gpattern.h
+memfs.o: /usr/include/glib-2.0/glib/gprimes.h
+memfs.o: /usr/include/glib-2.0/glib/gqsort.h
+memfs.o: /usr/include/glib-2.0/glib/gqueue.h
+memfs.o: /usr/include/glib-2.0/glib/grand.h /usr/include/glib-2.0/glib/grel.h
+memfs.o: /usr/include/glib-2.0/glib/gregex.h
+memfs.o: /usr/include/glib-2.0/glib/gscanner.h
+memfs.o: /usr/include/glib-2.0/glib/gsequence.h
+memfs.o: /usr/include/glib-2.0/glib/gshell.h
+memfs.o: /usr/include/glib-2.0/glib/gspawn.h
+memfs.o: /usr/include/glib-2.0/glib/gstrfuncs.h
+memfs.o: /usr/include/glib-2.0/glib/gtestutils.h
+memfs.o: /usr/include/glib-2.0/glib/gthreadpool.h
+memfs.o: /usr/include/glib-2.0/glib/gtimer.h
+memfs.o: /usr/include/glib-2.0/glib/gtree.h
+memfs.o: /usr/include/glib-2.0/glib/gurifuncs.h
+memfs.o: /usr/include/glib-2.0/glib/gvarianttype.h
+memfs.o: /usr/include/glib-2.0/glib/gvariant.h
+memfs.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/log.h
+memfs.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+memfs.o: /usr/include/bits/sched.h
 syscall.o: /usr/include/string.h /usr/include/features.h
 syscall.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 syscall.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -565,9 +655,9 @@ syscall.o: /usr/include/glib-2.0/glib/gvarianttype.h
 syscall.o: /usr/include/glib-2.0/glib/gvariant.h
 syscall.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 syscall.o: aul/include/aul/log.h aul/include/aul/error.h
-syscall.o: aul/include/aul/string.h aul/include/aul/contrib/list.h
-syscall.o: kernel-priv.h /usr/include/sched.h /usr/include/bits/sched.h
-syscall.o: aul/include/aul/list.h array.h ./buffer.h serialize.h
+syscall.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
+syscall.o: /usr/include/sched.h /usr/include/bits/sched.h array.h ./buffer.h
+syscall.o: serialize.h
 io.o: /usr/include/string.h /usr/include/features.h
 io.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 io.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -636,9 +726,8 @@ io.o: /usr/include/bits/select.h /usr/include/bits/time.h
 io.o: /usr/include/sys/sysmacros.h /usr/include/alloca.h
 io.o: /usr/include/inttypes.h /usr/include/stdint.h /usr/include/bits/wchar.h
 io.o: kernel.h /usr/include/glib-2.0/gmodule.h aul/include/aul/log.h
-io.o: aul/include/aul/error.h aul/include/aul/string.h
-io.o: aul/include/aul/contrib/list.h kernel-priv.h aul/include/aul/list.h
-io.o: ./buffer.h array.h
+io.o: aul/include/aul/error.h aul/include/aul/string.h aul/include/aul/list.h
+io.o: kernel-priv.h ./buffer.h array.h
 syscallblock.o: kernel.h /usr/include/stdlib.h /usr/include/features.h
 syscallblock.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 syscallblock.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -719,9 +808,8 @@ syscallblock.o: /usr/include/glib-2.0/glib/gvariant.h
 syscallblock.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 syscallblock.o: /usr/include/string.h aul/include/aul/log.h
 syscallblock.o: aul/include/aul/error.h aul/include/aul/string.h
-syscallblock.o: aul/include/aul/contrib/list.h kernel-priv.h
-syscallblock.o: /usr/include/sched.h /usr/include/bits/sched.h
-syscallblock.o: aul/include/aul/list.h ./buffer.h serialize.h
+syscallblock.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+syscallblock.o: /usr/include/bits/sched.h ./buffer.h serialize.h
 property.o: kernel.h /usr/include/stdlib.h /usr/include/features.h
 property.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 property.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -802,7 +890,7 @@ property.o: /usr/include/glib-2.0/glib/gvariant.h
 property.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 property.o: /usr/include/string.h aul/include/aul/log.h
 property.o: aul/include/aul/error.h aul/include/aul/string.h
-property.o: aul/include/aul/contrib/list.h
+property.o: aul/include/aul/list.h
 config.o: /usr/include/stdlib.h /usr/include/features.h
 config.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 config.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -882,9 +970,8 @@ config.o: /usr/include/glib-2.0/glib/gvarianttype.h
 config.o: /usr/include/glib-2.0/glib/gvariant.h
 config.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 config.o: aul/include/aul/log.h aul/include/aul/error.h
-config.o: aul/include/aul/string.h aul/include/aul/contrib/list.h
-config.o: kernel-priv.h /usr/include/sched.h /usr/include/bits/sched.h
-config.o: aul/include/aul/list.h
+config.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
+config.o: /usr/include/sched.h /usr/include/bits/sched.h
 calibration.o: /usr/include/stdio.h /usr/include/features.h
 calibration.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 calibration.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -892,7 +979,7 @@ calibration.o: /usr/include/gnu/stubs-64.h /usr/include/bits/types.h
 calibration.o: /usr/include/bits/typesizes.h /usr/include/libio.h
 calibration.o: /usr/include/_G_config.h /usr/include/wchar.h
 calibration.o: /usr/include/bits/stdio_lim.h /usr/include/bits/sys_errlist.h
-calibration.o: /usr/include/sqlite.h /usr/include/string.h
+calibration.o: /usr/include/sqlite3.h /usr/include/string.h
 calibration.o: /usr/include/xlocale.h /usr/include/limits.h
 calibration.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
 calibration.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
@@ -969,9 +1056,8 @@ calibration.o: /usr/include/glib-2.0/glib/gvarianttype.h
 calibration.o: /usr/include/glib-2.0/glib/gvariant.h
 calibration.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/log.h
 calibration.o: aul/include/aul/error.h aul/include/aul/string.h
-calibration.o: aul/include/aul/contrib/list.h kernel-priv.h
-calibration.o: /usr/include/sched.h /usr/include/bits/sched.h
-calibration.o: aul/include/aul/list.h
+calibration.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+calibration.o: /usr/include/bits/sched.h
 buffer.o: /usr/include/string.h /usr/include/features.h
 buffer.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 buffer.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -1050,8 +1136,8 @@ buffer.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
 buffer.o: /usr/include/bits/wchar.h /usr/include/glib-2.0/gmodule.h
 buffer.o: aul/include/aul/common.h aul/include/aul/log.h
 buffer.o: aul/include/aul/error.h aul/include/aul/string.h
-buffer.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-buffer.o: /usr/include/bits/sched.h aul/include/aul/list.h
+buffer.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+buffer.o: /usr/include/bits/sched.h
 serialize.o: /usr/include/stdlib.h /usr/include/features.h
 serialize.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 serialize.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -1135,7 +1221,7 @@ serialize.o: serialize.h kernel.h /usr/include/inttypes.h
 serialize.o: /usr/include/stdint.h /usr/include/bits/wchar.h
 serialize.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 serialize.o: aul/include/aul/log.h aul/include/aul/error.h
-serialize.o: aul/include/aul/string.h aul/include/aul/contrib/list.h
+serialize.o: aul/include/aul/string.h aul/include/aul/list.h
 trigger.o: /usr/include/unistd.h /usr/include/features.h
 trigger.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 trigger.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -1217,9 +1303,8 @@ trigger.o: /usr/include/glib-2.0/glib/gvarianttype.h
 trigger.o: /usr/include/glib-2.0/glib/gvariant.h
 trigger.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
 trigger.o: aul/include/aul/log.h aul/include/aul/error.h
-trigger.o: aul/include/aul/string.h aul/include/aul/contrib/list.h
-trigger.o: kernel-priv.h /usr/include/sched.h /usr/include/bits/sched.h
-trigger.o: aul/include/aul/list.h
+trigger.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
+trigger.o: /usr/include/sched.h /usr/include/bits/sched.h
 exec.o: /usr/include/string.h /usr/include/features.h
 exec.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 exec.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -1294,8 +1379,8 @@ exec.o: /usr/include/glib-2.0/glib/gvarianttype.h
 exec.o: /usr/include/glib-2.0/glib/gvariant.h /usr/include/glib-2.0/gmodule.h
 exec.o: aul/include/aul/common.h aul/include/aul/log.h
 exec.o: aul/include/aul/error.h aul/include/aul/string.h
-exec.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-exec.o: /usr/include/bits/sched.h aul/include/aul/list.h
+exec.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+exec.o: /usr/include/bits/sched.h
 luaenv.o: /usr/include/string.h /usr/include/features.h
 luaenv.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 luaenv.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -1309,7 +1394,16 @@ luaenv.o: /usr/include/stdio.h /usr/include/bits/types.h
 luaenv.o: /usr/include/bits/typesizes.h /usr/include/libio.h
 luaenv.o: /usr/include/_G_config.h /usr/include/wchar.h
 luaenv.o: /usr/include/bits/sys_errlist.h /usr/include/lua5.1/lualib.h
-luaenv.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
+luaenv.o: kernel.h /usr/include/stdlib.h /usr/include/bits/waitflags.h
+luaenv.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
+luaenv.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
+luaenv.o: /usr/include/sys/types.h /usr/include/time.h
+luaenv.o: /usr/include/sys/select.h /usr/include/bits/select.h
+luaenv.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
+luaenv.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
+luaenv.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
+luaenv.o: /usr/include/bits/wchar.h /usr/include/glib-2.0/glib.h
+luaenv.o: /usr/include/glib-2.0/glib/galloca.h
 luaenv.o: /usr/include/glib-2.0/glib/gtypes.h
 luaenv.o: /usr/lib/glib-2.0/include/glibconfig.h
 luaenv.o: /usr/include/glib-2.0/glib/gmacros.h
@@ -1321,9 +1415,9 @@ luaenv.o: /usr/include/glib-2.0/glib/gquark.h
 luaenv.o: /usr/include/glib-2.0/glib/gutils.h
 luaenv.o: /usr/include/glib-2.0/glib/gatomic.h
 luaenv.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-luaenv.o: /usr/include/bits/sigset.h /usr/include/glib-2.0/glib/gbase64.h
+luaenv.o: /usr/include/glib-2.0/glib/gbase64.h
 luaenv.o: /usr/include/glib-2.0/glib/gbitlock.h
-luaenv.o: /usr/include/glib-2.0/glib/gbookmarkfile.h /usr/include/time.h
+luaenv.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
 luaenv.o: /usr/include/glib-2.0/glib/gcache.h
 luaenv.o: /usr/include/glib-2.0/glib/glist.h
 luaenv.o: /usr/include/glib-2.0/glib/gmem.h
@@ -1368,20 +1462,11 @@ luaenv.o: /usr/include/glib-2.0/glib/gtimer.h
 luaenv.o: /usr/include/glib-2.0/glib/gtree.h
 luaenv.o: /usr/include/glib-2.0/glib/gurifuncs.h
 luaenv.o: /usr/include/glib-2.0/glib/gvarianttype.h
-luaenv.o: /usr/include/glib-2.0/glib/gvariant.h kernel.h
-luaenv.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-luaenv.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-luaenv.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-luaenv.o: /usr/include/sys/types.h /usr/include/sys/select.h
-luaenv.o: /usr/include/bits/select.h /usr/include/bits/time.h
-luaenv.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-luaenv.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-luaenv.o: /usr/include/bits/wchar.h /usr/include/glib-2.0/gmodule.h
-luaenv.o: aul/include/aul/common.h aul/include/aul/log.h
-luaenv.o: aul/include/aul/error.h aul/include/aul/string.h
-luaenv.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-luaenv.o: /usr/include/bits/sched.h aul/include/aul/list.h serialize.h
-luaenv.o: ./buffer.h
+luaenv.o: /usr/include/glib-2.0/glib/gvariant.h
+luaenv.o: /usr/include/glib-2.0/gmodule.h aul/include/aul/common.h
+luaenv.o: aul/include/aul/log.h aul/include/aul/error.h
+luaenv.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
+luaenv.o: /usr/include/sched.h /usr/include/bits/sched.h
 math.o: /usr/include/matheval.h /usr/include/glib-2.0/glib.h
 math.o: /usr/include/glib-2.0/glib/galloca.h
 math.o: /usr/include/glib-2.0/glib/gtypes.h
@@ -1455,5 +1540,5 @@ math.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
 math.o: /usr/include/bits/wchar.h /usr/include/glib-2.0/gmodule.h
 math.o: aul/include/aul/common.h /usr/include/string.h aul/include/aul/log.h
 math.o: aul/include/aul/error.h aul/include/aul/string.h
-math.o: aul/include/aul/contrib/list.h kernel-priv.h /usr/include/sched.h
-math.o: /usr/include/bits/sched.h aul/include/aul/list.h
+math.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
+math.o: /usr/include/bits/sched.h

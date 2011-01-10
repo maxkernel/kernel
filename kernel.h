@@ -10,7 +10,7 @@
 
 #include <aul/common.h>
 #include <aul/log.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 
 #ifdef __cplusplus
 extern "C" {

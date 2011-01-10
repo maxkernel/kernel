@@ -220,7 +220,7 @@ bool log_openfile(const char * path, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, strerror(errno));
+			*err = error_new(errno, "Count not open log file: %s", strerror(errno));
 		}
 		return false;
 	}

@@ -1,11 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
+#include <aul/common.h>
 #include <aul/error.h>
 
 Error * error_new(int code, const char * fmt, ...)
 {
-	Error * err = malloc(sizeof(Error));
-	PZERO(err, sizeof(Error));
+	Error * err = malloc0(sizeof(Error));
 	
 	err->code = code;
 	err->message = err->__message.string;

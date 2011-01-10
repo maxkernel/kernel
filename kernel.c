@@ -12,10 +12,10 @@
 #include <pthread.h>
 #include <bfd.h>
 #include <confuse.h>
-#include <sqlite.h>
+#include <sqlite3.h>
 
 #include <aul/common.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 #include <aul/mainloop.h>
 #include <aul/mutex.h>
 
@@ -30,7 +30,7 @@ GHashTable * kthreads = NULL;
 GHashTable * syscalls = NULL;
 
 mutex_t * io_lock = NULL;
-sqlite * database = NULL;
+sqlite3 * database = NULL;
 uint64_t starttime = 0;
 
 static list_t objects = {0};
@@ -718,7 +718,7 @@ int main(int argc, char * argv[])
 	//init logging
 	log_openfile(LOGDIR "/" LOGFILE, NULL);
 	log_addlistener(log_appendbuf, NULL, NULL);
-	LOGK(LOG_INFO, "Welcome to MaxKernel v" VERSION " " RELEASE " by " PROVIDER);
+	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
 
 	//log time
 	{
@@ -761,12 +761,24 @@ int main(int argc, char * argv[])
 
 	//connect to sqlite database
 	LOGK(LOG_DEBUG, "Opening database file");
-	database = sqlite_open(INSTALL "/" DBNAME, 0, NULL);
-	if (database == NULL)
+	if (sqlite3_open(INSTALL "/" DBNAME, &database) != SQLITE_OK)
 	{
 		LOGK(LOG_ERR, "Could not open database file %s", DBNAME);
 	}
 	
+	//init memfs memory pool system
+	LOGK(LOG_DEBUG, "Mounting kernel memfs");
+	{
+		Error * err = NULL;
+
+		memfs_init(&err);
+		if (err != NULL)
+		{
+			LOGK(LOG_FATAL, "%s", err->message);
+			// Will exit
+		}
+	}
+
 	//init mainloop
 	mainloop_init();
 
@@ -1017,10 +1029,23 @@ int main(int argc, char * argv[])
 
 	mutex_unlock(&kobj_mutex);
 
+	//destroy the memfs subsystem
+	LOGK(LOG_DEBUG, "Unmounting kernel memfs");
+	{
+		Error * err = NULL;
+
+		memfs_destroy(&err);
+		if (err != NULL)
+		{
+			LOGK(LOG_ERR, "%s", err->message);
+			error_free(err);
+		}
+	}
+
 	if (database != NULL)
 	{
 		LOGK(LOG_DEBUG, "Closing database file");
-		sqlite_close(database);
+		sqlite3_close(database);
 	}
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");

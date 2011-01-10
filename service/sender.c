@@ -1,7 +1,7 @@
 
 
 #include <aul/common.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 #include <aul/mutex.h>
 
 #include <kernel.h>

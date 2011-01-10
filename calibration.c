@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <sqlite.h>
+#include <sqlite3.h>
 #include <string.h>
 #include <limits.h>
 #include <float.h>
@@ -9,8 +9,8 @@
 #include "kernel.h"
 #include "kernel-priv.h"
 
-extern GSList * calentries;
-extern sqlite * database;
+extern list_t calentries;
+extern sqlite3 * database;
 
 static GRegex * bounds_regex = NULL;
 
@@ -25,43 +25,38 @@ static calparam_t * cal_make(const char type, const char * value)
 
 calparam_t * cal_getparam(const gchar * name, const gchar * sig)
 {
-	sqlite_vm * vm;
+	sqlite3_stmt * stmt;
 	calparam_t * c = NULL;
+	const char * type = NULL, * value = NULL;
 	
-	GString * query = g_string_new("");
-	g_string_printf(query, "SELECT type, value FROM calibration WHERE name='%s' AND updated=( SELECT MAX(updated) FROM calibration WHERE name='%s' );", name, name);
+	String query = string_new("SELECT type, value FROM calibration WHERE name='%s' AND updated=( SELECT MAX(updated) FROM calibration WHERE name='%s' );", name, name);
 	
-	gchar type;
-	gchar * value = NULL;
-	
-	if (sqlite_compile(database, query->str, NULL, &vm, NULL) != SQLITE_OK)
+	if (sqlite3_prepare_v2(database, query.string, -1, &stmt, NULL) != SQLITE_OK)
 	{
 		LOGK(LOG_ERR, "Could not compile SQL calibration query");
 		goto done;
 	}
 	
-	const gchar ** coldata = NULL;
-	if (sqlite_step(vm, NULL, &coldata, NULL) != SQLITE_ROW)
+	if (sqlite3_step(stmt) != SQLITE_ROW)
 	{
 		LOGK(LOG_DEBUG, "No calibration entry in database for %s", name);
 		goto done;
 	}
+
+	type = (const char *)sqlite3_column_text(stmt, 0);
+	value = (const char *)sqlite3_column_text(stmt, 1);
 	
-	type = coldata[0][0];
-	value = (gchar *)coldata[1];
-	
-	if (type != sig[0])
+	if (type[0] != sig[0])
 	{
-		LOGK(LOG_WARN, "Calibration type mismatch. Type in database: %c, default value type: %c. Using default", type, sig[0]);
+		LOGK(LOG_WARN, "Calibration type mismatch. Type in database: %c, default value type: %c. Using default", type[0], sig[0]);
 		goto done;
 	}
 	
 done:
 	if (value != NULL)
-		c = cal_make(type, value);
+		c = cal_make(type[0], value);
 	
-	g_string_free(query, true);
-	sqlite_finalize(vm, NULL);
+	sqlite3_finalize(stmt);
 	
 	return c;
 }
@@ -116,7 +111,7 @@ void cal_setparam(const char * module, const char * name, const char * value)
 	//save value in preview variable
 	if (cal->preview != NULL)
 	{
-		g_free(cal->preview);
+		FREE(cal->preview);
 	}
 	cal->preview = pvalue;
 
@@ -133,13 +128,13 @@ void cal_merge(const char * comment)
 		comment = "(none)";
 	}
 
-	GString * query = g_string_new("");
+	String query = string_blank();
 	char value[25];
 
-	GSList * next = calentries;
-	while (next != NULL)
+	list_t * pos;
+	list_foreach(pos, &calentries)
 	{
-		calentry_t * cal = next->data;
+		calentry_t * cal = list_entry(pos, calentry_t, global_list);
 		int changed = false;
 
 		if (cal->preview != NULL)
@@ -174,8 +169,9 @@ void cal_merge(const char * comment)
 		{
 			char * err;
 
-			g_string_printf(query, "INSERT INTO calibration VALUES ('%s', '%c', '%s', DATETIME('NOW'), '%s');", cal->name, cal->sig[0], value, comment);
-			if (sqlite_exec(database, query->str, NULL, NULL, &err) != SQLITE_OK)
+			string_clear(&query);
+			string_append(&query, "INSERT INTO calibration VALUES ('%s', '%c', '%s', DATETIME('NOW'), '%s');", cal->name, cal->sig[0], value, comment);
+			if (sqlite3_exec(database, query.string, NULL, NULL, &err) != SQLITE_OK)
 			{
 				LOGK(LOG_ERR, "Could not compile SQL calibration insert query: %s", err);
 			}
@@ -184,23 +180,19 @@ void cal_merge(const char * comment)
 			{
 				cal->module->calupdate(cal->name, cal->sig[0], cal->preview, cal->active, false);
 			}
-			g_free(cal->preview);
+			FREE(cal->preview);
 			cal->preview = NULL;
 		}
-
-		next = next->next;
 	}
 }
 
 void cal_revert()
 {
-	GSList * next = calentries;
-	while (next != NULL)
+	list_t * pos;
+	list_foreach(pos, &calentries)
 	{
-		calentry_t * cal = next->data;
+		calentry_t * cal = list_entry(pos, calentry_t, global_list);
 		FREE(cal->preview);
-
-		next = next->next;
 	}
 }
 
@@ -261,10 +253,10 @@ done:
 
 void cal_iterate(cal_itr_i itri, cal_itr_d itrd, void * userdata)
 {
-	GSList * next = calentries;
-	while (next != NULL)
+	list_t * pos;
+	list_foreach(pos, &calentries)
 	{
-		calentry_t * cal = next->data;
+		calentry_t * cal = list_entry(pos, calentry_t, global_list);
 		double min, max;
 		cal_bounds(cal, cal->sig[0], &min, &max);
 
@@ -288,15 +280,13 @@ void cal_iterate(cal_itr_i itri, cal_itr_d itrd, void * userdata)
 				break;
 			}
 		}
-
-		next = next->next;
 	}
 }
 
-int cal_compare(const void * a, const void * b)
+int cal_compare(list_t * a, list_t * b)
 {
-	const calentry_t * ca = a;
-	const calentry_t * cb = b;
+	calentry_t * ca = list_entry(a, calentry_t, global_list);
+	calentry_t * cb = list_entry(b, calentry_t, global_list);
 	return strcmp(ca->name, cb->name);
 }
 

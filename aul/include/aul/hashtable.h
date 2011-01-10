@@ -2,7 +2,7 @@
 #define __HASHTABLE_H
 
 #include <aul/common.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,13 +69,13 @@ static hashentry_t * __hashtable_get(hashtable_t * table, list_t * list, const v
 	return NULL;
 }
 
-static inline hashentry_t * hashtable_get(hashtable_t * table, void * key)
+static inline hashentry_t * hashtable_get(hashtable_t * table, const void * key)
 {
 	size_t bucketnum = table->hasher(key) % table->numbuckets;
 	return __hashtable_get(table, &table->buckets[bucketnum], key);
 }
 
-static inline hashentry_t * hashtable_put(hashtable_t * table, void * key, hashentry_t * entry)
+static inline hashentry_t * hashtable_put(hashtable_t * table, const void * key, hashentry_t * entry)
 {
 	size_t bucketnum = table->hasher(key) % table->numbuckets;
 	hashentry_t * oldentry = __hashtable_get(table, &table->buckets[bucketnum], key);

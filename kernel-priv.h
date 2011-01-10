@@ -9,7 +9,7 @@
 
 #include <aul/common.h>
 #include <aul/log.h>
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -129,7 +129,7 @@ typedef struct {
 	char * sig;
 	void * active;		//active variable (module memory)
 	void * preview;		//the previewed value (if we are currently calibrating, but haven't yet saved, this value is set)
-	void * deflt;			//the default value read from module before update
+	void * deflt;		//the default value read from module before update
 } calentry_t;
 
 typedef struct {
@@ -310,9 +310,16 @@ meta_t * meta_parse(const char * path);
 module_t * module_get(const char * name);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
-int module_compare(const void * a, const void * b);
+int module_compare(list_t * a, list_t * b);
 module_t * module_load(const char * name);
 void module_kernelinit();
+
+// memfs functions (complementary with the buffer system)
+//#define
+void memfs_init(Error ** err);
+void memfs_destroy(Error ** err);
+int memfs_orphanfd();
+int memfs_dupfd(int fd, bool rewind);
 
 bool lua_execfile(const char * name);
 
@@ -365,7 +372,7 @@ cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname);
 void cfg_setparam(const gchar * modname, const gchar * cfgname, const gchar * value);
 
 calparam_t * cal_getparam(const gchar * name, const gchar * sig);
-int cal_compare(const void * a, const void * b);
+int cal_compare(list_t * a, list_t * b);
 void cal_freeparam(calparam_t * val);
 
 #ifdef __cplusplus

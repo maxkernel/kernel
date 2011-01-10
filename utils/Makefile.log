@@ -1,7 +1,0 @@
-# stub for now
-
-all:
-	echo "" > max-log
-
-clean:
-	rm -f max-log

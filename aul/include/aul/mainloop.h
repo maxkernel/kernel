@@ -5,8 +5,7 @@
 
 #include <aul/common.h>
 #include <aul/mutex.h>
-
-#include <aul/contrib/list.h>
+#include <aul/list.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -47,9 +47,9 @@ error.o: /usr/include/time.h /usr/include/sys/select.h
 error.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
 error.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
 error.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-error.o: /usr/include/string.h include/aul/error.h include/aul/common.h
-error.o: /usr/include/inttypes.h /usr/include/stdint.h
-error.o: /usr/include/bits/wchar.h include/aul/string.h
+error.o: /usr/include/string.h include/aul/common.h /usr/include/inttypes.h
+error.o: /usr/include/stdint.h /usr/include/bits/wchar.h include/aul/error.h
+error.o: include/aul/string.h
 log.o: /usr/include/stdio.h /usr/include/features.h
 log.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 log.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -165,7 +165,7 @@ mainloop.o: /usr/include/stdint.h /usr/include/bits/wchar.h
 mainloop.o: include/aul/error.h include/aul/string.h include/aul/mainloop.h
 mainloop.o: include/aul/mutex.h /usr/include/pthread.h /usr/include/sched.h
 mainloop.o: /usr/include/bits/sched.h /usr/include/signal.h
-mainloop.o: /usr/include/bits/setjmp.h include/aul/contrib/list.h
+mainloop.o: /usr/include/bits/setjmp.h include/aul/list.h
 hashtable.o: /usr/include/string.h /usr/include/features.h
 hashtable.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 hashtable.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -181,8 +181,7 @@ hashtable.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
 hashtable.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
 hashtable.o: /usr/include/inttypes.h /usr/include/stdint.h
 hashtable.o: /usr/include/bits/wchar.h include/aul/log.h include/aul/error.h
-hashtable.o: include/aul/string.h include/aul/hashtable.h
-hashtable.o: include/aul/contrib/list.h
+hashtable.o: include/aul/string.h include/aul/hashtable.h include/aul/list.h
 queue.o: include/aul/queue.h include/aul/common.h /usr/include/stdlib.h
 queue.o: /usr/include/features.h /usr/include/bits/predefs.h
 queue.o: /usr/include/sys/cdefs.h /usr/include/bits/wordsize.h
