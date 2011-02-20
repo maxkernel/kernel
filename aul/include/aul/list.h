@@ -85,11 +85,6 @@ static inline void list_remove(list_t * entry)
 	entry->prev = NULL;
 }
 
-/**
- * list_pop - alias for list_remove
- */
-#define list_pop(entry)		list_remove(entry)
-
 #if 0
 /**
  * list_move - delete from one list and add as another's head
@@ -222,6 +217,7 @@ static inline void list_sort(list_t * head, list_compare_f cmp)
 	}
 
 	//simple bubble sort
+	// TODO - make better
 	for (i=len-1; i>0; --i)
 	{
 		list_t * pos;

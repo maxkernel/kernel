@@ -59,8 +59,10 @@ typedef struct
 
 typedef enum
 {
-	TCP		= 0,
-	UDP		= 1
+	NONE	= 0,
+	TCP		= 1,
+	UDP		= 2,
+	UNIX	= 3,
 } protocol_t;
 
 struct __stream_t;
@@ -146,8 +148,8 @@ void send_stopthread(void * userdata);
 void tcp_init();
 void udp_init();
 
-String tcp_streamconfig();
-String udp_streamconfig();
+string_t tcp_streamconfig();
+string_t udp_streamconfig();
 
 void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestroy_f destroy, size_t size);
 void service_freestream(stream_t * stream);
@@ -189,7 +191,7 @@ static inline void generateid(char * target, GHashTable * table)
 	} while (!isunique(target, table));
 }
 
-static inline String addr2string(uint32_t ip)
+static inline string_t addr2string(uint32_t ip)
 {
 	unsigned char a4 = (ip & 0xFF000000) >> 24;
 	unsigned char a3 = (ip & 0x00FF0000) >> 16;

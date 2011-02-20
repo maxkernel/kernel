@@ -14,22 +14,25 @@
 #include <confuse.h>
 #include <sqlite3.h>
 
+#include <glib.h>
+
 #include <aul/common.h>
 #include <aul/list.h>
+#include <aul/hashtable.h>
 #include <aul/mainloop.h>
 #include <aul/mutex.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <kernel.h>
+#include <kernel-priv.h>
 
 list_t modules;
 list_t calentries;
+hashtable_t properties;
 module_t * kernel_module = NULL;
-GHashTable * properties = NULL;
 GHashTable * kthreads = NULL;
 GHashTable * syscalls = NULL;
 
-mutex_t * io_lock = NULL;
+mutex_t io_lock;
 sqlite3 * database = NULL;
 uint64_t starttime = 0;
 
@@ -63,8 +66,8 @@ static void sig_coredump(const char * name, const char * code)
 	time_t now = time(NULL);
 	strftime(timebuf, sizeof(timebuf), "%F.%H.%M.%S", localtime(&now));
 
-	String file = string_new("%s/%s.%s.log", LOGDIR, code, timebuf);
-	String cmd = string_new("/bin/bash %s/debug/core.debug.bash %d %s '%s'", INSTALL, getpid(), file.string, name);
+	string_t file = string_new("%s/%s.%s.log", LOGDIR, code, timebuf);
+	string_t cmd = string_new("/bin/bash %s/debug/core.debug.bash %d %s '%s'", INSTALL, getpid(), file.string, name);
 
 	//execute the script file the uses gdb to grab a stack trace
 	system(cmd.string);
@@ -175,7 +178,7 @@ static inline int cfg_rundir(const char * dir)
 		goto end;
 	}
 
-	String abspath;
+	string_t abspath;
 	DIR * d = opendir(dirpath);
 	struct dirent * entry;
 	while ((entry = readdir(d)) != NULL)
@@ -273,7 +276,7 @@ static int cfg_execfile(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 
 static void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
 {
-	String str;
+	string_t str;
 	string_clear(&str);
 	string_vappend(&str, fmt, ap);
 
@@ -282,9 +285,9 @@ static void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
 
 
 /*------------- LOGGING ------------------*/
-static void log_appendbuf(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
+static void log_appendbuf(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
-	String msg = kernel_logformat(level, domain, milliseconds, message);
+	string_t msg = kernel_logformat(level, domain, milliseconds, message);
 
 	if (loglen + msg.length + 1 >= LOGBUF_SIZE)
 	{
@@ -304,7 +307,7 @@ const char * kernel_loghistory()
 	return logbuf;
 }
 
-String kernel_logformat(Level level, const char * domain, uint64_t milliseconds, const char * message)
+string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseconds, const char * message)
 {
 	char * levelstr = "Unkno";
 	if	((level & LEVEL_FATAL) > 0)			levelstr = "FATAL";
@@ -442,8 +445,8 @@ static void * kthread_dothread(void * object)
 
 			if (tmres == 0)
 			{
-				uint64_t rtdiff = (rtafter.tv_sec - rtbefore.tv_sec) * AUL_NANOS_PER_SEC + (rtafter.tv_nsec - rtbefore.tv_nsec);
-				uint64_t cpudiff = (cpuafter.tv_sec - cpubefore.tv_sec) * AUL_NANOS_PER_SEC + (cpuafter.tv_nsec - cpubefore.tv_nsec);
+				uint64_t rtdiff = (rtafter.tv_sec - rtbefore.tv_sec) * NANOS_PER_SECOND + (rtafter.tv_nsec - rtbefore.tv_nsec);
+				uint64_t cpudiff = (cpuafter.tv_sec - cpubefore.tv_sec) * NANOS_PER_SECOND + (cpuafter.tv_nsec - cpubefore.tv_nsec);
 
 				profile_addthreadrealtime(kth, rtdiff);
 				profile_addthreadcputime(kth, cpudiff);
@@ -476,7 +479,7 @@ static bool kthread_start(kthread_t * kth)
 void kthread_schedule(kthread_t * thread)
 {
 	kthread_task_t * task = malloc0(sizeof(kthread_task_t));
-	String str = string_new("Starting thread '%s'", thread->kobject.obj_name);
+	string_t str = string_new("Starting thread '%s'", thread->kobject.obj_name);
 
 	task->desc = string_copy(&str);
 	task->thread = thread;
@@ -523,7 +526,7 @@ trigger_t * kthread_gettrigger(kthread_t * kth)
 	return kth->trigger;
 }
 
-static bool kthread_dotasks(void * userdata)
+static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
 	mutex_lock(&kthread_tasks_mutex);
 
@@ -565,7 +568,7 @@ static void kthread_stopsinglepass(void * userdata)
 
 void kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata)
 {
-	String str = string_new("%s interval thread", name);
+	string_t str = string_new("%s interval thread", name);
 
 	trigger_t * trigger = trigger_newclock(name, rate_hz);
 	runnable_t * runnable = exec_newfunction(name, threadfunc, NULL, userdata);
@@ -581,7 +584,7 @@ void kthread_newthread(const char * name, int priority, handler_f threadfunc, ha
 	rfunc->dostopfunc = stopfunc;
 	rfunc->userdata = userdata;
 
-	String str = string_new("%s thread", name);
+	string_t str = string_new("%s thread", name);
 
 	trigger_t * trigger = trigger_newtrue(name);
 	runnable_t * runnable = exec_newfunction(name, kthread_dosinglepass, kthread_stopsinglepass, rfunc);
@@ -599,7 +602,11 @@ bool kthread_requeststop()
 /*---------------- KERN FUNCTIONS -----------------------*/
 const char * max_model() { return property_get("model"); }
 const char * kernel_id() { return property_get("id"); }
-const int kernel_installed() { return property_get_i("installed"); }
+const int kernel_installed()
+{
+	const char * installed = property_get("installed");
+	return installed != NULL? atoi(installed) : 0;
+}
 
 //microseconds since epoch
 const int64_t kernel_timestamp()
@@ -733,12 +740,12 @@ int main(int argc, char * argv[])
 	LIST_INIT(&calentries);
 	LIST_INIT(&objects);
 	LIST_INIT(&kthread_tasks);
+	HASHTABLE_INIT(&properties, hash_str, hash_streq);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
 	mutex_init(&kthread_tasks_mutex, M_RECURSIVE);
-	properties = g_hash_table_new(g_str_hash, g_str_equal);
 	kthreads = g_hash_table_new(g_int_hash, g_int_equal);
 	syscalls = g_hash_table_new(g_str_hash, g_str_equal);
-	io_lock = mutex_new(M_RECURSIVE);
+	mutex_init(&io_lock, M_RECURSIVE);
 
 	//set start time
 	starttime = kernel_timestamp();
@@ -769,12 +776,12 @@ int main(int argc, char * argv[])
 	//init memfs memory pool system
 	LOGK(LOG_DEBUG, "Mounting kernel memfs");
 	{
-		Error * err = NULL;
+		exception_t * err = NULL;
 
 		memfs_init(&err);
 		if (err != NULL)
 		{
-			LOGK(LOG_FATAL, "%s", err->message);
+			LOGK(LOG_FATAL, "%s", err->message.string);
 			// Will exit
 		}
 	}
@@ -969,10 +976,10 @@ int main(int argc, char * argv[])
 		}
 
 		//check for new kernel tasks every second
-		mainloop_addtimer(NULL, "KThread task handler", AUL_NANOS_PER_SEC, kthread_dotasks, NULL);
+		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);
 
 #ifdef EN_PROFILE
-		mainloop_addtimer(NULL, "Profiler", (1.0 / PROFILE_UPDATEHZ) * AUL_NANOS_PER_SEC, profile_track, NULL);
+		mainloop_addtimer(NULL, "Profiler", (1.0 / PROFILE_UPDATEHZ) * NANOS_PER_SECOND, profile_track, NULL);
 #endif
 
 		//execute all tasks in queue
@@ -1032,13 +1039,13 @@ int main(int argc, char * argv[])
 	//destroy the memfs subsystem
 	LOGK(LOG_DEBUG, "Unmounting kernel memfs");
 	{
-		Error * err = NULL;
+		exception_t * err = NULL;
 
 		memfs_destroy(&err);
 		if (err != NULL)
 		{
-			LOGK(LOG_ERR, "%s", err->message);
-			error_free(err);
+			LOGK(LOG_ERR, "%s", err->message.string);
+			exception_free(err);
 		}
 	}
 

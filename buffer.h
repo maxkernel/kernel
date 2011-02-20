@@ -1,3 +1,5 @@
+#include <buffer2.h>
+
 #ifndef __BUFFER_H
 #define __BUFFER_H
 
@@ -5,6 +7,7 @@
 extern "C" {
 #endif
 
+#if 0
 typedef unsigned char * buffer_t;
 
 buffer_t buffer_new(size_t size);
@@ -18,6 +21,7 @@ void * buffer_data(buffer_t buffer);
 size_t buffer_datasize(const buffer_t buffer);
 
 void buffer_free(buffer_t buffer);
+#endif
 
 #ifdef __cplusplus
 }

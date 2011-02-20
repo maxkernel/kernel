@@ -3,6 +3,9 @@
 #include <inttypes.h>
 #include <unistd.h>
 
+// TODO - delete this and remove GThread
+#include <glib.h>
+
 #include <kernel.h>
 #include <map.h>
 #include <array.h>
@@ -103,12 +106,12 @@ CFG_PARAM(	enable_directiontoggle,		"i",	"Enable symmetric driving. If toggled, 
 //DEF_CLOCK(pod_heartbeat, 3);	//update at 3 hertz
 //DEF_CLOCK(pod_sendecho, 1);		//update at 1 hertz
 
-#define QUEUE_SIZE					(PACKET_SIZE * 4)
+#define QUEUE_SIZE					(PACKET_SIZE * 5)
 
 #define POD_MAXLATENCY				0.5		/* seconds */
 #define POD_MOTORPREVIEW_TIME		(3 * MICROS_PER_SECOND)		/* 3 seconds */
 
-static int pod_fd;
+static int pod_fd = -1;
 //static GTimer * pod_latency_timer = NULL;
 static double motor_throttle = 0.0;
 static int direction = 1;
@@ -133,7 +136,7 @@ static inline void pod_write(uint8_t cmd, uint8_t param1, uint8_t param2)
 		return;
 	}
 
-	gchar data[6] = {STX, param1, param2, cmd, (param1+param2+cmd)%256, ETX};
+	char data[6] = {STX, param1, param2, cmd, (param1+param2+cmd)%256, ETX};
 	write(pod_fd, data, sizeof(data));
 }
 
@@ -142,7 +145,7 @@ static inline void pod_write_pad()
 	if (pod_fd == -1)
 		return;
 
-	gchar data[6];
+	char data[6];
 	memset(data, DLE, sizeof(data));
 	write(pod_fd, data, sizeof(data));
 }
@@ -206,7 +209,7 @@ static void pod_sendecho(int refresh)
 */
 
 //static bool pod_newdata(GIOChannel * gio, GIOCondition condition, void * empty)
-static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
+static bool pod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	static bool pod_initial_response; /* false */
 
@@ -220,25 +223,36 @@ static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
 		LOG(LOG_WARN, "End of stream reached in MaxPOD serial port %s", serial_port);
 		return false;
 	}
-	ENQUEUE(&queue, d);
+	queue_enqueue(&queue, &d, sizeof(char));
 
-	while (!queue_isempty(&queue) && *(char *)queue_peak(&queue) == DLE)
+	while (true)
 	{
-		//dump all DLE's not in a packet
-		(void)DEQUEUE(&queue, char);
-	}
-
-	if (queue_size(&queue) >= PACKET_SIZE)
-	{
-		int packet[PACKET_SIZE];
-		int i=0;
-
-		for (; i<PACKET_SIZE; i++)
+		if (queue_size(&queue) < PACKET_SIZE)
 		{
-			packet[i] = (int)DEQUEUE(&queue, char);
+			// We don't have a full packet
+			return true;
 		}
 
-		if (packet[0] != STX || packet[5] != ETX)
+		//dump all DLE's not in a packet
+		queue_dequeue(&queue, &d, sizeof(char));
+
+		if (d == STX)
+		{
+			break;
+		}
+		else if (d != DLE)
+		{
+			LOG(LOG_WARN, "Out of sync byte read from MaxPOD, expected DLE (%d), got %d", DLE, d);
+		}
+	}
+
+	// Parse packet
+	{
+		int packet[PACKET_SIZE - 1];
+
+		queue_dequeue(&queue, packet, sizeof(packet));
+
+		if (packet[4] != ETX)
 		{
 			if (!pod_initial_response)
 				return true;
@@ -248,7 +262,7 @@ static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
 			pod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
 		}
 
-		if ( (packet[1]+packet[2]+packet[3]) % 256 != packet[4] )
+		if ( (packet[0]+packet[1]+packet[2]) % 256 != packet[3] )
 		{
 			//checksum bad
 			LOG(LOG_WARN, "Checksum error in MaxPOD");
@@ -257,7 +271,7 @@ static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
 
 		pod_initial_response = true;
 
-		switch (packet[3])
+		switch (packet[2])
 		{
 			case PCMD_HEARTBEAT:
 			{
@@ -284,7 +298,7 @@ static bool pod_newdata(int fd, fdcond_t condition, void * userdata)
 			}
 
 			case PCMD_ERROR:
-				LOG(LOG_ERR, "Error received from MaxPOD (opcode=%d, param=%d)", packet[1], packet[2]);
+				LOG(LOG_ERR, "Error received from MaxPOD (opcode=%d, param=%d)", packet[0], packet[1]);
 				pod_write_pad();
 				break;
 
@@ -519,7 +533,7 @@ void pod_updatecal(const char * name, const char type, void * newvalue, void * t
 
 /* ------------- INIT --------------------*/
 void mod_init() {
-	QUEUE_INIT(queue, data);
+	QUEUE_INIT(&queue, data, sizeof(data));
 
 	pod_fd = serial_open(serial_port, B115200);
 	mainloop_addwatch(NULL, pod_fd, FD_READ, pod_newdata, NULL);

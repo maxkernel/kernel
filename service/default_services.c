@@ -85,7 +85,7 @@ static void s_log_newconnect(service_h service, stream_h stream)
 	service_writeclientdata(S_LOG_HANDLE, stream, kernel_timestamp(), history, strlen(history));
 }
 
-static void s_log_write(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
+static void s_log_write(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
 	if (isunique(S_LOG_HANDLE, service_table))
 	{
@@ -104,7 +104,7 @@ static void s_log_write(Level level, const char * domain, uint64_t milliseconds,
 	//disable the log to prevent recusion on logged errors
 	*ld = true;
 	{
-		String msg = kernel_logformat(level, domain, milliseconds, message);
+		string_t msg = kernel_logformat(level, domain, milliseconds, message);
 		service_writedata(S_LOG_HANDLE, kernel_timestamp(), msg.string, msg.length);
 	}
 	*ld = false;

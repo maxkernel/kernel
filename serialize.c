@@ -3,52 +3,31 @@
 #include <string.h>
 #include <glib.h>
 
-#include "array.h"
-#include "serialize.h"
-
-#if defined(KERNEL)
-  #include "kernel.h"
-#elif defined(LIBMAX)
-  #include "max.h"
-#endif
+#include <serialize.h>
+#include <kernel.h>
 
 static size_t param_size(char type, void * data)
 {
 	switch (type)
 	{
-		#define __deserialize_elem(t1, t2) \
-			case t1: return sizeof(t2);
-
-		__deserialize_elem(T_BOOLEAN, bool)
-		__deserialize_elem(T_INTEGER, int)
-		__deserialize_elem(T_DOUBLE, double)
-		__deserialize_elem(T_CHAR, char)
-
-		case T_STRING:
-			return strlen(*(char **)data)+1;
-
-		case T_BUFFER:
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-			return buffer_size(*(buffer_t *)data);
-
-		default:
-			return 0;
+		case T_BOOLEAN:	return sizeof(bool);
+		case T_INTEGER:	return sizeof(int);
+		case T_DOUBLE:	return sizeof(double);
+		case T_CHAR:	return sizeof(char);
+		case T_STRING:	return strlen(*(char **)data)+1;
+		default:		return 0;
 	}
 }
 
-buffer_t serialize(const char * sig, ...)
+void serialize(buffer_t buffer, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	buffer_t buf = vserialize(sig, args);
+	vserialize(buffer, sig, args);
 	va_end(args);
-
-	return buf;
 }
 
-buffer_t vserialize(const char * sig, va_list args)
+void vserialize(buffer_t buffer, const char * sig, va_list args)
 {
 	void ** array = vparam_pack(sig, args);
 	if (array == NULL)
@@ -253,18 +232,48 @@ size_t param_arraysize(const char * sig)
 	return sizeof(void *) * s;
 }
 
-void ** param_pack(const char * sig, ...)
+void param_pack(void ** params, unsigned int maxparams, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	void ** array = vparam_pack(sig, args);
+	vparam_pack(params, maxparams, sig, args);
 	va_end(args);
-
-	return array;
 }
 
-void ** vparam_pack(const char * sig, va_list args)
+// TODO NOTE - strings take two params pointers
+void vparam_pack(void ** params, unsigned int maxparams, const char * sig, va_list args)
 {
+	// Sanity check
+	{
+		if (params == NULL || sig == NULL)
+		{
+			LOGK(LOG_ERR, "Could not pack params with NULL list or NULL sig!");
+			return;
+		}
+
+		unsigned int i = 0;
+		while (sig[i] != '\0')
+		{
+			switch (sig[i])
+			{
+				case T_BOOLEAN:
+				case T_INTEGER:
+				case T_DOUBLE:
+				case T_CHAR:
+				case T_STRING:
+					// These are allowed
+					break;
+
+				default:
+					LOGK(LOG_ERR, "Could not pack invalid parameter %d of sig %s", i+1, sig);
+					return;
+			}
+
+			i++;
+		}
+	}
+
+#if 0
 	size_t sigi, taili, len;
 	len = taili = strlen(sig) * sizeof(void *);
 
@@ -293,6 +302,21 @@ void ** vparam_pack(const char * sig, va_list args)
 					LOG(LOG_WARN, "Invalid type '%c' in signature '%s'", sig[sigi], sig);
 				#endif
 				return NULL;
+		}
+	}
+#endif
+
+	// Pack the params into the given array
+	{
+		unsigned int i = 0;
+		while (*sig != '\0')
+		{
+			switch (*sig)
+			{
+				case T_BOOLEAN: sgkjsgk;
+			}
+
+			sig++;
 		}
 	}
 

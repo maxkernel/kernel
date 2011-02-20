@@ -39,7 +39,7 @@ static void doconnect(proxy_t * proxy)
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	String port = string_new("%d", proxy->port);
+	string_t port = string_new("%d", proxy->port);
 	if ((rv = getaddrinfo(proxy->host, port.string, &hints, &servinfo)) != 0) {
 		LOG(LOG_ERR, "Proxy: Could not call getaddrinfo: %s", gai_strerror(rv));
 		return;
@@ -86,7 +86,7 @@ static void jpegproxy_destroy(void * object)
 
 void * jpegproxy_new(const char * host, int port)
 {
-	String name = string_new("PROXY (port %d)", port);
+	string_t name = string_new("PROXY (port %d)", port);
 
 	proxy_t * p = kobj_new("JpegProxyStream", string_copy(&name), jpegproxy_info, jpegproxy_destroy, sizeof(proxy_t));
 	p->sock = -1;

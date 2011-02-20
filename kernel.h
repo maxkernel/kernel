@@ -5,8 +5,6 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <glib.h>
-#include <gmodule.h>
 
 #include <aul/common.h>
 #include <aul/log.h>
@@ -111,6 +109,10 @@ extern "C" {
 #define CAL_PARAM(name, sig, desc)					__WRITE_META(M_CALPARAM, #name, sig, desc)
 #define CAL_UPDATE(func)							__WRITE_META(M_CALUPDATE, #func)
 
+
+#define PARAMS_MAX				64
+
+
 typedef void (*destructor_f)(void * object);
 typedef char * (*info_f)(void * object);
 typedef void (*handler_f)(void * userdata);
@@ -144,21 +146,18 @@ void * vsyscall_exec(const char * name, va_list args);
 void * asyscall_exec(const char * name, void ** args);
 void syscall_free(void * p);
 
-void property_set(char * name, char * value);
+void property_set(const char * name, const char * value);
 void property_clear(const char * name);
-char * property_get(const char * name);
-int property_get_i(const char * name);
-double property_get_d(const char * name);
+const char * property_get(const char * name);
 bool property_isset(const char * name);
 
 const void * io_input(const char * name);
-void io_output(const char * name, const void * value, bool docopy);
+void io_output(const char * name, const void * value);
 
 #define ISNULL(name)				(INPUT(name) == NULL)
 #define INPUT(name)					io_input(#name)
 #define INPUTT(type, name)			(*(const type *)INPUT(name))
-#define OUTPUT(name, value)			io_output(#name, value, true)
-#define OUTPUT_NOCOPY(name, value)	io_output(#name, value, false)
+#define OUTPUT(name, value)			io_output(#name, value)
 
 const char * max_model();
 const char * kernel_id();
@@ -168,7 +167,7 @@ const int64_t kernel_elapsed();
 const char * kernel_datatype(char type);
 
 const char * kernel_loghistory();
-String kernel_logformat(Level level, const char * domain, uint64_t milliseconds, const char * message);
+string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseconds, const char * message);
 
 typedef void (*cal_itr_d)(void * userdata, char * module, char * name, char type, char * desc, double value, double min, double max);
 typedef void (*cal_itr_i)(void * userdata, char * module, char * name, char type, char * desc, int value, int min, int max);
@@ -176,8 +175,6 @@ void cal_iterate(cal_itr_i, cal_itr_d, void * userdata);
 void cal_setparam(const char * module, const char * name, const char * value);
 void cal_merge(const char * comment);
 void cal_revert();
-//double cal_map(const double dest_min, const double dest_center, const double dest_max, const double src_min, const double src_center, const double src_max, double value);
-
 double math_eval(char * expr);
 
 #ifdef __cplusplus

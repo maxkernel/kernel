@@ -38,24 +38,32 @@ void cfg_setparam(const char * modname, const char * cfgname, const char * value
 		return;
 	}
 
+	LOGK(LOG_DEBUG, "Setting configuration parameter %s to value %s", cfg->name, value);
 	switch (cfg->type) {
 
-		#define __cfg_setparam_element(t1, t2, t3) \
-			case t1: { \
-				LOGK(LOG_DEBUG, "Setting configuration parameter %s to value %s", cfg->name, value); \
-				*(t2*)cfg->variable = t3; \
-				break; }
+		case T_BOOLEAN:
+			*(bool *)cfg->variable = atoi(value);
+			break;
 
-		__cfg_setparam_element(T_BOOLEAN, bool, atoi(value))
-		__cfg_setparam_element(T_INTEGER, int, atoi(value))
-		__cfg_setparam_element(T_DOUBLE, double, g_strtod(value, NULL))
-		__cfg_setparam_element(T_CHAR, char, value[0])
-		__cfg_setparam_element(T_STRING, char *, g_strdup(value))
+		case T_INTEGER:
+			*(int *)cfg->variable = atoi(value);
+			break;
+
+		case T_DOUBLE:
+			*(double *)cfg->variable = strtod(value, NULL);
+			break;
+
+		case T_CHAR:
+			*(char *)cfg->variable = value[0];
+			break;
+
+		case T_STRING:
+			*(char **)cfg->variable = strdup(value);
+			break;
 
 		default:
-		{
 			LOGK(LOG_ERR, "Unknown configuration type '%c' for %s", cfg->type, cfg->name);
-		}
+			break;
 	}
 }
 

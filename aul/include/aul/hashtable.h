@@ -92,6 +92,16 @@ static inline hashentry_t * hashtable_put(hashtable_t * table, const void * key,
 	return oldentry;
 }
 
+static inline bool hashtable_isempty(hashtable_t * table)
+{
+	return list_isempty(&table->iterator);
+}
+
+static inline size_t hashtable_size(hashtable_t * table)
+{
+	return list_size(&table->iterator);
+}
+
 
 #define hashtable_entry(ptr, type, member) \
 	list_entry(ptr, type, member)
@@ -124,6 +134,8 @@ hashtable_t * hashtable_new(size_t numbuckets, hashcode_f hasher, hashequals_f e
 // Hashcode functions
 unsigned int hash_str(const void * key);
 bool hash_streq(const void * a, const void * b);
+unsigned int hash_int(const void * key);
+bool hash_inteq(const void * a, const void * b);
 
 #ifdef __cplusplus
 }

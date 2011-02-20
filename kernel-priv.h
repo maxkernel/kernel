@@ -10,6 +10,7 @@
 #include <aul/common.h>
 #include <aul/log.h>
 #include <aul/list.h>
+#include <aul/mainloop.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,7 +36,7 @@ typedef bool (*trigger_f)(void * object);
 typedef void * (*blk_constructor_f)();
 typedef void (*blk_onupdate_f)(void * userdata);
 typedef void (*blk_destroy_f)(void * userdata);
-typedef void (*blk_link_f)(struct __boutput_inst_t * output, struct __binput_inst_t * input);
+typedef void (*blk_link_f)(const void * output, void * input, size_t outsize, size_t insize);
 typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
 
 
@@ -234,7 +235,7 @@ typedef struct __block_inst_t
 	list_t module_list;
 	block_t * block;
 	blk_destroy_f ondestroy;
-	gpointer userdata;
+	void * userdata;
 	list_t inputs_inst;
 	list_t outputs_inst;
 } block_inst_t;
@@ -245,10 +246,11 @@ typedef struct __boutput_inst_t
 	list_t block_inst_list;
 
 	bio_t * output;
+
 	void * data;
 	void * copybuf;
-	//bool data_modified;
-	//bool copybuf_modified;
+	bool output_valid;
+	bool output_modified;
 
 	list_t links;
 } boutput_inst_t;
@@ -262,18 +264,12 @@ typedef struct __binput_inst_t
 	boutput_inst_t * src_inst;
 	list_t boutput_inst_list;
 
-	blk_link_f copy_func;
 	void * data;
+	bool src_valid;
+	bool src_modified;
+	bool input_valid;
+	bool input_modified;
 } binput_inst_t;
-
-/*
-typedef struct
-{
-	gchar * updatefunc;
-	gchar * update_freq_str;
-	gdouble update_freq_hz;
-} mclock_t;
-*/
 
 typedef struct __kthread_t
 {
@@ -316,10 +312,15 @@ void module_kernelinit();
 
 // memfs functions (complementary with the buffer system)
 //#define
-void memfs_init(Error ** err);
-void memfs_destroy(Error ** err);
+void memfs_init(exception_t ** err);
+void memfs_destroy(exception_t ** err);
 int memfs_orphanfd();
-int memfs_dupfd(int fd, bool rewind);
+void memfs_closefd(int fd);
+int memfs_dupfd(int fd);
+off_t memfs_sizefd(int fd);
+void memfs_setseekfd(int fd, off_t position);
+off_t memfs_getseekfd(int fd);
+void memfs_rewindfd(int fd);
 
 bool lua_execfile(const char * name);
 
@@ -335,7 +336,7 @@ block_inst_t * syscallblock_getblockinst(syscallblock_t * sb);
 void profile_init();
 void profile_addthreadrealtime(kthread_t * kth, uint64_t nanoseconds);
 void profile_addthreadcputime(kthread_t * kth, uint64_t nanoseconds);
-bool profile_track(void * userdata);
+bool profile_track(mainloop_t * loop, uint64_t nanoseconds, void * userdata);
 #endif
 
 #define KTHREAD_SCHED		SCHED_RR
@@ -363,15 +364,15 @@ block_inst_t * io_newblock(block_t * blk, void ** args);
 void io_beforeblock(block_inst_t * block);
 void io_afterblock(block_inst_t * block);
 const void * io_doinput(block_inst_t * blk, const char * name);
-void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool docopy);
+void io_dooutput(block_inst_t * blk, const char * name, const void * value);
 
 void io_newcomplete(block_inst_t * inst);
 bool io_route(boutput_inst_t * out, binput_inst_t * in);
 
-cfgentry_t * cfg_getparam(const gchar * modname, const gchar * cfgname);
-void cfg_setparam(const gchar * modname, const gchar * cfgname, const gchar * value);
+cfgentry_t * cfg_getparam(const char * modname, const char * cfgname);
+void cfg_setparam(const char * modname, const char * cfgname, const char * value);
 
-calparam_t * cal_getparam(const gchar * name, const gchar * sig);
+calparam_t * cal_getparam(const char * name, const char * sig);
 int cal_compare(list_t * a, list_t * b);
 void cal_freeparam(calparam_t * val);
 

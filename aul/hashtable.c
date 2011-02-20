@@ -178,3 +178,12 @@ bool hash_streq(const void * a, const void * b)
 	return strcmp(aa, bb) == 0;
 }
 
+unsigned int hash_int(const void * key)
+{
+	return (unsigned int)*(int *)key;
+}
+
+bool hash_inteq(const void * a, const void * b)
+{
+	return *(int *)a == *(int *)b;
+}

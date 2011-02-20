@@ -19,12 +19,12 @@
 		char _timebuf[50];														\
 		time_t _now = time(NULL);												\
 		strftime(_timebuf, sizeof(_timebuf), "%F.%H.%M.%S", localtime(&_now));	\
-		String _str = string_new("\n[%s] Log file opened\n", _timebuf);			\
+		string_t _str = string_new("\n[%s] Log file opened\n", _timebuf);		\
 		write(fd, _str.string, _str.length);									\
 	} while (0)
 
 
-static inline const char * level2string(Level level)
+static inline const char * level2string(level_t level)
 {
 	char * levelstr = "Unkno";
 	if	((level & LEVEL_FATAL) > 0)			levelstr = "FATAL";
@@ -52,7 +52,7 @@ static off_t file_size(const char * path)
 
 static void move_archive(const char * prefix, int arnum)
 {
-	String oldpath = string_new("%s.%d.gz", prefix, arnum);
+	string_t oldpath = string_new("%s.%d.gz", prefix, arnum);
 	if (!file_exists(oldpath.string))
 	{
 		return;
@@ -60,19 +60,19 @@ static void move_archive(const char * prefix, int arnum)
 
 	move_archive(prefix, arnum+1);
 
-	String newpath = string_new("%s.%d.gz", prefix, arnum+1);
+	string_t newpath = string_new("%s.%d.gz", prefix, arnum+1);
 	rename(oldpath.string, newpath.string);
 }
 
 static bool compress_archive(const char * prefix, int arnum)
 {
-	String oldpath = string_new("%s.%d", prefix, arnum);
+	string_t oldpath = string_new("%s.%d", prefix, arnum);
 	if (!file_exists(oldpath.string))
 	{
 		//nothing to do
 		return true;
 	}
-	String newpath = string_new("%s.%d.gz", prefix, arnum+1);
+	string_t newpath = string_new("%s.%d.gz", prefix, arnum+1);
 
 	//perform compression
 	{
@@ -121,7 +121,7 @@ static void archive(const char * path)
 		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not compress old log file %s. Log data has been lost.", path);
 	}
 
-	String newpath = string_new("%s.1", path);
+	string_t newpath = string_new("%s.1", path);
 	rename(path, newpath.string);
 }
 
@@ -133,12 +133,12 @@ struct log_file
 	off_t size;
 };
 
-static void log_print(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
+static void log_print(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
 	fprintf(stdout, "%s (%-5s) %" PRIu64 " - %s\n", domain, level2string(level), milliseconds, message);
 }
 
-static void log_filewrite(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
+static void log_filewrite(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
 	struct log_file * data = userdata;
 
@@ -147,7 +147,7 @@ static void log_filewrite(Level level, const char * domain, uint64_t millisecond
 		return;
 	}
 
-	String buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
+	string_t buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
 	ssize_t wrote = write(data->fd, buf.string, buf.length);
 
 	if (wrote == -1)
@@ -207,9 +207,9 @@ void log_destroy()
 	}
 }
 
-bool log_openfile(const char * path, Error ** err)
+bool log_openfile(const char * path, exception_t ** err)
 {
-	if (error_check(err))
+	if (exception_check(err))
 	{
 		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function log_open");
 		return false;
@@ -220,7 +220,7 @@ bool log_openfile(const char * path, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Count not open log file: %s", strerror(errno));
+			*err = exception_new(errno, "Count not open log file: %s", strerror(errno));
 		}
 		return false;
 	}
@@ -235,7 +235,7 @@ bool log_openfile(const char * path, Error ** err)
 	return true;
 }
 
-void log_dispatch(Level level, const char * domain, const char * fmt, va_list args)
+void log_dispatch(level_t level, const char * domain, const char * fmt, va_list args)
 {
 	//get time (milliseconds) since first log_dispatch
 	static struct timeval logp_start = {0};
@@ -248,7 +248,7 @@ void log_dispatch(Level level, const char * domain, const char * fmt, va_list ar
 	uint64_t diff = (now.tv_sec - logp_start.tv_sec) * 1000LL + (now.tv_usec - logp_start.tv_usec) / 1000LL;
 
 	//construct string
-	String str;
+	string_t str;
 	string_clear(&str);
 	string_vappend(&str, fmt, args);
 	

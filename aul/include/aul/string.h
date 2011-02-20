@@ -15,18 +15,18 @@ typedef struct
 {
 	char string[AUL_STRING_MAXLEN];
 	size_t length;
-} String;
+} string_t;
 
 #define STRING_INIT				{{0},0}
 
-String string_blank();
-String string_new(const char * fmt, ...) CHECK_PRINTF(1, 2);
-void string_append(String * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
-void string_vappend(String * str, const char * fmt, va_list args);
+string_t string_blank();
+string_t string_new(const char * fmt, ...) CHECK_PRINTF(1, 2);
+void string_append(string_t * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
+void string_vappend(string_t * str, const char * fmt, va_list args);
 
-String string_clone(const String * str);
-const char * string_copy(const String * str);
-void string_clear(String * str);
+string_t string_clone(const string_t * str);
+const char * string_copy(const string_t * str);
+void string_clear(string_t * str);
 
 
 //string utils

@@ -159,7 +159,7 @@ static bool jpeghttp_newclient(GIOChannel * gio, GIOCondition condition, void * 
 
 void * jpeghttp_new(int port)
 {
-	String name = string_new("HTTP (port %d)", port);
+	string_t name = string_new("HTTP (port %d)", port);
 
 	server_t * server = kobj_new("JpegHttpStream", string_copy(&name), jpeghttp_info, jpeghttp_destroy, sizeof(server_t));
 	server->port = port;

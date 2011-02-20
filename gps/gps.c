@@ -33,7 +33,7 @@ static regex_t gprms_match;
 static regex_t latlong_match;
 
 static mutex_t stream_mutex;
-static String stream = STRING_INIT;
+static string_t stream = STRING_INIT;
 
 static double mtod(char * start, regmatch_t * m)
 {
@@ -72,7 +72,7 @@ static inline char mtoc(char * start, regmatch_t * match)
 	return start[match->rm_so];
 }
 
-static bool gps_newdata(int fd, fdcond_t condition, void * userdata)
+static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	static char buffer[200] = {0};
 	static char line[200] = {0};
@@ -99,7 +99,7 @@ static bool gps_newdata(int fd, fdcond_t condition, void * userdata)
 		
 		{
 			static bool rmsline = false;
-			static String date = STRING_INIT;
+			static string_t date = STRING_INIT;
 			static double speed = 0.0;
 			static double heading = 0.0;
 			

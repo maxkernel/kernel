@@ -89,7 +89,7 @@ static void handle_root(http_connection * conn, http_context * ctx, const char *
 		uri = "/index.html";
 	}
 
-	String path = string_new("%s/%s%s", INSTALL, ROOT, uri);
+	string_t path = string_new("%s/%s%s", INSTALL, ROOT, uri);
 	if (stat(path.string, &statbuf) == -1 || !S_ISREG(statbuf.st_mode))
 	{
 		http_printf(conn, "HTTP/1.1 404 Not Found\r\n\r\n");
@@ -118,13 +118,13 @@ static void handle_root(http_connection * conn, http_context * ctx, const char *
 
 void module_init()
 {
-	Error * err = NULL;
+	exception_t * err = NULL;
 
 	ctx = http_new(port, NULL, &err);
 	if (err != NULL)
 	{
-		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message);
-		error_free(err);
+		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message.string);
+		exception_free(err);
 		return;
 	}
 

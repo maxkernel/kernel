@@ -1,9 +1,9 @@
 #include <stdarg.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
-#include "buffer.h"
-#include "serialize.h"
+#include <kernel.h>
+#include <kernel-priv.h>
+#include <buffer.h>
+#include <serialize.h>
 
 
 extern module_t * kernel_module;
@@ -16,36 +16,55 @@ static void syscallblock_dosyscall(void * object, ...)
 	va_list args;
 	va_start(args, object);
 
-	String pname;
+	string_t pname;
 	const char * sig = method_params(sb->syscall->sig);
-	size_t sigi = 0;
+	unsigned int i = 0;
 
 	while (*sig != '\0')
 	{
 		string_clear(&pname);
-		string_append(&pname, "p%zu", sigi+1);
+		string_append(&pname, "p%u", i+1);
 
 		switch (*sig)
 		{
-			#define __sb_dosyscall_elem(t1, t2) \
-				case t1: {\
-					t2 v = va_arg(args, t2); \
-					io_dooutput(sb->block_inst, pname.string, &v, false); \
-					break; }
+			case T_BOOLEAN:
+			{
+				bool v = (bool)va_arg(args, int);
+				io_dooutput(sb->block_inst, pname.string, &v);
+				break;
+			}
 
-			__sb_dosyscall_elem(T_BOOLEAN, int)
-			__sb_dosyscall_elem(T_INTEGER, int)
-			__sb_dosyscall_elem(T_DOUBLE, double)
-			__sb_dosyscall_elem(T_CHAR, int)
-			__sb_dosyscall_elem(T_STRING, char *)
-			__sb_dosyscall_elem(T_BUFFER, buffer_t)
-			__sb_dosyscall_elem(T_ARRAY_BOOLEAN, buffer_t)
-			__sb_dosyscall_elem(T_ARRAY_INTEGER, buffer_t)
-			__sb_dosyscall_elem(T_ARRAY_DOUBLE, buffer_t)
+			case T_INTEGER:
+			{
+				int v = va_arg(args, int);
+				io_dooutput(sb->block_inst, pname.string, &v);
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				double v = va_arg(args, double);
+				io_dooutput(sb->block_inst, pname.string, &v);
+				break;
+			}
+
+			case T_CHAR:
+			{
+				char v = (char)va_arg(args, int);
+				io_dooutput(sb->block_inst, pname.string, &v);
+				break;
+			}
+
+			case T_STRING:
+			{
+				char * v = va_arg(args, char *);
+				io_dooutput(sb->block_inst, pname.string, &v);
+				break;
+			}
 		}
 
 		sig++;
-		sigi++;
+		i++;
 	}
 
 	va_end(args);
@@ -71,9 +90,36 @@ block_inst_t * syscallblock_getblockinst(syscallblock_t * sb)
 
 syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, const char * desc)
 {
+	// Sanity check
+	{
+		if (name == NULL || params == NULL)
+		{
+			LOGK(LOG_ERR, "Could not create syscall block with name '%s' or invalid parameters", name);
+			return NULL;
+		}
+
+		int i=0;
+		for (; params[i] != NULL; i++)
+		{
+			switch (params[i]->input->sig)
+			{
+				case T_BOOLEAN:
+				case T_INTEGER:
+				case T_DOUBLE:
+				case T_CHAR:
+				case T_STRING:
+					continue;
+
+				default:
+					LOGK(LOG_ERR, "Could not create syscall block %s: invalid type for parameter %d: %s", name, i, kernel_datatype(params[i]->input->sig));
+					return NULL;
+			}
+		}
+	}
+
 	syscallblock_t * sb = kobj_new("SyscallBlock", strdup(name), syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
 
-	//build syscall
+	// Build syscall
 	{
 		syscall_t * syscall = malloc0(sizeof(syscall_t));
 		syscall->dynamic_data = sb;
@@ -81,7 +127,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		syscall->name = strdup(name);
 		syscall->desc = STRDUP(desc);
 
-		String sig = string_new("v:");
+		string_t sig = string_new("v:");
 		int i=0;
 		for (; params[i] != NULL; i++)
 		{
@@ -94,11 +140,11 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 	}
 
 
-	//build block
+	// Build block
 	{
-		String blkobjname = string_new("%s(%s) syscall block", sb->syscall->name, sb->syscall->sig);
-		String blkname = string_new("syscall_%s", name);
-		String blkdesc = string_new("Syscall block for %s(%s)", sb->syscall->name, sb->syscall->sig);
+		string_t blkobjname = string_new("%s(%s) syscall block", sb->syscall->name, sb->syscall->sig);
+		string_t blkname = string_new("syscall_%s", name);
+		string_t blkdesc = string_new("Syscall block for %s(%s)", sb->syscall->name, sb->syscall->sig);
 
 		block_t * blk = kobj_new("Block", string_copy(&blkobjname), io_blockinfo, io_blockfree, sizeof(block_t));
 
@@ -108,7 +154,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		LIST_INIT(&blk->inputs);
 		LIST_INIT(&blk->outputs);
 
-		String pname;
+		string_t pname;
 		size_t i=0;
 		for(; params[i] != NULL; i++)
 		{
@@ -128,12 +174,12 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		sb->block = blk;
 	}
 
-	//create block instance
+	// Create block instance
 	sb->block_inst = io_newblock(sb->block, NULL);
 
-	//route the data
+	// Route the data
 	{
-		String pname;
+		string_t pname;
 		size_t i=0;
 		for (; params[i] != NULL; i++)
 		{

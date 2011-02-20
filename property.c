@@ -1,40 +1,54 @@
+#include <aul/hashtable.h>
 #include "kernel.h"
 
-extern GHashTable * properties;
+extern hashtable_t properties;
 
-void property_set(char * name, char * value)
+typedef struct
 {
-	if (property_isset(name))
-	{
-		g_free(property_get(name));
-	}
+	const char * value;
+	hashentry_t entry;
+} property_t;
 
-	g_hash_table_insert(properties, name, g_strdup(value));
+void property_set(const char * name, const char * value)
+{
+	hashentry_t * entry = hashtable_get(&properties, name);
+	if (entry == NULL)
+	{
+		property_t * prop = malloc0(sizeof(property_t));
+		prop->value = strdup(value);
+		hashtable_put(&properties, name, &prop->entry);
+	}
+	else
+	{
+		property_t * prop = hashtable_entry(entry, property_t, entry);
+		free((void *)prop->value);
+		prop->value = strdup(value);
+	}
 }
 
 void property_clear(const char * name)
 {
-	char * prop = property_get(name);
-	g_hash_table_remove(properties, name);
-	g_free(prop);
+	hashentry_t * entry = hashtable_get(&properties, name);
+	if (entry != NULL)
+	{
+		hashtable_remove(entry);
+
+		property_t * prop = hashtable_entry(entry, property_t, entry);
+		free((void *)prop->value);
+		free(prop);
+	}
 }
 
-char * property_get(const char * name)
+const char * property_get(const char * name)
 {
-	return g_hash_table_lookup(properties, name);
-}
+	hashentry_t * entry = hashtable_get(&properties, name);
+	if (entry == NULL)
+		return NULL;
 
-int property_get_i(const char * name)
-{
-	return atoi(property_get(name));
-}
-
-double property_get_d(const char * name)
-{
-	return g_strtod(property_get(name), NULL);
+	return hashtable_entry(entry, property_t, entry)->value;
 }
 
 bool property_isset(const char * name)
 {
-	return property_get(name) != NULL;
+	return hashtable_get(&properties, name) != NULL;
 }

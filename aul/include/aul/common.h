@@ -11,21 +11,34 @@
 extern "C" {
 #endif
 
-#ifndef MILLIS_PER_SECOND
-# define MILLIS_PER_SECOND		1000LL
-#endif
+#undef  MILLIS_PER_SECOND
+#define MILLIS_PER_SECOND		1000
 
-#ifndef MICROS_PER_SECOND
-# define MICROS_PER_SECOND		1000000LL
-#endif
+#undef  MICROS_PER_SECOND
+#define MICROS_PER_SECOND		1000000L
 
-#ifndef NANOS_PER_SECOND
-# define NANOS_PER_SECOND		1000000000LL
-#endif
+#undef  NANOS_PER_SECOND
+#define NANOS_PER_SECOND		1000000000LL
 
+#undef  LIKELY
 #define LIKELY(x)       __builtin_expect(!!(x), 1)
+
+#undef  UNLIKELY
 #define UNLIKELY(x)     __builtin_expect(!!(x), 0)
 
+#undef	MAX
+#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
+
+#undef	MIN
+#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+
+#undef	ABS
+#define ABS(a)	   (((a) < 0) ? -(a) : (a))
+
+#undef	CLAMP
+#define CLAMP(x, low, high)  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+
+#undef  CHECK_PRINTF
 #define CHECK_PRINTF(fmt_arg, arg1)		__attribute__((format (printf, fmt_arg, arg1)))
 
 
@@ -43,11 +56,14 @@ static inline void * malloc0(size_t size)
 
 static inline char * STRDUP(const char * str)
 {
-	if (UNLIKELY(str == NULL)){
+	if (UNLIKELY(str == NULL))
+	{
 		return NULL;
 	}
-
-	return strdup(str);
+	else
+	{
+		return strdup(str);
+	}
 }
 
 #ifdef __cplusplus

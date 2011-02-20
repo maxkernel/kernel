@@ -3,6 +3,8 @@
 #include <ctype.h>
 #include <dlfcn.h>
 
+#include <glib.h>
+
 #include "kernel.h"
 #include "kernel-priv.h"
 
@@ -50,7 +52,7 @@ static bool module_symbol(void * module, const char * name, void ** function_ptr
 
 module_t * module_get(const char * name)
 {
-	String sname = string_new("%s", name);
+	string_t sname = string_new("%s", name);
 	if (!strsuffix(sname.string, ".mo"))
 	{
 		string_append(&sname, ".mo");
@@ -86,7 +88,7 @@ bool module_exists(const char * name)
 
 module_t * module_load(const char * name)
 {
-	String sname = string_new("%s", name);
+	string_t sname = string_new("%s", name);
 	if (!strsuffix(sname.string, ".mo"))
 	{
 		string_append(&sname, ".mo");
@@ -184,10 +186,10 @@ module_t * module_load(const char * name)
 			LOGK(LOG_FATAL, "Could not read module destroy function %s for module %s", meta->destroy, name);
 			//will exit program
 		}
-		g_free(meta->initialize);
-		g_free(meta->preactivate);
-		g_free(meta->postactivate);
-		g_free(meta->destroy);
+		free(meta->initialize);
+		free(meta->preactivate);
+		free(meta->postactivate);
+		free(meta->destroy);
 
 		// call preactivate
 		if (module->preactivate != NULL)
@@ -304,7 +306,7 @@ module_t * module_load(const char * name)
 		{
 			list_t * pos2;
 			block_t * block = list_entry(pos, block_t, module_list);
-			String obj_name = string_new("%s:%s", module->kobject.obj_name, block->name);
+			string_t obj_name = string_new("%s:%s", module->kobject.obj_name, block->name);
 
 			block->module = module;
 			block->kobject.obj_name = strdup(obj_name.string);

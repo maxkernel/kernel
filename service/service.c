@@ -189,7 +189,7 @@ client_t * service_getclient(char * client_handle)
 }
 
 
-static bool service_checktimeout(void * userdata)
+static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
 	GHashTableIter itr;
 	client_t * client = NULL;
@@ -238,8 +238,8 @@ static void service_stoploop()
 
 const char * service_getstreamconfig()
 {
-	String tcp = tcp_streamconfig();
-	String udp = udp_streamconfig();
+	string_t tcp = tcp_streamconfig();
+	string_t udp = udp_streamconfig();
 	snprintf(streamconfig_cache, sizeof(streamconfig_cache), "%s%s", tcp.string, udp.string);
 	return streamconfig_cache;
 }
@@ -261,7 +261,8 @@ void module_init()
 	//initialize default services
 	service_default_init();
 
-	serviceloop = mainloop_new("Service network loop");
+	serviceloop = malloc0(sizeof(mainloop_t));
+	mainloop_new("Service network loop", serviceloop);
 	mainloop_addtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL);
 	kthread_newthread("Service server", 5, service_runloop, service_stoploop, NULL);
 

@@ -20,7 +20,7 @@ CFG_PARAM(enable_discovery, "b", "Enables other computers to discover this robot
 bool enable_discovery = false;
 char hostname[50];
 
-bool discovery_newclient(int fd, fdcond_t cond, void * data)
+bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 {
 	char buf[PACKET_LEN];
 	memset(buf, 0, sizeof(buf));
@@ -46,7 +46,7 @@ bool discovery_newclient(int fd, fdcond_t cond, void * data)
 
 		if (doreply)
 		{
-			String reply = string_new("name=%s\nid=%s\nstarted=%"PRId64"\nnow=%"PRId64"\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, MODEL, VERSION, PROVIDER, PROVIDER_URL);
+			string_t reply = string_new("name=%s\nid=%s\nstarted=%"PRId64"\nnow=%"PRId64"\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, MODEL, VERSION, PROVIDER, PROVIDER_URL);
 
 			if (syscall_exists("service_getstreamconfig", "s:v"))
 			{
@@ -66,13 +66,13 @@ void module_init()
 {
 	gethostname(hostname, sizeof(hostname));
 
-	Error * err = NULL;
+	exception_t * err = NULL;
 	int sock = udp_server(DISCOVERY_PORT, &err);
 
 	if (err != NULL)
 	{
-		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, err->message);
-		error_free(err);
+		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, err->message.string);
+		exception_free(err);
 		return;
 	}
 

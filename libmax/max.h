@@ -19,10 +19,6 @@ extern "C" {
 #define T_DOUBLE		'd'
 #define T_CHAR			'c'
 #define T_STRING		's'
-#define T_ARRAY_BOOLEAN	'B'
-#define T_ARRAY_INTEGER	'I'
-#define T_ARRAY_DOUBLE	'D'
-#define T_BUFFER		'x'
 
 typedef struct {
 	//private data

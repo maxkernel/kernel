@@ -3,10 +3,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <errno.h>
 #include <linux/videodev2.h>
 
 #include <kernel.h>
@@ -55,7 +56,7 @@ static unsigned int webcam_getformat(char * fmt)
 	size_t len = strlen(fmt), i = 0;
 	for (; i<len; i++)
 	{
-		fmt[i] = g_ascii_tolower(fmt[i]);
+		fmt[i] = tolower(fmt[i]);
 	}
 
 	if (strcmp(fmt, "yuv420") == 0)
@@ -124,32 +125,6 @@ static int webcam_open(char * path)
 
 	return fd;
 }
-
-/*
-static void webcam_unmap(webcam_t * webcam)
-{
-	if (webcam == NULL || webcam->buffers == NULL)
-	{
-		return;
-	}
-
-	int i=0;
-	for (; i<webcam->n_buffers; i++)
-	{
-		if (webcam->buffers[i].start != 0)
-		{
-			//unmap all before the error'd
-			if (munmap(webcam->buffers[webcam->n_buffers].start, webcam->buffers[webcam->n_buffers].length) == -1)
-			{
-				LOG(LOG_ERR, "Webcam: Could not munmap frame buffer %d on %s", i, webcam->path);
-			}
-
-			webcam->buffers[i].start = 0;
-			webcam->buffers[i].length = 0;
-		}
-	}
-}
-*/
 
 static bool webcam_init(webcam_t * webcam)
 {
@@ -224,7 +199,7 @@ static bool webcam_start(webcam_t * webcam)
 		return false;
 	}
 
-	webcam->buffers = g_malloc0(sizeof(videobuffer_t) * req.count);
+	webcam->buffers = malloc0(sizeof(videobuffer_t) * req.count);
 	if (!webcam->buffers) {
 		LOG(LOG_ERR, "Webcam: Out of buffer memory");
 		return false;
@@ -301,7 +276,7 @@ static bool webcam_stop(webcam_t * webcam)
 				LOG(LOG_ERR, "Webcam: could not munmap buffer %zu on %s", i, webcam->path);
 			}
 		}
-		g_free(webcam->buffers);
+		free(webcam->buffers);
 		webcam->buffers = NULL;
 	}
 
@@ -361,11 +336,11 @@ void * webcam_new(char * path, char * format, int width, int height)
 		return NULL;
 	}
 
-	webcam_t * webcam = g_malloc0(sizeof(webcam_t));
+	webcam_t * webcam = malloc0(sizeof(webcam_t));
 	webcam->fd = fd;
-	webcam->path = g_strdup(path);
+	webcam->path = strdup(path);
 	webcam->format = webcam_getformat(format);
-	webcam->format_str = g_strdup(format);
+	webcam->format_str = strdup(format);
 	webcam->width = width;
 	webcam->height = height;
 

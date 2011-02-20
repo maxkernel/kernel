@@ -11,9 +11,9 @@
 #include <aul/net.h>
 
 
-int udp_server(uint16_t port, Error ** err)
+int udp_server(uint16_t port, exception_t ** err)
 {
-	if (error_check(err))
+	if (exception_check(err))
 	{
 		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function udp_server");
 		return -1;
@@ -24,7 +24,7 @@ int udp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not create datagram socket: %s", strerror(errno));
+			*err = exception_new(errno, "Could not create datagram socket: %s", strerror(errno));
 		}
 		return -1;
 	}
@@ -40,7 +40,7 @@ int udp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not bind datagram to port %d: %s", port, strerror(errno));
+			*err = exception_new(errno, "Could not bind datagram to port %d: %s", port, strerror(errno));
 		}
 		close(sock);
 		return -1;
@@ -49,9 +49,9 @@ int udp_server(uint16_t port, Error ** err)
 	return sock;
 }
 
-int tcp_server(uint16_t port, Error ** err)
+int tcp_server(uint16_t port, exception_t ** err)
 {
-	if (error_check(err))
+	if (exception_check(err))
 	{
 		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function tcp_server");
 		return -1;
@@ -62,7 +62,7 @@ int tcp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not create tcp socket: %s", strerror(errno));
+			*err = exception_new(errno, "Could not create tcp socket: %s", strerror(errno));
 		}
 		return -1;
 	}
@@ -72,7 +72,7 @@ int tcp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not set socket options: %s", strerror(errno));
+			*err = exception_new(errno, "Could not set socket options: %s", strerror(errno));
 		}
 		close(sock);
 		return -1;
@@ -97,7 +97,7 @@ int tcp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not bind socket to port %d: %s", port, strerror(errno));
+			*err = exception_new(errno, "Could not bind socket to port %d: %s", port, strerror(errno));
 		}
 		close(sock);
 		return -1;
@@ -107,7 +107,7 @@ int tcp_server(uint16_t port, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not listen for incoming connections on port %d: %s", port, strerror(errno));
+			*err = exception_new(errno, "Could not listen for incoming connections on port %d: %s", port, strerror(errno));
 		}
 		close(sock);
 		return -1;
@@ -117,9 +117,9 @@ int tcp_server(uint16_t port, Error ** err)
 }
 
 
-int unix_server(const char * path, Error ** err)
+int unix_server(const char * path, exception_t ** err)
 {
-	if (error_check(err))
+	if (exception_check(err))
 	{
 		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function unix_server");
 		return -1;
@@ -130,7 +130,7 @@ int unix_server(const char * path, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not create unix socket %s: %s", path, strerror(errno));
+			*err = exception_new(errno, "Could not create unix socket %s: %s", path, strerror(errno));
 		}
 		return -1;
 	}
@@ -141,7 +141,7 @@ int unix_server(const char * path, Error ** err)
 		{
 			if (err != NULL)
 			{
-				*err = error_new(errno, "Could not create unix socket file %s: %s", path, strerror(errno));
+				*err = exception_new(errno, "Could not create unix socket file %s: %s", path, strerror(errno));
 			}
 			close(sock);
 			return -1;
@@ -166,7 +166,7 @@ int unix_server(const char * path, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not bind unix socket %s: %s", path, strerror(errno));
+			*err = exception_new(errno, "Could not bind unix socket %s: %s", path, strerror(errno));
 		}
 		close(sock);
 		return -1;
@@ -176,7 +176,7 @@ int unix_server(const char * path, Error ** err)
 	{
 		if (err != NULL)
 		{
-			*err = error_new(errno, "Could not listen for incoming connections on socket %s: %s", path, strerror(errno));
+			*err = exception_new(errno, "Could not listen for incoming connections on socket %s: %s", path, strerror(errno));
 		}
 		close(sock);
 		return -1;

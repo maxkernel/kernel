@@ -58,7 +58,7 @@ struct __http_context
 	hashtable_t parameters;
 };
 
-static inline String addr2string(uint32_t ip)
+static inline string_t addr2string(uint32_t ip)
 {
 	unsigned char a4 = (ip & 0xFF000000) >> 24;
 	unsigned char a3 = (ip & 0x00FF0000) >> 16;
@@ -90,7 +90,7 @@ void http_urldecode(char * string)
 	}
 }
 
-static bool http_newdata(int fd, fdcond_t cond, void * userdata)
+static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
 	http_buffer * buffer = userdata;
 
@@ -235,7 +235,7 @@ static bool http_newdata(int fd, fdcond_t cond, void * userdata)
 	return false;
 }
 
-static bool http_newclient(int fd, fdcond_t cond, void * userdata)
+static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
 	http_context * ctx = userdata;
 
@@ -279,9 +279,9 @@ static bool http_newclient(int fd, fdcond_t cond, void * userdata)
 	return true;
 }
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error)
+http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** error)
 {
-	if (error_check(error))
+	if (exception_check(error))
 	{
 		LOG(LOG_ERR, "Error already set in function http_new");
 		return NULL;
@@ -291,7 +291,7 @@ http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error)
 	ctx->mainloop = mainloop;
 	LIST_INIT(&ctx->filters);
 
-	Error * err = NULL;
+	exception_t * err = NULL;
 
 	ctx->socket = tcp_server(port, &err);
 	if (err != NULL)
@@ -299,7 +299,7 @@ http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error)
 		if (error != NULL)
 			*error = err;
 		else
-			error_free(err);
+			exception_free(err);
 
 		free(ctx);
 		return NULL;
@@ -330,7 +330,7 @@ void http_printf(http_connection * conn, const char * fmt, ...)
 
 void http_vprintf(http_connection * conn, const char * fmt, va_list args)
 {
-	String msg = string_blank();
+	string_t msg = string_blank();
 	string_vappend(&msg, fmt, args);
 	http_write(conn, msg.string, msg.length);
 }

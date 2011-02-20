@@ -36,14 +36,14 @@ static void tcp_send(stream_t * data, packet_t * packet)
 }
 
 
-static bool tcp_newdata(int fd, fdcond_t cond, void * userdata)
+static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
 	tcpstream_t * data = userdata;
 
 	ssize_t bytesread = recv(fd, data->packet.data.raw + data->packet.size, PACKET_SIZE - data->packet.size, 0);
 	if (bytesread <= 0)
 	{
-		String errstr = string_blank();
+		string_t errstr = string_blank();
 		if (bytesread < 0)
 		{
 			string_append(&errstr, " (%s)", strerror(errno));
@@ -156,7 +156,7 @@ static bool tcp_newdata(int fd, fdcond_t cond, void * userdata)
 }
 
 
-static bool tcp_newclient(int fd, fdcond_t cond, void * userdata)
+static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t socklen = sizeof(addr);
@@ -173,7 +173,7 @@ static bool tcp_newclient(int fd, fdcond_t cond, void * userdata)
 			data->sockfd = sock;
 			data->state = OKAY;
 
-			String str_addr = addr2string(addr.sin_addr.s_addr);
+			string_t str_addr = addr2string(addr.sin_addr.s_addr);
 			mainloop_addwatch(serviceloop, sock, FD_READ, tcp_newdata, data);
 			LOG(LOG_DEBUG, "New TCP service client (%s)", str_addr.string);
 		}
@@ -182,7 +182,7 @@ static bool tcp_newclient(int fd, fdcond_t cond, void * userdata)
 	return true;
 }
 
-String tcp_streamconfig()
+string_t tcp_streamconfig()
 {
 	return string_new("service_tcpport=%d\n", tcp_port);
 }
@@ -193,13 +193,13 @@ void tcp_init()
 	{
 		if (CLAMP(tcp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == tcp_port)
 		{
-			Error * err = NULL;
+			exception_t * err = NULL;
 			int tcp_fd = tcp_server(tcp_port, &err);
 
 			if (err != NULL)
 			{
-				LOG(LOG_ERR, "Could not create service TCP server on port %d: %s", tcp_port, err->message);
-				error_free(err);
+				LOG(LOG_ERR, "Could not create service TCP server on port %d: %s", tcp_port, err->message.string);
+				exception_free(err);
 			}
 			else
 			{

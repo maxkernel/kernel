@@ -181,7 +181,7 @@ static bool trigger_waitclock(void * object)
 
 trigger_t * trigger_newclock(const char * name, double freq_hz)
 {
-	String str = string_new("%s (@ %0.3fHz) " CLOCK_NAME, name, freq_hz);
+	string_t str = string_new("%s (@ %0.3fHz) " CLOCK_NAME, name, freq_hz);
 	trigger_clock_t * clk = trigger_new(string_copy(&str), trigger_infoclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
 	clk->interval_nsec = hz2nanos(freq_hz);
 
@@ -192,7 +192,7 @@ trigger_t * trigger_newclock(const char * name, double freq_hz)
 static char * trigger_infovarclock(void * obj)
 {
 	char * str = "[PLACEHOLDER VARCLOCK INFO]";
-	return g_strdup(str);
+	return strdup(str);
 }
 
 static bool trigger_waitvarclock(void * object)
@@ -378,7 +378,7 @@ trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 		list_add(&kernel_module->blocks, &blk->module_list);
 	}
 
-	String str = string_new("%s " VARCLOCK_NAME, name);
+	string_t str = string_new("%s " VARCLOCK_NAME, name);
 	trigger_varclock_t * clk = trigger_new(string_copy(&str), trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	clk->interval_nsec = hz2nanos(initial_freq_hz);
 	clk->block_inst = io_newblock(blk, NULL);
@@ -400,7 +400,7 @@ static bool trigger_waittrue(void * object)
 
 trigger_t * trigger_newtrue(const char * name)
 {
-	String str = string_new("%s " true_NAME, name);
+	string_t str = string_new("%s " true_NAME, name);
 	trigger_t * trig = trigger_new(string_copy(&str), trigger_infotrue, NULL, trigger_waittrue, sizeof(trigger_t));
 	return trig;
 }

@@ -11,16 +11,16 @@
 #include "array.h"
 
 #define IO_BLOCK_NAME		"block instance"
-#define IO_FIXED_SIZE(type)	(type == T_BOOLEAN || type == T_INTEGER || type == T_DOUBLE || type == T_CHAR)
 
-extern mutex_t * io_lock;
+extern mutex_t io_lock;
 
-static void link_copy(boutput_inst_t * out, binput_inst_t * in);
-static void link_strcopy(boutput_inst_t * out, binput_inst_t * in);
-static void link_bufcopy(boutput_inst_t * out, binput_inst_t * in);
-static void link_i2dcopy(boutput_inst_t * out, binput_inst_t * in);
-static void link_d2icopy(boutput_inst_t * out, binput_inst_t * in);
-static void link_c2icopy(boutput_inst_t * out, binput_inst_t * in);
+static void link_noop(const void * out, void * in, size_t outsize, size_t insize);
+static void link_copy(const void * out, void * in, size_t outsize, size_t insize);
+static void link_strcopy(const void * out, void * in, size_t outsize, size_t insize);
+static void link_bufcopy(const void * out, void * in, size_t outsize, size_t insize);
+static void link_i2dcopy(const void * out, void * in, size_t outsize, size_t insize);
+static void link_d2icopy(const void * out, void * in, size_t outsize, size_t insize);
+static void link_c2icopy(const void * out, void * in, size_t outsize, size_t insize);
 
 /*------------------ STATIC FUNCTIONS -----------------------*/
 
@@ -45,13 +45,17 @@ static size_t io_size(bio_t * type)
 {
 	switch (type->sig)
 	{
-		case T_BOOLEAN:		return sizeof(bool);
-		case T_INTEGER:		return sizeof(int);
-		case T_DOUBLE:		return sizeof(double);
-		case T_CHAR:		return sizeof(char);
+		case T_BOOLEAN:			return sizeof(bool);
+		case T_INTEGER:			return sizeof(int);
+		case T_DOUBLE:			return sizeof(double);
+		case T_CHAR:			return sizeof(char);
+		case T_STRING:			return (sizeof(char) * AUL_STRING_MAXLEN) + sizeof(char *);
+		case T_ARRAY_BOOLEAN:
+		case T_ARRAY_INTEGER:
+		case T_ARRAY_DOUBLE:
+		case T_BUFFER:			return sizeof(int);
+		default:				return 0;
 	}
-
-	return 0;
 }
 
 static void * io_malloc(bio_t * type)
@@ -62,7 +66,30 @@ static void * io_malloc(bio_t * type)
 		LOGK(LOG_FATAL, "Unknown IO type '%c'", type->sig);
 	}
 
-	return g_malloc(size);
+	return malloc0(size);
+}
+
+static void io_checklink(bio_t * out, bio_t * in)
+{
+	if (out->sig != in->sig)
+	{
+		if (out->sig == T_DOUBLE && in->sig == T_INTEGER)
+		{
+			LOGK(LOG_WARN, "Possible loss of precision in link from %s.%s -> %s.%s (double to integer)", out->block->name, out->name, in->block->name, in->name);
+		}
+		else if (out->sig == T_CHAR && in->sig == T_INTEGER)
+		{
+			LOGK(LOG_WARN, "Possible misuse of type in link from %s.%s -> %s.%s (char to integer)", out->block->name, out->name, in->block->name, in->name);
+		}
+		else if (out->sig == T_INTEGER && in->sig == T_DOUBLE)
+		{
+			// This is okay
+		}
+		else
+		{
+			LOGK(LOG_ERR, "Could not find a link function to convert output '%c' to input '%c' in link from %s.%s -> %s.%s", out->sig, in->sig, out->block->name, out->name, in->block->name, in->name);
+		}
+	}
 }
 
 static blk_link_f io_linkfunc(bio_t * out, bio_t * in)
@@ -92,40 +119,24 @@ static blk_link_f io_linkfunc(bio_t * out, bio_t * in)
 	{
 		case T_INTEGER:
 		{
-			if (in->sig == T_DOUBLE)
-			{
-				//integer to double is okay
-				return link_i2dcopy;
-			}
-
+			if (in->sig == T_DOUBLE)	return link_i2dcopy;
 			break;
 		}
 
 		case T_DOUBLE:
 		{
-			if (in->sig == T_INTEGER)
-			{
-				//warn on double to integer
-				LOGK(LOG_WARN, "Possible loss of precision in link from %s.%s -> %s.%s (double to integer)", out->block->name, out->name, in->block->name, in->name);
-				return link_d2icopy;
-			}
-
+			if (in->sig == T_INTEGER)	return link_d2icopy;
 			break;
 		}
 
 		case T_CHAR:
 		{
-			if (in->sig == T_INTEGER)
-			{
-				//warn on char to integer
-				LOGK(LOG_WARN, "Possible misuse of type in link from %s.%s -> %s.%s (char to integer)", out->block->name, out->name, in->block->name, in->name);
-				return link_c2icopy;
-			}
+			if (in->sig == T_INTEGER)	return link_c2icopy;
+			break;
 		}
 	}
 
-	LOGK(LOG_ERR, "Could not find a link function to convert output '%c' to input '%c' in link from %s.%s -> %s.%s", out->sig, in->sig, out->block->name, out->name, in->block->name, in->name);
-	return NULL;
+	return link_noop;
 }
 
 static void io_constructor(block_t * blk, void * data, void ** args)
@@ -138,47 +149,49 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 	LOGK(LOG_DEBUG, "Calling constructor %s on block %s with sig '%s'", blk->new_name, blk->name, blk->new_sig);
 
 	ffi_cif cif;
-	ffi_type ** atypes = g_malloc0(sizeof(ffi_type *) * strlen(blk->new_sig));
+	ffi_type * atypes[PARAMS_MAX];
 
-	char * sig = (char *)blk->new_sig;
-	gint i=0;
+	const char * sig = (const char *)blk->new_sig;
+	unsigned int i = 0;
+
 	while (*sig != '\0')
 	{
 		switch (*sig)
 		{
-			#define __io_constructor_elem(t1, t2) \
-				case t1: \
-					atypes[i] = &t2; \
-					break;
+			case T_BOOLEAN:
+				atypes[i++] = &ffi_type_uint8;	// bool is 1 byte
+				break;
 
-			// BOOL is 1 byte
-			__io_constructor_elem(T_BOOLEAN, ffi_type_uint8)
-			__io_constructor_elem(T_INTEGER, ffi_type_sint)
-			__io_constructor_elem(T_DOUBLE, ffi_type_double)
-			__io_constructor_elem(T_CHAR, ffi_type_uchar)
-			__io_constructor_elem(T_STRING, ffi_type_pointer)
-			__io_constructor_elem(T_VOID, ffi_type_void);
+			case T_INTEGER:
+				atypes[i++] = &ffi_type_sint;
+				break;
 
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-			case T_BUFFER:
-				atypes[i] = &ffi_type_pointer;
+			case T_DOUBLE:
+				atypes[i++] = &ffi_type_double;
+				break;
+
+			case T_CHAR:
+				atypes[i++] = &ffi_type_uchar;
+				break;
+
+			case T_STRING:
+				atypes[i++] = &ffi_type_pointer;
+				break;
+
+			case T_VOID:
+				atypes[i++] = &ffi_type_void;
 				break;
 
 			default:
-				LOGK(LOG_FATAL, "Unknown constructor signature type '%c'", *sig);
+				LOGK(LOG_FATAL, "Unknown/invalid constructor signature type '%c'", *sig);
 				//will exit
 		}
 
-		i++;
 		sig++;
 	}
 
 	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, i, &ffi_type_pointer, atypes);
 	ffi_call(&cif, (void *)blk->new, data, args);
-
-	g_free(atypes);
 }
 
 static block_inst_t * io_currentblockinst()
@@ -231,7 +244,7 @@ block_inst_t * io_newblock(block_t * blk, void ** args)
 {
 	LOGK(LOG_DEBUG, "Creating new block %s in module %s", blk->name, blk->module->kobject.obj_name);
 
-	String str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.obj_name, blk->name);
+	string_t str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.obj_name, blk->name);
 	block_inst_t * blk_inst = exec_new(string_copy(&str), io_instinfo, io_instdestroy, io_doinst, NULL, sizeof(block_inst_t));
 	list_add(&blk->module->block_inst, &blk_inst->module_list);
 
@@ -248,6 +261,11 @@ block_inst_t * io_newblock(block_t * blk, void ** args)
 		binput_inst_t * in_inst = malloc0(sizeof(binput_inst_t));
 		in_inst->block_inst = blk_inst;
 		in_inst->input = in;
+		in_inst->data = io_malloc(in);
+		in_inst->src_valid = false;
+		in_inst->src_modified = false;
+		in_inst->input_valid = false;
+		in_inst->input_modified = false;
 
 		list_add(&blk_inst->inputs_inst, &in_inst->block_inst_list);
 	}
@@ -258,6 +276,10 @@ block_inst_t * io_newblock(block_t * blk, void ** args)
 		boutput_inst_t * out_inst = malloc0(sizeof(boutput_inst_t));
 		out_inst->block_inst = blk_inst;
 		out_inst->output = out;
+		out_inst->data = io_malloc(out);
+		out_inst->copybuf = io_malloc(out);
+		out_inst->output_valid = false;
+		out_inst->output_modified = false;
 		LIST_INIT(&out_inst->links);
 
 		list_add(&blk_inst->outputs_inst, &out_inst->block_inst_list);
@@ -280,7 +302,6 @@ void io_newcomplete(block_inst_t * inst)
 		if (in->src_inst == NULL)
 		{
 			LOGK(LOG_WARN, "Unconnected input %s in block %s in module %s", in->input->name, in->block_inst->block->name, in->block_inst->block->module->path);
-			in->data = io_malloc(in->input);
 		}
 	}
 
@@ -295,31 +316,12 @@ void io_newcomplete(block_inst_t * inst)
 	}
 }
 
-/*
-block_inst_t * io_getblockinst(const char * blkid)
-{
-	block_inst_t * blk_inst = (block_inst_t *)kobj_lookup(blkid);
-	if (blk_inst == NULL)
-	{
-		LOGK(LOG_DEBUG, "Block instance id %s does not exist", blkid);
-		return NULL;
-	}
-
-	if (blk_inst->class_type != C_RUNNABLE || blk_inst->runtype != RT_BLOCKINST)
-	{
-		return NULL;
-	}
-
-	return blk_inst;
-}
-*/
-
 bool io_route(boutput_inst_t * out, binput_inst_t * in)
 {
 	if (out == NULL || in == NULL)
 	{
-		LOGK(LOG_FATAL, "Could not route. One of the inputs/outputs is null!");
-		//will exit
+		LOGK(LOG_ERR, "Could not route. One of the inputs/outputs is null!");
+		return false;
 	}
 
 	LOGK(LOG_DEBUG, "Routing %s:%s.%s -> %s:%s.%s", out->block_inst->block->module->kobject.obj_name, out->block_inst->block->name, out->output->name, in->block_inst->block->module->kobject.obj_name, in->block_inst->block->name, in->input->name);
@@ -330,15 +332,8 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 		return false;
 	}
 
-	blk_link_f link_func = io_linkfunc(out->output, in->input);
-	if (link_func == NULL)
-	{
-		return false;
-	}
-
-	in->copy_func = link_func;
+	io_checklink(out->output, in->input);
 	in->src_inst = out;
-
 	list_add(&out->links, &in->boutput_inst_list);
 
 	return true;
@@ -346,37 +341,74 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 
 void io_beforeblock(block_inst_t * block)
 {
-	mutex_lock(io_lock);
-
-	list_t * pos;
-	list_foreach(pos, &block->inputs_inst)
+	mutex_lock(&io_lock);
 	{
-		binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
-		if (in_inst->src_inst != NULL && in_inst->src_inst->copybuf != NULL)
+		list_t * pos;
+		list_foreach(pos, &block->inputs_inst)
 		{
-			in_inst->copy_func(in_inst->src_inst, in_inst);
+			binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
+			if (in_inst->src_inst != NULL && in_inst->src_modified)
+			{
+				// The source has been modified, copy it over
+				if (in_inst->src_valid)
+				{
+					// The source is valid, do a regular copy
+					io_linkfunc(in_inst->src_inst->output, in_inst->input)(in_inst->src_inst->copybuf, in_inst->data, io_size(in_inst->src_inst->output), io_size(in_inst->input));
+				}
+				else
+				{
+					// The source is not valid, set the output * to NULL
+					io_linkfunc(in_inst->src_inst->output, in_inst->input)(NULL, in_inst->data, io_size(in_inst->src_inst->output), io_size(in_inst->input));
+				}
+
+				// Update the valid and modified flags
+				in_inst->input_valid = in_inst->src_valid;
+				in_inst->input_modified = in_inst->src_modified;
+				in_inst->src_modified = false;
+			}
 		}
 	}
-
-	mutex_unlock(io_lock);
+	mutex_unlock(&io_lock);
 }
 
 void io_afterblock(block_inst_t * block)
 {
-	mutex_lock(io_lock);
-
-	list_t * pos;
-	list_foreach(pos, &block->outputs_inst)
+	mutex_lock(&io_lock);
 	{
-		boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
+		list_t * pos;
+		list_foreach(pos, &block->outputs_inst)
+		{
+			boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
+			if (out_inst->output_modified)
+			{
+				// The output has been modified, copy it to the copybuf and tell all the inputs
 
-		//swap pointers
-		void * temp = out_inst->copybuf;
-		out_inst->copybuf = out_inst->data;
-		out_inst->data = temp;
+				if (out_inst->output_valid)
+				{
+					// The output is valid, do a regular copy
+					io_linkfunc(out_inst->output, out_inst->output)(out_inst->data, out_inst->copybuf, io_size(out_inst->output), io_size(out_inst->output));
+				}
+				else
+				{
+					// The output is not valid, call the copy function with a NULL ptr
+					io_linkfunc(out_inst->output, out_inst->output)(NULL, out_inst->copybuf, io_size(out_inst->output), io_size(out_inst->output));
+				}
+
+				// Tell all the inputs
+				list_t * pos2;
+				list_foreach(pos2, &out_inst->links)
+				{
+					binput_inst_t * in_inst = list_entry(pos2, binput_inst_t, boutput_inst_list);
+					in_inst->src_valid = out_inst->output_valid;
+					in_inst->src_modified = out_inst->output_modified;
+				}
+
+				// Update the flags
+				out_inst->output_modified = false;
+			}
+		}
 	}
-
-	mutex_unlock(io_lock);
+	mutex_unlock(&io_lock);
 }
 
 const void * io_doinput(block_inst_t * blk, const char * name)
@@ -399,19 +431,13 @@ const void * io_doinput(block_inst_t * blk, const char * name)
 		return NULL;
 	}
 
-	if (in->data == NULL)
+	if (!in->input_valid)
 	{
+		// Input is not valid, just return NULL
 		return NULL;
 	}
 
-	if (IO_FIXED_SIZE(in->input->sig))
-	{
-		return in->data;
-	}
-	else
-	{
-		return &in->data;
-	}
+	return in->data;
 }
 
 const void * io_input(const char * name)
@@ -426,60 +452,33 @@ const void * io_input(const char * name)
 	return io_doinput(blk, name);
 }
 
-void io_dooutput(block_inst_t * blk, const char * name, const void * value, bool docopy)
+void io_dooutput(block_inst_t * blk, const char * name, const void * value)
 {
 	list_t * pos;
-	boutput_inst_t * out = NULL;
+	boutput_inst_t * out_inst = NULL;
 	list_foreach(pos, &blk->outputs_inst)
 	{
 		boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
 		if (strcmp(name, test->output->name) == 0)
 		{
-			out = test;
+			out_inst = test;
 			break;
 		}
 	}
 
-	if (out == NULL)
+	if (out_inst == NULL)
 	{
 		LOGK(LOG_WARN, "Output %s in block %s does not exist!", name, blk->block->name);
 		return;
 	}
 
-	if (IO_FIXED_SIZE(out->output->sig))
-	{
-		if (out->data == NULL)
-		{
-			out->data = io_malloc(out->output);
-		}
+	io_linkfunc(out_inst->output, out_inst->output)(value, out_inst->data, io_size(out_inst->output), io_size(out_inst->output));
 
-		memcpy(out->data, value, io_size(out->output));
-	}
-	else
-	{
-		switch (out->output->sig)
-		{
-			case T_STRING:
-				g_free(out->data);
-				out->data = docopy? g_strdup(*(char **)value) : *(char **)value;
-				break;
-
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-			case T_BUFFER:
-				buffer_free(out->data);
-				out->data = docopy? buffer_copy(*(buffer_t *)value) : *(buffer_t *)value;
-				break;
-
-			default:
-				LOGK(LOG_ERR, "Unknown type. Cannot copy '%c' into %s.%s.%s", out->output->sig, out->output->block->module->path, out->output->block->name, name);
-				return;
-		}
-	}
+	out_inst->output_valid = value != NULL;
+	out_inst->output_modified = true;
 }
 
-void io_output(const char * name, const void * value, bool docopy)
+void io_output(const char * name, const void * value)
 {
 	block_inst_t * blk = io_currentblockinst();
 	if (blk == NULL)
@@ -488,73 +487,55 @@ void io_output(const char * name, const void * value, bool docopy)
 		return;
 	}
 
-	io_dooutput(blk, name, value, docopy);
+	io_dooutput(blk, name, value);
 }
 
 
 /*---------- LINK FUNCTIONS -------------------*/
-
-static void link_copy(boutput_inst_t * out, binput_inst_t * in)
+static void link_noop(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data == NULL)
-	{
-		in->data = io_malloc(in->input);
-	}
-
-	memcpy(in->data, out->copybuf, io_size(in->input));
+	// This is a noop function, used when there is an incompatible out -> in
 }
 
-static void link_strcopy(boutput_inst_t * out, binput_inst_t * in)
+static void link_copy(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data != NULL)
-	{
-		g_free(in->data);
-	}
-
-	in->data = g_strdup(out->copybuf);
+	if (UNLIKELY( out == NULL ))	memset(in, 0, insize);
+	else							memcpy(in, out, insize);
 }
 
-static void link_bufcopy(boutput_inst_t * out, binput_inst_t * in)
+static void link_strcopy(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data != NULL && buffer_size(out->copybuf) == buffer_size(in->data))
-	{
-		//buffers are the same size, just memcpy
-		memcpy(in->data, out->copybuf, buffer_size(in->data));
-	}
-	else
-	{
-		//this is a very inefficient method!
-		buffer_free(in->data);
-		in->data = buffer_copy(out->copybuf);
-	}
+	*(char **)in = in + sizeof(char *);
+
+	if (UNLIKELY( out == NULL ))	(*(char **)in)[0] = '\0';
+	else							memcpy(*(char **)in, *(const char **)out, strlen(*(const char **)out)+1);
 }
 
-static void link_i2dcopy(boutput_inst_t * out, binput_inst_t * in)
+static void link_bufcopy(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data == NULL)
+	if (*(buffer_t *)in != 0)
 	{
-		in->data = io_malloc(in->input);
+		buffer_free(*(buffer_t *)in);
 	}
 
-	*(double *)in->data = (double) *(int *)out->copybuf;
+	if (UNLIKELY( out == NULL))		*(buffer_t *)in = 0;
+	else							*(buffer_t *)in = buffer_dup(*(const buffer_t *)out);
 }
 
-static void link_d2icopy(boutput_inst_t * out, binput_inst_t * in)
+static void link_i2dcopy(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data == NULL)
-	{
-		in->data = io_malloc(in->input);
-	}
-
-	*(int *)in->data = (int) *(double *)out->copybuf;
+	if (UNLIKELY( out == NULL ))	*(double *)in = 0.0;
+	else							*(double *)in = (double) *(const int *)out;
 }
 
-static void link_c2icopy(boutput_inst_t * out, binput_inst_t * in)
+static void link_d2icopy(const void * out, void * in, size_t outsize, size_t insize)
 {
-	if (in->data == NULL)
-	{
-		in->data = io_malloc(in->input);
-	}
+	if (UNLIKELY( out == NULL ))	*(int *)in = 0;
+	else							*(int *)in = (int) *(const double *)out;
+}
 
-	*(int *)in->data = (int) *(char *)out->copybuf;
+static void link_c2icopy(const void * out, void * in, size_t outsize, size_t insize)
+{
+	if (UNLIKELY( out == NULL ))	*(int *)in = 0;
+	else							*(int *)in = (int) *(const char *)out;
 }

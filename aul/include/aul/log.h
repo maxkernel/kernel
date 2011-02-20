@@ -3,7 +3,7 @@
 
 #include <stdarg.h>
 #include <aul/common.h>
-#include <aul/error.h>
+#include <aul/exception.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,19 +20,19 @@ typedef enum
 	LEVEL_WARNING	= 1 << 3,
 	LEVEL_INFO		= 1 << 4,
 	LEVEL_DEBUG		= 1 << 5
-} Level;
+} level_t;
 
-typedef void (*log_f)(Level level, const char * domain, uint64_t milliseconds, const char * message, void * userdata);
+typedef void (*log_f)(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata);
 typedef void (*logclose_f)(void * userdata);
 
 void log_destroy();
-bool log_openfile(const char * path, Error ** err);
-void log_dispatch(Level level, const char * domain, const char * fmt, va_list args);
+bool log_openfile(const char * path, exception_t ** err);
+void log_dispatch(level_t level, const char * domain, const char * fmt, va_list args);
 void log_addlistener(log_f listener, logclose_f closer, void * userdata);
 void log_removelistener(log_f listener);
 void log_setdefault(log_f listener, logclose_f closer, void * userdata);
 
-static inline CHECK_PRINTF(3, 4) void log_write(Level level, const char * domain, const char * fmt, ...)
+static inline CHECK_PRINTF(3, 4) void log_write(level_t level, const char * domain, const char * fmt, ...)
 {
 #if !defined(ALPHA) && !defined(BETA)
 	if (level == LEVEL_DEBUG)

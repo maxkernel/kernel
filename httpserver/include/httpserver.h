@@ -7,7 +7,7 @@
 #include <aul/common.h>
 #include <aul/mainloop.h>
 #include <aul/hashtable.h>
-#include <aul/error.h>
+#include <aul/exception.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +27,7 @@ typedef enum
 const char * http_getheader(http_context * ctx, const char * name);
 const char * http_getparam(http_context * ctx, const char * name);
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, Error ** error);
+http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** error);
 void http_adduri(http_context * ctx, const char * uri, http_match match, http_callback cb, void * userdata);
 
 void http_printf(http_connection * conn, const char * fmt, ...) CHECK_PRINTF(2, 3);

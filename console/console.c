@@ -9,24 +9,29 @@
 #include <aul/common.h>
 #include <aul/net.h>
 #include <aul/mainloop.h>
+#include <aul/list.h>
 
 #include <console.h>
 #include <kernel.h>
 #include <serialize.h>
 
-//#define LOCAL		1
-//#define NETWORK		2
-
-//static int l_serversock = NULL;	//local socket
-//static GTcpSocket * n_serversock = NULL;	//network socket
-
-//MODULE --------------------------------
 MOD_INIT(module_init);
 
-gint enable_network = 0;
+int enable_network = 0;
 CFG_PARAM(enable_network, "i");
 
-static String addr2string(uint32_t ip)
+
+typedef struct
+{
+	list_t free_list;
+	size_t size;
+	char buffer[CONSOLE_BUFFERMAX];
+} cbuffer_t;
+
+static list_t free_buffers;
+
+
+static string_t addr2string(uint32_t ip)
 {
 	unsigned char a4 = (ip & 0xFF000000) >> 24;
 	unsigned char a3 = (ip & 0x00FF0000) >> 16;
@@ -57,147 +62,135 @@ static void console_replyclient(int fd, buffer_t reply)
 	}
 }
 
-static void console_null(void * DELETE_ME_SHITHEAD)
+static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
+	cbuffer_t * buffer = userdata;
 
-}
-
-//static bool console_clientdata(int fd, fdcond_t condition, void * userdata)
-static void console_clientdata(void * userdata)
-{
-	int fd = (int)userdata;
-
-while (true)
-{
-	ssize_t bytesread;
-	size_t bufsize;
-	char * buf = NULL;
-	void ** array = NULL;
-
-	/*
-	char * buf = g_malloc(sizeof(gsize));
-	size_t * size = (size_t *)buf;
-	void ** array = NULL;
-	*/
-
-	//receive length of buffer
-	bytesread = recv(fd, &bufsize, sizeof(bufsize), MSG_WAITALL);
-	if (bytesread != sizeof(size_t))
+	// Get data and put in buffer
+	ssize_t bytesread = recv(fd, &buffer->buffer, CONSOLE_BUFFERMAX - buffer->size, 0);
+	if (bytesread <= 0)
 	{
+		// Socket has closed or error'd
 		if (bytesread != 0)
 		{
-			LOG(LOG_WARN, "Could not receive syscall buffer length");
+			LOG(LOG_WARN, "Could not receive data from console client: %s", strerror(bytesread));
 		}
 
-		//if read == 0, socket has closed
+		// Return buffer to free list
+		list_add(&free_buffers, &buffer->free_list);
+
 		close(fd);
-//		return false;
-		return;
+		return false;
 	}
 
-	//now receive the rest
-	buf = malloc(bufsize);
-	memcpy(buf, &bufsize, sizeof(size_t));
+	// Increment the buffer length
+	buffer->size += bytesread;
 
-	bytesread = recv(fd, buf + sizeof(size_t), bufsize - sizeof(size_t), MSG_WAITALL);
-	if (bytesread < bufsize - sizeof(size_t))
+	// Start processing packet
+	if (buffer->size >= sizeof(size_t))
 	{
-		LOG(LOG_WARN, "Could not receive syscall buffer (read=%zd, all=%zu)", bytesread, bufsize - sizeof(size_t));
-		goto done;
-	}
+		size_t packetsize = *(size_t *)buffer->buffer;
 
-	array = malloc0(param_arraysize("cssx"));
-	if (!deserialize("cssx", array, (buffer_t)buf))
-	{
-		LOG(LOG_WARN, "Could not deserialize syscall buffer");
-		goto done;
-	}
-
-	char type = *(char *)array[0];
-	char * name = *(char **)array[1];
-	char * sig = *(char **)array[2];
-	buffer_t params = *(buffer_t *)array[3];
-
-	switch (type)
-	{
-		case T_METHOD:
+		// Sanity check
+		if (packetsize > CONSOLE_BUFFERMAX)
 		{
-			if (syscall_exists(name, sig))
-			{
-				const char * param_sig = method_params(sig);
-				void ** param_array = malloc0(param_arraysize(param_sig));
-				if (!deserialize(param_sig, param_array, params))
-				{
-					LOG(LOG_WARN, "Could not deserialize parameter buffer with sig '%s'", param_sig);
+			LOG(LOG_ERR, "Packet from client too big! Max=%d, Size=%zu", CONSOLE_BUFFERMAX, packetsize);
 
-					buffer_t ebuf = mkerror(name, "Could not deserialize parameter buffer");
-					console_replyclient(fd, ebuf);
-					buffer_free(ebuf);
+			// Return buffer to free list
+			list_add(&free_buffers, &buffer->free_list);
 
-					goto done;
-				}
-
-				void * ret = asyscall_exec(name, param_array);
-				FREE(param_array);
-
-				String rsig = string_new("%c", method_returntype(sig));
-
-				buffer_t pbuf = aserialize(rsig.string, &ret);
-				buffer_t rbuf = serialize("cssx", T_RETURN, name, rsig.string, pbuf);
-				buffer_free(pbuf);
-
-				console_replyclient(fd, rbuf);
-				buffer_free(rbuf);
-
-				//only if return is a buffer, free the memory
-				switch (method_returntype(sig))
-				{
-					case T_ARRAY_BOOLEAN:
-					case T_ARRAY_INTEGER:
-					case T_ARRAY_DOUBLE:
-					case T_BUFFER:
-						buffer_free(*(buffer_t *)ret);
-						break;
-
-					default:
-						break;
-				}
-
-				syscall_free(ret);
-			}
-			else
-			{
-				String msg = string_new("Syscall %s with signature '%s' doesn't exist!", name, sig);
-
-				buffer_t ebuf = mkerror(name, msg.string);
-				console_replyclient(fd, ebuf);
-				buffer_free(ebuf);
-			}
-
-			break;
+			close(fd);
+			return false;
 		}
 
-		case T_ERROR:
-			LOG(LOG_WARN, "Console received an error from client: (%s) %s", name, (char *)buffer_data(params));
-			break;
+		if (buffer->size >= packetsize)
+		{
+			// We have a full packet, parse it
 
-		case T_RETURN:
-			LOG(LOG_WARN, "Unexpected return type message received in console (name=%s)", name);
-			break;
+			void ** array = malloc0(param_arraysize("cssx"));
+			if (!deserialize("cssx", array, (buffer_t)buffer->buffer))
+			{
+				LOG(LOG_WARN, "Could not deserialize syscall buffer");
+				goto done;
+			}
 
-		default:
-			LOG(LOG_WARN, "Unknown message type received in console (name=%s, type=%c)", name, type);
-			break;
-	}
+			char type = *(char *)array[0];
+			char * name = *(char **)array[1];
+			char * sig = *(char **)array[2];
+			buffer_t params = *(buffer_t *)array[3];
+
+			switch (type)
+			{
+				case T_METHOD:
+				{
+					if (syscall_exists(name, sig))
+					{
+						const char * param_sig = method_params(sig);
+						void ** param_array = malloc0(param_arraysize(param_sig));
+						if (!deserialize(param_sig, param_array, params))
+						{
+							LOG(LOG_WARN, "Could not deserialize parameter buffer with sig '%s'", param_sig);
+
+							buffer_t ebuf = mkerror(name, "Could not deserialize parameter buffer");
+							console_replyclient(fd, ebuf);
+							buffer_free(ebuf);
+
+							goto done;
+						}
+
+						void * ret = asyscall_exec(name, param_array);
+						FREE(param_array);
+
+						string_t rsig = string_new("%c", method_returntype(sig));
+
+						buffer_t pbuf = aserialize(rsig.string, &ret);
+						buffer_t rbuf = serialize("cssx", T_RETURN, name, rsig.string, pbuf);
+						buffer_free(pbuf);
+
+						console_replyclient(fd, rbuf);
+						buffer_free(rbuf);
+						syscall_free(ret);
+					}
+					else
+					{
+						string_t msg = string_new("Syscall %s with signature '%s' doesn't exist!", name, sig);
+
+						buffer_t ebuf = mkerror(name, msg.string);
+						console_replyclient(fd, ebuf);
+						buffer_free(ebuf);
+					}
+
+					break;
+				}
+
+				case T_ERROR:
+					LOG(LOG_WARN, "Console received an error from client: (%s) %s", name, (char *)buffer_data(params));
+					break;
+
+				case T_RETURN:
+					LOG(LOG_WARN, "Unexpected return type message received in console (name=%s)", name);
+					break;
+
+				default:
+					LOG(LOG_WARN, "Unknown message type received in console (name=%s, type=%c)", name, type);
+					break;
+			}
 
 done:
-	FREE(buf);
-	FREE(array);
+			FREE(array);
+		}
+
+
+		// Re-align new packet
+		memmove(buffer->buffer, buffer->buffer + buffer->size, buffer->size - packetsize);
+		buffer->size -= packetsize;
+	}
+
+	return true;
 
 }
-}
 
-static bool console_newunixclient(int fd, fdcond_t condition, void * userdata)
+static bool console_newunixclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	int client = accept(fd, NULL, NULL);
 	if (client == -1)
@@ -206,17 +199,22 @@ static bool console_newunixclient(int fd, fdcond_t condition, void * userdata)
 	}
 	else
 	{
-		// TODO - fix this to use mainloop!
-		kthread_newthread("Console client handler", KTH_PRIO_MEDIUM, console_clientdata, console_null, (void *)client);
-		//mainloop_addwatch(NULL, client, FD_READ, console_clientdata, NULL);
+		// Get a free buffer
+		cbuffer_t * buf = list_entry(free_buffers.next, cbuffer_t, free_list);
+		list_remove(&buf->free_list);
+
+		// Set up the buffer
+		buf->size = 0;
+
+		// Add socket to mainloop watch
+		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buf);
 		LOG(LOG_DEBUG, "New UNIX console client (%s)", CONSOLE_SOCKFILE);
 	}
 
 	return true;
 }
 
-/*
-static bool console_newtcpclient(int fd, fdcond_t condition, void * userdata)
+static bool console_newtcpclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t size = sizeof(addr);
@@ -228,38 +226,54 @@ static bool console_newtcpclient(int fd, fdcond_t condition, void * userdata)
 	}
 	else
 	{
-		String str_addr = addr2string(addr.sin_addr.s_addr);
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, NULL);
+		// Get a free buffer
+		cbuffer_t * buf = list_entry(free_buffers.next, cbuffer_t, free_list);
+		list_remove(&buf->free_list);
+
+		// Set up the buffer
+		buf->size = 0;
+
+		// Add socket to mainloop watch
+		string_t str_addr = addr2string(addr.sin_addr.s_addr);
+		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buf);
 		LOG(LOG_DEBUG, "New TCP console client (%s)", str_addr.string);
 	}
 	
 	return true;
 }
-*/
 
 void module_init()
 {
-	Error * err = NULL;
+	exception_t * err = NULL;
 
 	LOG(LOG_DEBUG, "Initializing console");
 
-	//start unix socket
+	// Initialize buffers
+	LIST_INIT(&free_buffers);
+	cbuffer_t * buffers = malloc0(sizeof(cbuffer_t) * CONSOLE_BUFFERS);
+
+	size_t i = 0;
+	for (; i<CONSOLE_BUFFERS; i++)
+	{
+		list_add(&free_buffers, &buffers[i].free_list);
+	}
+
+	// Start unix socket
 	int unixsock = unix_server(CONSOLE_SOCKFILE, &err);
 	if (err != NULL)
 	{
-		LOG(LOG_WARN, "Error creating unix server socket: %s", err->message);
-		error_free(err);
+		LOG(LOG_WARN, "Error creating unix server socket: %s", err->message.string);
+		exception_free(err);
 	}
 	else
 	{
-		//change permissions on socket (user:rw,group:rw,other:rw)
+		// Change permissions on socket (user:rw,group:rw,other:rw)
 		chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 		mainloop_addwatch(NULL, unixsock, FD_READ, console_newunixclient, NULL);
 		LOG(LOG_DEBUG, "Awaiting UNIX console clients on file %s", CONSOLE_SOCKFILE);
 	}
 
-	/* TODO finish this
-	//start network socket (if cfg says to)
+	// Start network socket (if cfg says to)
 	if (enable_network)
 	{
 		LOG(LOG_DEBUG, "Creating network server socket");
@@ -267,8 +281,8 @@ void module_init()
 		int tcpsock = tcp_server(CONSOLE_TCPPORT, &err);
 		if (err != NULL)
 		{
-			LOG(LOG_WARN, "Error creating network server socket: %s", err->message);
-			error_free(err);
+			LOG(LOG_WARN, "Error creating network server socket: %s", err->message.string);
+			exception_free(err);
 		}
 		else
 		{
@@ -276,6 +290,5 @@ void module_init()
 			LOG(LOG_DEBUG, "Awaiting TCP console clients on port %d", CONSOLE_TCPPORT);
 		}
 	}
-	*/
 }
 

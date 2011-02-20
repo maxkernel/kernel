@@ -4,8 +4,9 @@
 #include <limits.h>
 #include <float.h>
 
-#include <aul/common.h>
+#include <glib.h>
 
+#include <aul/common.h>
 #include "kernel.h"
 #include "kernel-priv.h"
 
@@ -29,7 +30,7 @@ calparam_t * cal_getparam(const gchar * name, const gchar * sig)
 	calparam_t * c = NULL;
 	const char * type = NULL, * value = NULL;
 	
-	String query = string_new("SELECT type, value FROM calibration WHERE name='%s' AND updated=( SELECT MAX(updated) FROM calibration WHERE name='%s' );", name, name);
+	string_t query = string_new("SELECT type, value FROM calibration WHERE name='%s' AND updated=( SELECT MAX(updated) FROM calibration WHERE name='%s' );", name, name);
 	
 	if (sqlite3_prepare_v2(database, query.string, -1, &stmt, NULL) != SQLITE_OK)
 	{
@@ -128,7 +129,7 @@ void cal_merge(const char * comment)
 		comment = "(none)";
 	}
 
-	String query = string_blank();
+	string_t query = string_blank();
 	char value[25];
 
 	list_t * pos;

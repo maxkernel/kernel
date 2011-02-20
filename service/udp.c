@@ -31,7 +31,7 @@ static void udp_send(stream_t * data, packet_t * packet)
 	}
 }
 
-static bool udp_newdata(int fd, fdcond_t cond, void * userdata)
+static bool udp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
 	struct sockaddr_in addr;
 	socklen_t addrlen = sizeof(addr);
@@ -101,8 +101,8 @@ static bool udp_newdata(int fd, fdcond_t cond, void * userdata)
 
 				if (stream->addr.sin_addr.s_addr != addr.sin_addr.s_addr || stream->addr.sin_port != addr.sin_port)
 				{
-					String real = addr2string(stream->addr.sin_addr.s_addr);
-					String spoof = addr2string(addr.sin_addr.s_addr);
+					string_t real = addr2string(stream->addr.sin_addr.s_addr);
+					string_t spoof = addr2string(addr.sin_addr.s_addr);
 					LOG(LOG_WARN, "Service client (%s) with registered address (%s:%d) is trying to be spoofed by address (%s:%d)", client->handle, real.string, stream->addr.sin_port, spoof.string, addr.sin_port);
 					iserror = true;
 				}
@@ -120,7 +120,7 @@ static bool udp_newdata(int fd, fdcond_t cond, void * userdata)
 	return true;
 }
 
-String udp_streamconfig()
+string_t udp_streamconfig()
 {
 	return string_new("service_udpport=%d\n", udp_port);
 }
@@ -131,13 +131,13 @@ void udp_init()
 	{
 		if (CLAMP(udp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == udp_port)
 		{
-			Error * err = NULL;
+			exception_t * err = NULL;
 			int udp_fd = udp_server(udp_port, &err);
 
 			if (err != NULL)
 			{
-				LOG(LOG_ERR, "Could not create service UDP server on port %d: %s", udp_port, err->message);
-				error_free(err);
+				LOG(LOG_ERR, "Could not create service UDP server on port %d: %s", udp_port, err->message.string);
+				exception_free(err);
 			}
 			else
 			{

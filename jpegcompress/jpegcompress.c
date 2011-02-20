@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <setjmp.h>
+#include <ctype.h>
 #include <jpeglib.h>
 #include <jerror.h>
 
@@ -53,7 +54,7 @@ static convert_f jpeg_getconverter(char * fmt)
 	size_t len = strlen(fmt), i = 0;
 	for (; i<len; i++)
 	{
-		fmt[i] = g_ascii_tolower(fmt[i]);
+		fmt[i] = (char)tolower(fmt[i]);
 	}
 
 	if (strcmp(fmt, "yuv420") == 0)
@@ -70,7 +71,7 @@ static convert_f jpeg_getconverter(char * fmt)
 
 void * jpeg_new(char * format, int quality)
 {
-	jpeg_t * jpeg = g_malloc0(sizeof(jpeg_t));
+	jpeg_t * jpeg = malloc0(sizeof(jpeg_t));
 	jpeg->quality = quality;
 	jpeg->converter = jpeg_getconverter(format);
 
@@ -91,9 +92,9 @@ static void jpeg_freecompress(jpeg_t * jpeg)
 		jpeg_destroy_compress(jpeg->cinfo);
 	}
 
-	g_free(jpeg->cinfo);
-	g_free(jpeg->jerr);
-	g_free(jpeg->dest);
+	free(jpeg->cinfo);
+	free(jpeg->jerr);
+	free(jpeg->dest);
 
 	jpeg->cinfo = NULL;
 	jpeg->jerr = NULL;
@@ -109,8 +110,8 @@ void jpeg_free(void * data)
 
 	jpeg_t * jpeg = data;
 	jpeg_freecompress(jpeg);
-	g_free(jpeg->output_frame);
-	g_free(jpeg);
+	free(jpeg->output_frame);
+	free(jpeg);
 }
 
 /*--------------------------- LIBJPEG ERROR HANDLERS ---------------------*/
@@ -133,7 +134,7 @@ void jpeg_destinit(j_compress_ptr cinfo)
 
 	if (jpeg->output_frame == NULL)
 	{
-		jpeg->output_frame = g_malloc(BUFFER_STEP + sizeof(size_t));
+		jpeg->output_frame = malloc(BUFFER_STEP + sizeof(size_t));
 		jpeg->buffer = jpeg->output_frame + sizeof(size_t);
 		jpeg->buffer_length = BUFFER_STEP;
 	}
@@ -158,7 +159,7 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 	size_t oldlen = jpeg->buffer_length;
 	size_t newlen = jpeg->buffer_length + BUFFER_STEP;
 
-	jpeg->output_frame = g_realloc(jpeg->output_frame, newlen + sizeof(size_t));
+	jpeg->output_frame = realloc(jpeg->output_frame, newlen + sizeof(size_t));
 	jpeg->buffer = jpeg->output_frame + sizeof(size_t);
 	jpeg->buffer_length = newlen;
 
@@ -242,22 +243,22 @@ void jpeg_update(void * object)
 		jpeg->width = newwidth;
 		jpeg->height = newheight;
 
-		g_free(jpeg->row);
+		free(jpeg->row);
 		jpeg->row = NULL;
 	}
 
 	if (jpeg->row == NULL)
 	{
-		jpeg->row = g_malloc(jpeg->width * 3);
+		jpeg->row = malloc(jpeg->width * 3);
 	}
 
 	if (jpeg->cinfo == NULL)
 	{
 		//init the compress struct
 
-		jpeg->cinfo = cinfo = g_malloc0(sizeof(struct jpeg_compress_struct));
-		jpeg->jerr = jerr = g_malloc0(sizeof(struct jpeg_error_mgr));
-		jpeg->dest = dest = g_malloc0(sizeof(struct jpeg_destination_mgr));
+		jpeg->cinfo = cinfo = malloc0(sizeof(struct jpeg_compress_struct));
+		jpeg->jerr = jerr = malloc0(sizeof(struct jpeg_error_mgr));
+		jpeg->dest = dest = malloc0(sizeof(struct jpeg_destination_mgr));
 		cinfo->client_data = jpeg;
 
 		cinfo->err = jpeg_std_error(jerr);

@@ -7,14 +7,15 @@
 #include "kernel-priv.h"
 
 #define KENTRY_NAMELEN		50
-#define GROUP_MAX		20
-
-#define K_MODULE			1
-#define K_BLOCKINST			2
+#define GROUP_MAX			20
 
 typedef struct
 {
-	unsigned short type;
+	enum
+	{
+		K_MODULE		= 1,
+		K_BLOCKINST		= 2,
+	} type;
 	char name[KENTRY_NAMELEN];
 	const void * data;
 } kernentry_t;
@@ -361,6 +362,7 @@ static int l_newrategroup(lua_State * L)
 	block_inst_t ** insts = malloc0(sizeof(block_inst_t *) * (GROUP_MAX+1));
 	size_t index = 0;
 
+	luaL_getmetatable(L, "MaxKernel.module");
 	luaL_getmetatable(L, "MaxKernel.kernentry");
 	lua_pushnil(L);
 	while (lua_next(L, 2) != 0)
@@ -370,27 +372,57 @@ static int l_newrategroup(lua_State * L)
 			luaL_error(L, "Too many rategroup items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
 		}
 
-		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1) || !lua_rawequal(L, -1, -4))
+		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1))
 		{
 			luaL_error(L, "Encountered unknown value for item %s in rategroup table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
 		}
-		lua_pop(L, 1);
 
-		kernentry_t * entry = lua_touserdata(L, -1);
-		if (entry->type != K_BLOCKINST || strlen(entry->name) != 0)
+		if (lua_rawequal(L, -1, -4))
 		{
-			luaL_error(L, "Invalid type for item %s in rategroup table", lua_tostring(L, -2));
+			kernentry_t * entry = lua_touserdata(L, -2);
+			if (entry->type != K_BLOCKINST || strlen(entry->name) != 0)
+			{
+				luaL_error(L, "Invalid type for item %s in rategroup table", lua_tostring(L, -3));
+			}
+
+			insts[index++] = (block_inst_t *)entry->data;
+		}
+		else if (lua_rawequal(L, -1, -5))
+		{
+			module_t * modobject = *(module_t **)lua_touserdata(L, -2);
+
+			bool found = false;
+			list_t * pos;
+			list_foreach(pos, &modobject->block_inst)
+			{
+				block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
+				if (strcmp(STATIC_STR, inst->block->name) == 0)
+				{
+					insts[index++] = inst;
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				luaL_error(L, "Invalid type for item %s in rategroup table, module does not have a static block instance", lua_tostring(L, -3));
+			}
+		}
+		else
+		{
+			luaL_error(L, "Encountered unknown userdata value for item %s in rategroup table", lua_tostring(L, -3));
 		}
 
-		insts[index++] = (block_inst_t *)entry->data;
 
-		lua_pop(L, 1);
+
+		lua_pop(L, 2);
 	}
 
 	// Print some debug info
 	if (insts[0] != NULL)
 	{
-		String str = string_new("Creating new rategroup with update @ %f Hz and members: %s", freq_hz, insts[0]->block->name);
+		string_t str = string_new("Creating new rategroup with update @ %f Hz and members: %s", freq_hz, insts[0]->block->name);
 		size_t i = 1;
 		while (insts[i] != NULL)
 		{
@@ -410,7 +442,7 @@ static int l_newrategroup(lua_State * L)
 	runnable_t * rungrp = exec_newrungroup(name, (runnable_t **)insts);
 	trigger_t * trigger = trigger_newvarclock(name, freq_hz);
 
-	String name_str = string_new("%s vrategroup", name);
+	string_t name_str = string_new("%s vrategroup", name);
 	kthread_t * kth = kthread_new(string_copy(&name_str), trigger, rungrp, 0);
 
 	kthread_schedule(kth);
@@ -453,10 +485,44 @@ static int l_newsyscall(lua_State * L)
 		lua_pop(L, 1);
 
 		kernentry_t * entry = lua_touserdata(L, -1);
-		const block_inst_t * in_inst = entry->data;
-		if (entry->type != K_BLOCKINST || strlen(entry->name) == 0)
+		if (strlen(entry->name) == 0)
 		{
 			luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
+		}
+
+		const block_inst_t * in_inst = NULL;
+		switch (entry->type)
+		{
+			case K_BLOCKINST:
+			{
+				in_inst = entry->data;
+				break;
+			}
+
+			case K_MODULE:
+			{
+				const module_t * modobject = entry->data;
+
+				bool found = false;
+				list_t * pos;
+				list_foreach(pos, &modobject->block_inst)
+				{
+					block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
+					if (strcmp(STATIC_STR, inst->block->name) == 0)
+					{
+						in_inst = inst;
+						found = true;
+						break;
+					}
+				}
+
+				if (!found)
+				{
+					luaL_error(L, "Invalid module for item %s in syscall member table. Module does not have a static block.", lua_tostring(L, -2));
+				}
+
+				break;
+			}
 		}
 
 		list_t * pos;
@@ -483,7 +549,7 @@ static int l_newsyscall(lua_State * L)
 
 	//binput_inst_t ** inputs = getinput(L, 2);
 
-	String desc = string_blank();
+	string_t desc = string_blank();
 	if (inputs[0] != NULL)
 	{
 		string_append(&desc, "%s ::", (initial_desc != NULL)? initial_desc : "[no description]");
@@ -503,6 +569,8 @@ static int l_newsyscall(lua_State * L)
 	}
 
 	syscallblock_t * sb = syscallblock_new(name, inputs, desc.string);
+	// TODO - error check: syscallblock_new may return NULL
+
 	free(inputs);
 
 	// Return the syscall block_inst

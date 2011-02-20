@@ -49,7 +49,7 @@ void module_init()
 		struct dirent * ent;
 		while ((ent = readdir(dirp)) != NULL)
 		{
-			String path = string_new(SIGNAL_DIR "/%s/" SIGNAL_LINK, ent->d_name);
+			string_t path = string_new(SIGNAL_DIR "/%s/" SIGNAL_LINK, ent->d_name);
 			struct stat statbuf;
 
 			ZERO(statbuf);

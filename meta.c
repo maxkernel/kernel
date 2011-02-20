@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <bfd.h>
 
+#include <glib.h>
+
 #include "kernel.h"
 #include "kernel-priv.h"
 
@@ -64,7 +66,7 @@ const char * resolvepath(const char * name, int etype)
 	}
 	else
 	{
-		String abspath;
+		string_t abspath;
 		char pathbuf[PATH_MAX_SIZE];
 		memcpy(pathbuf, path, sizeof(pathbuf));
 
@@ -176,7 +178,7 @@ meta_t * meta_parse(const char * path)
 	}
 	
 	buflen = bfd_get_section_size(sect);
-	buf = malloc(buflen);
+	buf = malloc0(buflen);
 	bfd_get_section_contents(abfd, sect, buf, 0, buflen);
 	
 	while (bufi < buflen)

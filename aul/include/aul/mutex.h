@@ -12,7 +12,7 @@ extern "C" {
 #define M_RECURSIVE			PTHREAD_MUTEX_RECURSIVE
 #define M_NORMAL			PTHREAD_MUTEX_NORMAL
 
-typedef pthread_mutex_t		mutex_t;
+typedef pthread_mutex_t mutex_t;
 #define mutex_lock(m)		pthread_mutex_lock(m)
 #define mutex_unlock(m)		pthread_mutex_unlock(m)
 
