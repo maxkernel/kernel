@@ -27,7 +27,7 @@ clean:
 rebuild: clean all
 
 depend: $(SRCS)
-	makedepend $(DEFINES) $(INCLUDES) $^
+	makedepend $(DEFINES) $(INCLUDES) $^ 2>/dev/null
 
 .c.o:
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@

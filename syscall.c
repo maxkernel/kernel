@@ -1,5 +1,6 @@
 #include <string.h>
 #include <ffi.h>
+#include <glib.h>
 
 #include "kernel.h"
 #include "kernel-priv.h"
@@ -228,10 +229,19 @@ void * vsyscall_exec(const char * name, va_list args)
 	g_ptr_array_free(pargs, true);
 	*/
 	
-	void ** params = vparam_pack(method_params(syscall->sig), args);
-	void * ret = asyscall_exec(name, params);
-	param_free(params);
+	//void ** params = vparam_pack(method_params(syscall->sig), args);
+	//void * ret = asyscall_exec(name, params);
+	//param_free(params);
 
+	char array[SYSCALL_BUFFERMAX];
+	ssize_t result = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, method_params(syscall->sig), args);
+	if (result == -1)
+	{
+		LOGK(LOG_ERR, "Could not pack all arguments for syscall %s, consider increasing SYSCALL_BUFSIZE (currently %d)", name, SYSCALL_BUFFERMAX);
+		return NULL;
+	}
+
+	void * ret = asyscall_exec(name, (void **)array);
 	return ret;
 }
 

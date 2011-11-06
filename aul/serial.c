@@ -17,11 +17,18 @@ int serial_open(const char * port, speed_t speed)
 		return -1;
 	}
 
+// TODO - fix this!!!!! These parameters are NOT correct!
 	tcgetattr(fd, &tp);
-	tp.c_cflag = CS8|CLOCAL|CREAD;
-	tp.c_oflag = 0;
-	tp.c_iflag = IGNBRK|IGNPAR;
-	tp.c_lflag = 0;
+//	tp.c_cflag = CS8|CLOCAL|CREAD;
+//	tp.c_oflag = 0;
+//	tp.c_iflag = IGNBRK|IGNPAR;
+//	tp.c_lflag = 0;
+	tp.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	tp.c_oflag &= ~OPOST;
+	tp.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+	tp.c_cflag &= ~(CSIZE | PARENB);
+	tp.c_cflag |= CS8;
+
 	cfsetispeed(&tp, speed);
 	cfsetospeed(&tp, speed);
 

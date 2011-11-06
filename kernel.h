@@ -140,6 +140,7 @@ void kthread_newthread(const char * name, int priority, handler_f threadfunc, ha
 bool kthread_requeststop();
 
 #define SYSCALL(name, ...) syscall_exec(name, ## __VA_ARGS__)
+#define SYSCALL_BUFFERMAX			128
 bool syscall_exists(const char * name, const char * sig);
 void * syscall_exec(const char * name, ...);
 void * vsyscall_exec(const char * name, va_list args);

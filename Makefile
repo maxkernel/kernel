@@ -49,10 +49,10 @@ TARGET		= maxkernel
 export INSTALL
 export RELEASE
 
-.PHONY: prepare prereq install clean rebuild depend
+.PHONY: prepare prereq install clean rebuild depend unittest
 
 all: prepare prereq $(TARGET)
-	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend 2>/dev/null &&) true
+	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In utils" >>buildlog && $(MAKE) -C utils 2>>buildlog) || ( cat buildlog && false )
@@ -83,21 +83,25 @@ clean:
 	$(MAKE) -C aul clean
 	$(MAKE) -C libmax clean
 	$(MAKE) -C utils clean
+	$(MAKE) -C unittest clean
 	rm -f $(TARGET) $(OBJS) $(foreach module,$(MODULES),$(module)/Makefile)
 
 rebuild: clean all
 
 depend: $(SRCS)
-	makedepend $(DEFINES) $(INCLUDES) $^
+	makedepend $(DEFINES) $(INCLUDES) -Y $^ 2>/dev/null
 	$(MAKE) -C aul depend
 	$(MAKE) -C libmax depend
+	$(MAKE) -C unittest depend
+
+unittest: prereq
+	$(MAKE) -C unittest run
 
 prepare:
 	echo "Build Log ==----------------------== [$(shell date)]" >buildlog
 
 prereq:
 	( echo "In aul" >>buildlog && $(MAKE) -C aul 2>>buildlog ) || ( cat buildlog && false )
-	echo "In kernel" >>buildlog
 
 .c.o:
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@ 2>>buildlog || ( cat buildlog && false )
@@ -151,38 +155,6 @@ prereq:
 
 # DO NOT DELETE THIS LINE -- make depend needs it
 
-kernel.o: /usr/include/stdlib.h /usr/include/features.h
-kernel.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-kernel.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-kernel.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-kernel.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-kernel.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-kernel.o: /usr/include/xlocale.h /usr/include/sys/types.h
-kernel.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-kernel.o: /usr/include/time.h /usr/include/sys/select.h
-kernel.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-kernel.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-kernel.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-kernel.o: /usr/include/stdio.h /usr/include/libio.h /usr/include/_G_config.h
-kernel.o: /usr/include/wchar.h /usr/include/bits/stdio_lim.h
-kernel.o: /usr/include/bits/sys_errlist.h /usr/include/unistd.h
-kernel.o: /usr/include/bits/posix_opt.h /usr/include/bits/environments.h
-kernel.o: /usr/include/bits/confname.h /usr/include/getopt.h
-kernel.o: /usr/include/string.h /usr/include/argp.h /usr/include/ctype.h
-kernel.o: /usr/include/limits.h /usr/include/bits/posix1_lim.h
-kernel.o: /usr/include/bits/local_lim.h /usr/include/linux/limits.h
-kernel.o: /usr/include/bits/posix2_lim.h /usr/include/bits/xopen_lim.h
-kernel.o: /usr/include/errno.h /usr/include/bits/errno.h
-kernel.o: /usr/include/linux/errno.h /usr/include/asm/errno.h
-kernel.o: /usr/include/asm-generic/errno.h
-kernel.o: /usr/include/asm-generic/errno-base.h /usr/include/malloc.h
-kernel.o: /usr/include/dirent.h /usr/include/bits/dirent.h
-kernel.o: /usr/include/sys/mman.h /usr/include/bits/mman.h
-kernel.o: /usr/include/sys/time.h /usr/include/pthread.h /usr/include/sched.h
-kernel.o: /usr/include/bits/sched.h /usr/include/signal.h
-kernel.o: /usr/include/bits/setjmp.h /usr/include/bfd.h
-kernel.o: /usr/include/ansidecl.h /usr/include/symcat.h
-kernel.o: /usr/include/confuse.h /usr/include/sqlite3.h
 kernel.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 kernel.o: /usr/include/glib-2.0/glib/gtypes.h
 kernel.o: /usr/lib/glib-2.0/include/glibconfig.h
@@ -243,27 +215,14 @@ kernel.o: /usr/include/glib-2.0/glib/gtree.h
 kernel.o: /usr/include/glib-2.0/glib/gurifuncs.h
 kernel.o: /usr/include/glib-2.0/glib/gvarianttype.h
 kernel.o: /usr/include/glib-2.0/glib/gvariant.h aul/include/aul/common.h
-kernel.o: /usr/include/inttypes.h /usr/include/stdint.h
-kernel.o: /usr/include/bits/wchar.h aul/include/aul/list.h
-kernel.o: aul/include/aul/hashtable.h aul/include/aul/mainloop.h
-kernel.o: aul/include/aul/mutex.h kernel.h aul/include/aul/log.h
-kernel.o: aul/include/aul/exception.h aul/include/aul/string.h kernel-priv.h
-meta.o: /usr/include/string.h /usr/include/features.h
-meta.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-meta.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-meta.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h
-meta.o: /usr/include/ctype.h /usr/include/bits/types.h
-meta.o: /usr/include/bits/typesizes.h /usr/include/endian.h
-meta.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-meta.o: /usr/include/sys/stat.h /usr/include/time.h /usr/include/bits/stat.h
-meta.o: /usr/include/bfd.h /usr/include/ansidecl.h /usr/include/symcat.h
+kernel.o: aul/include/aul/list.h aul/include/aul/hashtable.h
+kernel.o: aul/include/aul/mainloop.h aul/include/aul/mutex.h ./kernel.h
+kernel.o: aul/include/aul/log.h aul/include/aul/exception.h
+kernel.o: aul/include/aul/string.h ./kernel-priv.h
 meta.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 meta.o: /usr/include/glib-2.0/glib/gtypes.h
 meta.o: /usr/lib/glib-2.0/include/glibconfig.h
-meta.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-meta.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-meta.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-meta.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+meta.o: /usr/include/glib-2.0/glib/gmacros.h
 meta.o: /usr/include/glib-2.0/glib/garray.h
 meta.o: /usr/include/glib-2.0/glib/gasyncqueue.h
 meta.o: /usr/include/glib-2.0/glib/gthread.h
@@ -271,8 +230,8 @@ meta.o: /usr/include/glib-2.0/glib/gerror.h
 meta.o: /usr/include/glib-2.0/glib/gquark.h
 meta.o: /usr/include/glib-2.0/glib/gutils.h
 meta.o: /usr/include/glib-2.0/glib/gatomic.h
-meta.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-meta.o: /usr/include/bits/sigset.h /usr/include/glib-2.0/glib/gbase64.h
+meta.o: /usr/include/glib-2.0/glib/gbacktrace.h
+meta.o: /usr/include/glib-2.0/glib/gbase64.h
 meta.o: /usr/include/glib-2.0/glib/gbitlock.h
 meta.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
 meta.o: /usr/include/glib-2.0/glib/gcache.h
@@ -314,37 +273,15 @@ meta.o: /usr/include/glib-2.0/glib/gtimer.h
 meta.o: /usr/include/glib-2.0/glib/gtree.h
 meta.o: /usr/include/glib-2.0/glib/gurifuncs.h
 meta.o: /usr/include/glib-2.0/glib/gvarianttype.h
-meta.o: /usr/include/glib-2.0/glib/gvariant.h kernel.h /usr/include/stdlib.h
-meta.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
-meta.o: /usr/include/sys/types.h /usr/include/sys/select.h
-meta.o: /usr/include/bits/select.h /usr/include/bits/time.h
-meta.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-meta.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-meta.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-meta.o: aul/include/aul/log.h aul/include/aul/exception.h
-meta.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-meta.o: /usr/include/sched.h /usr/include/bits/sched.h
-module.o: /usr/include/stdlib.h /usr/include/features.h
-module.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-module.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-module.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-module.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-module.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-module.o: /usr/include/xlocale.h /usr/include/sys/types.h
-module.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-module.o: /usr/include/time.h /usr/include/sys/select.h
-module.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-module.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-module.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-module.o: /usr/include/string.h /usr/include/ctype.h /usr/include/dlfcn.h
-module.o: /usr/include/bits/dlfcn.h /usr/include/glib-2.0/glib.h
-module.o: /usr/include/glib-2.0/glib/galloca.h
+meta.o: /usr/include/glib-2.0/glib/gvariant.h ./kernel.h
+meta.o: aul/include/aul/common.h aul/include/aul/log.h
+meta.o: aul/include/aul/exception.h aul/include/aul/string.h
+meta.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+meta.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+module.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 module.o: /usr/include/glib-2.0/glib/gtypes.h
 module.o: /usr/lib/glib-2.0/include/glibconfig.h
-module.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-module.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-module.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-module.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+module.o: /usr/include/glib-2.0/glib/gmacros.h
 module.o: /usr/include/glib-2.0/glib/garray.h
 module.o: /usr/include/glib-2.0/glib/gasyncqueue.h
 module.o: /usr/include/glib-2.0/glib/gthread.h
@@ -352,7 +289,7 @@ module.o: /usr/include/glib-2.0/glib/gerror.h
 module.o: /usr/include/glib-2.0/glib/gquark.h
 module.o: /usr/include/glib-2.0/glib/gutils.h
 module.o: /usr/include/glib-2.0/glib/gatomic.h
-module.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
+module.o: /usr/include/glib-2.0/glib/gbacktrace.h
 module.o: /usr/include/glib-2.0/glib/gbase64.h
 module.o: /usr/include/glib-2.0/glib/gbitlock.h
 module.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
@@ -400,85 +337,23 @@ module.o: /usr/include/glib-2.0/glib/gtimer.h
 module.o: /usr/include/glib-2.0/glib/gtree.h
 module.o: /usr/include/glib-2.0/glib/gurifuncs.h
 module.o: /usr/include/glib-2.0/glib/gvarianttype.h
-module.o: /usr/include/glib-2.0/glib/gvariant.h kernel.h
-module.o: /usr/include/inttypes.h /usr/include/stdint.h
-module.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-module.o: aul/include/aul/log.h aul/include/aul/exception.h
-module.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-module.o: /usr/include/sched.h /usr/include/bits/sched.h
-profile.o: /usr/include/inttypes.h /usr/include/features.h
-profile.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-profile.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-profile.o: /usr/include/gnu/stubs-64.h /usr/include/stdint.h
-profile.o: /usr/include/bits/wchar.h kernel.h /usr/include/stdlib.h
-profile.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
-profile.o: /usr/include/endian.h /usr/include/bits/endian.h
-profile.o: /usr/include/bits/byteswap.h /usr/include/xlocale.h
-profile.o: /usr/include/sys/types.h /usr/include/bits/types.h
-profile.o: /usr/include/bits/typesizes.h /usr/include/time.h
-profile.o: /usr/include/sys/select.h /usr/include/bits/select.h
-profile.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
-profile.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-profile.o: /usr/include/alloca.h aul/include/aul/common.h
-profile.o: /usr/include/string.h aul/include/aul/log.h
+module.o: /usr/include/glib-2.0/glib/gvariant.h ./kernel.h
+module.o: aul/include/aul/common.h aul/include/aul/log.h
+module.o: aul/include/aul/exception.h aul/include/aul/string.h
+module.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+module.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+profile.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
 profile.o: aul/include/aul/exception.h aul/include/aul/string.h
-profile.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-profile.o: /usr/include/bits/sched.h
-memfs.o: /usr/include/unistd.h /usr/include/features.h
-memfs.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-memfs.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-memfs.o: /usr/include/gnu/stubs-64.h /usr/include/bits/posix_opt.h
-memfs.o: /usr/include/bits/environments.h /usr/include/bits/types.h
-memfs.o: /usr/include/bits/typesizes.h /usr/include/bits/confname.h
-memfs.o: /usr/include/getopt.h /usr/include/errno.h /usr/include/bits/errno.h
-memfs.o: /usr/include/linux/errno.h /usr/include/asm/errno.h
-memfs.o: /usr/include/asm-generic/errno.h
-memfs.o: /usr/include/asm-generic/errno-base.h /usr/include/fcntl.h
-memfs.o: /usr/include/bits/fcntl.h /usr/include/sys/types.h
-memfs.o: /usr/include/time.h /usr/include/endian.h /usr/include/bits/endian.h
-memfs.o: /usr/include/bits/byteswap.h /usr/include/sys/select.h
-memfs.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-memfs.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-memfs.o: /usr/include/bits/pthreadtypes.h /usr/include/bits/uio.h
-memfs.o: /usr/include/sys/stat.h /usr/include/bits/stat.h
-memfs.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-memfs.o: /usr/include/bits/waitstatus.h /usr/include/xlocale.h
-memfs.o: /usr/include/alloca.h /usr/include/sys/mount.h
-memfs.o: /usr/include/sys/ioctl.h /usr/include/bits/ioctls.h
-memfs.o: /usr/include/asm/ioctls.h /usr/include/asm-generic/ioctls.h
-memfs.o: /usr/include/linux/ioctl.h /usr/include/asm/ioctl.h
-memfs.o: /usr/include/asm-generic/ioctl.h /usr/include/bits/ioctl-types.h
-memfs.o: /usr/include/sys/ttydefaults.h aul/include/aul/string.h
-memfs.o: /usr/include/string.h aul/include/aul/common.h
-memfs.o: /usr/include/inttypes.h /usr/include/stdint.h
-memfs.o: /usr/include/bits/wchar.h kernel.h aul/include/aul/log.h
-memfs.o: aul/include/aul/exception.h aul/include/aul/list.h kernel-priv.h
-memfs.o: /usr/include/sched.h /usr/include/bits/sched.h
-syscall.o: /usr/include/string.h /usr/include/features.h
-syscall.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-syscall.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-syscall.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h kernel.h
-syscall.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-syscall.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-syscall.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-syscall.o: /usr/include/sys/types.h /usr/include/bits/types.h
-syscall.o: /usr/include/bits/typesizes.h /usr/include/time.h
-syscall.o: /usr/include/sys/select.h /usr/include/bits/select.h
-syscall.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
-syscall.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-syscall.o: /usr/include/alloca.h /usr/include/inttypes.h
-syscall.o: /usr/include/stdint.h /usr/include/bits/wchar.h
-syscall.o: aul/include/aul/common.h aul/include/aul/log.h
-syscall.o: aul/include/aul/exception.h aul/include/aul/string.h
-syscall.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-syscall.o: /usr/include/bits/sched.h array.h ./buffer.h serialize.h
+profile.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+profile.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+memfs.o: aul/include/aul/string.h aul/include/aul/common.h
+memfs.o: aul/include/aul/exception.h ./kernel.h aul/include/aul/log.h
+memfs.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+memfs.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
 syscall.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 syscall.o: /usr/include/glib-2.0/glib/gtypes.h
 syscall.o: /usr/lib/glib-2.0/include/glibconfig.h
-syscall.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-syscall.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-syscall.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-syscall.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+syscall.o: /usr/include/glib-2.0/glib/gmacros.h
 syscall.o: /usr/include/glib-2.0/glib/garray.h
 syscall.o: /usr/include/glib-2.0/glib/gasyncqueue.h
 syscall.o: /usr/include/glib-2.0/glib/gthread.h
@@ -486,7 +361,7 @@ syscall.o: /usr/include/glib-2.0/glib/gerror.h
 syscall.o: /usr/include/glib-2.0/glib/gquark.h
 syscall.o: /usr/include/glib-2.0/glib/gutils.h
 syscall.o: /usr/include/glib-2.0/glib/gatomic.h
-syscall.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
+syscall.o: /usr/include/glib-2.0/glib/gbacktrace.h
 syscall.o: /usr/include/glib-2.0/glib/gbase64.h
 syscall.o: /usr/include/glib-2.0/glib/gbitlock.h
 syscall.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
@@ -534,31 +409,26 @@ syscall.o: /usr/include/glib-2.0/glib/gtimer.h
 syscall.o: /usr/include/glib-2.0/glib/gtree.h
 syscall.o: /usr/include/glib-2.0/glib/gurifuncs.h
 syscall.o: /usr/include/glib-2.0/glib/gvarianttype.h
-syscall.o: /usr/include/glib-2.0/glib/gvariant.h
-io.o: /usr/include/string.h /usr/include/features.h
-io.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-io.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-io.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h /usr/include/ctype.h
-io.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-io.o: /usr/include/endian.h /usr/include/bits/endian.h
-io.o: /usr/include/bits/byteswap.h /usr/include/glib-2.0/glib.h
-io.o: /usr/include/glib-2.0/glib/galloca.h
+syscall.o: /usr/include/glib-2.0/glib/gvariant.h ./kernel.h
+syscall.o: aul/include/aul/common.h aul/include/aul/log.h
+syscall.o: aul/include/aul/exception.h aul/include/aul/string.h
+syscall.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+syscall.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h array.h
+syscall.o: ./buffer.h ./buffer2.h serialize.h
+io.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 io.o: /usr/include/glib-2.0/glib/gtypes.h
 io.o: /usr/lib/glib-2.0/include/glibconfig.h
-io.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-io.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-io.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-io.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+io.o: /usr/include/glib-2.0/glib/gmacros.h
 io.o: /usr/include/glib-2.0/glib/garray.h
 io.o: /usr/include/glib-2.0/glib/gasyncqueue.h
 io.o: /usr/include/glib-2.0/glib/gthread.h
 io.o: /usr/include/glib-2.0/glib/gerror.h /usr/include/glib-2.0/glib/gquark.h
 io.o: /usr/include/glib-2.0/glib/gutils.h
 io.o: /usr/include/glib-2.0/glib/gatomic.h
-io.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-io.o: /usr/include/bits/sigset.h /usr/include/glib-2.0/glib/gbase64.h
+io.o: /usr/include/glib-2.0/glib/gbacktrace.h
+io.o: /usr/include/glib-2.0/glib/gbase64.h
 io.o: /usr/include/glib-2.0/glib/gbitlock.h
-io.o: /usr/include/glib-2.0/glib/gbookmarkfile.h /usr/include/time.h
+io.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
 io.o: /usr/include/glib-2.0/glib/gcache.h /usr/include/glib-2.0/glib/glist.h
 io.o: /usr/include/glib-2.0/glib/gmem.h /usr/include/glib-2.0/glib/gslice.h
 io.o: /usr/include/glib-2.0/glib/gchecksum.h
@@ -594,146 +464,24 @@ io.o: /usr/include/glib-2.0/glib/gtimer.h /usr/include/glib-2.0/glib/gtree.h
 io.o: /usr/include/glib-2.0/glib/gurifuncs.h
 io.o: /usr/include/glib-2.0/glib/gvarianttype.h
 io.o: /usr/include/glib-2.0/glib/gvariant.h aul/include/aul/mutex.h
-io.o: /usr/include/pthread.h /usr/include/sched.h /usr/include/bits/sched.h
-io.o: /usr/include/bits/pthreadtypes.h /usr/include/bits/setjmp.h
-io.o: aul/include/aul/common.h /usr/include/stdlib.h
-io.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
-io.o: /usr/include/sys/types.h /usr/include/sys/select.h
-io.o: /usr/include/bits/select.h /usr/include/bits/time.h
-io.o: /usr/include/sys/sysmacros.h /usr/include/alloca.h
-io.o: /usr/include/inttypes.h /usr/include/stdint.h /usr/include/bits/wchar.h
-io.o: kernel.h aul/include/aul/log.h aul/include/aul/exception.h
-io.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-io.o: ./buffer.h array.h
-syscallblock.o: kernel.h /usr/include/stdlib.h /usr/include/features.h
-syscallblock.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-syscallblock.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-syscallblock.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-syscallblock.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-syscallblock.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-syscallblock.o: /usr/include/xlocale.h /usr/include/sys/types.h
-syscallblock.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-syscallblock.o: /usr/include/time.h /usr/include/sys/select.h
-syscallblock.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-syscallblock.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-syscallblock.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-syscallblock.o: /usr/include/inttypes.h /usr/include/stdint.h
-syscallblock.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-syscallblock.o: /usr/include/string.h aul/include/aul/log.h
+io.o: aul/include/aul/common.h ./kernel.h aul/include/aul/log.h
+io.o: aul/include/aul/exception.h aul/include/aul/string.h
+io.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+io.o: aul/include/aul/hashtable.h ./buffer.h ./buffer2.h array.h
+syscallblock.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
 syscallblock.o: aul/include/aul/exception.h aul/include/aul/string.h
-syscallblock.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-syscallblock.o: /usr/include/bits/sched.h ./buffer.h serialize.h
-syscallblock.o: /usr/include/glib-2.0/glib.h
-syscallblock.o: /usr/include/glib-2.0/glib/galloca.h
-syscallblock.o: /usr/include/glib-2.0/glib/gtypes.h
-syscallblock.o: /usr/lib/glib-2.0/include/glibconfig.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-syscallblock.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-syscallblock.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-syscallblock.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
-syscallblock.o: /usr/include/glib-2.0/glib/garray.h
-syscallblock.o: /usr/include/glib-2.0/glib/gasyncqueue.h
-syscallblock.o: /usr/include/glib-2.0/glib/gthread.h
-syscallblock.o: /usr/include/glib-2.0/glib/gerror.h
-syscallblock.o: /usr/include/glib-2.0/glib/gquark.h
-syscallblock.o: /usr/include/glib-2.0/glib/gutils.h
-syscallblock.o: /usr/include/glib-2.0/glib/gatomic.h
-syscallblock.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-syscallblock.o: /usr/include/glib-2.0/glib/gbase64.h
-syscallblock.o: /usr/include/glib-2.0/glib/gbitlock.h
-syscallblock.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
-syscallblock.o: /usr/include/glib-2.0/glib/gcache.h
-syscallblock.o: /usr/include/glib-2.0/glib/glist.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmem.h
-syscallblock.o: /usr/include/glib-2.0/glib/gslice.h
-syscallblock.o: /usr/include/glib-2.0/glib/gchecksum.h
-syscallblock.o: /usr/include/glib-2.0/glib/gcompletion.h
-syscallblock.o: /usr/include/glib-2.0/glib/gconvert.h
-syscallblock.o: /usr/include/glib-2.0/glib/gdataset.h
-syscallblock.o: /usr/include/glib-2.0/glib/gdate.h
-syscallblock.o: /usr/include/glib-2.0/glib/gdir.h
-syscallblock.o: /usr/include/glib-2.0/glib/gfileutils.h
-syscallblock.o: /usr/include/glib-2.0/glib/ghash.h
-syscallblock.o: /usr/include/glib-2.0/glib/ghook.h
-syscallblock.o: /usr/include/glib-2.0/glib/ghostutils.h
-syscallblock.o: /usr/include/glib-2.0/glib/giochannel.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmain.h
-syscallblock.o: /usr/include/glib-2.0/glib/gpoll.h
-syscallblock.o: /usr/include/glib-2.0/glib/gslist.h
-syscallblock.o: /usr/include/glib-2.0/glib/gstring.h
-syscallblock.o: /usr/include/glib-2.0/glib/gunicode.h
-syscallblock.o: /usr/include/glib-2.0/glib/gkeyfile.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmappedfile.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmarkup.h
-syscallblock.o: /usr/include/glib-2.0/glib/gmessages.h
-syscallblock.o: /usr/include/glib-2.0/glib/gnode.h
-syscallblock.o: /usr/include/glib-2.0/glib/goption.h
-syscallblock.o: /usr/include/glib-2.0/glib/gpattern.h
-syscallblock.o: /usr/include/glib-2.0/glib/gprimes.h
-syscallblock.o: /usr/include/glib-2.0/glib/gqsort.h
-syscallblock.o: /usr/include/glib-2.0/glib/gqueue.h
-syscallblock.o: /usr/include/glib-2.0/glib/grand.h
-syscallblock.o: /usr/include/glib-2.0/glib/grel.h
-syscallblock.o: /usr/include/glib-2.0/glib/gregex.h
-syscallblock.o: /usr/include/glib-2.0/glib/gscanner.h
-syscallblock.o: /usr/include/glib-2.0/glib/gsequence.h
-syscallblock.o: /usr/include/glib-2.0/glib/gshell.h
-syscallblock.o: /usr/include/glib-2.0/glib/gspawn.h
-syscallblock.o: /usr/include/glib-2.0/glib/gstrfuncs.h
-syscallblock.o: /usr/include/glib-2.0/glib/gtestutils.h
-syscallblock.o: /usr/include/glib-2.0/glib/gthreadpool.h
-syscallblock.o: /usr/include/glib-2.0/glib/gtimer.h
-syscallblock.o: /usr/include/glib-2.0/glib/gtree.h
-syscallblock.o: /usr/include/glib-2.0/glib/gurifuncs.h
-syscallblock.o: /usr/include/glib-2.0/glib/gvarianttype.h
-syscallblock.o: /usr/include/glib-2.0/glib/gvariant.h
+syscallblock.o: aul/include/aul/list.h ./kernel-priv.h
+syscallblock.o: aul/include/aul/mainloop.h aul/include/aul/mutex.h
+syscallblock.o: aul/include/aul/hashtable.h ./buffer.h ./buffer2.h
+syscallblock.o: serialize.h
 property.o: aul/include/aul/hashtable.h aul/include/aul/common.h
-property.o: /usr/include/stdlib.h /usr/include/features.h
-property.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-property.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-property.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-property.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-property.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-property.o: /usr/include/xlocale.h /usr/include/sys/types.h
-property.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-property.o: /usr/include/time.h /usr/include/sys/select.h
-property.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-property.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-property.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-property.o: /usr/include/inttypes.h /usr/include/stdint.h
-property.o: /usr/include/bits/wchar.h /usr/include/string.h
-property.o: aul/include/aul/list.h kernel.h aul/include/aul/log.h
+property.o: aul/include/aul/list.h ./kernel.h aul/include/aul/log.h
 property.o: aul/include/aul/exception.h aul/include/aul/string.h
-config.o: /usr/include/stdlib.h /usr/include/features.h
-config.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-config.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-config.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-config.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-config.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-config.o: /usr/include/xlocale.h /usr/include/sys/types.h
-config.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-config.o: /usr/include/time.h /usr/include/sys/select.h
-config.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-config.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-config.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-config.o: /usr/include/string.h kernel.h /usr/include/inttypes.h
-config.o: /usr/include/stdint.h /usr/include/bits/wchar.h
-config.o: aul/include/aul/common.h aul/include/aul/log.h
+config.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
 config.o: aul/include/aul/exception.h aul/include/aul/string.h
-config.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-config.o: /usr/include/bits/sched.h
-calibration.o: /usr/include/stdio.h /usr/include/features.h
-calibration.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-calibration.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-calibration.o: /usr/include/gnu/stubs-64.h /usr/include/bits/types.h
-calibration.o: /usr/include/bits/typesizes.h /usr/include/libio.h
-calibration.o: /usr/include/_G_config.h /usr/include/wchar.h
-calibration.o: /usr/include/bits/stdio_lim.h /usr/include/bits/sys_errlist.h
-calibration.o: /usr/include/sqlite3.h /usr/include/string.h
-calibration.o: /usr/include/xlocale.h /usr/include/limits.h
-calibration.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-calibration.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-calibration.o: /usr/include/bits/xopen_lim.h /usr/include/glib-2.0/glib.h
+config.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+config.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+calibration.o: /usr/include/glib-2.0/glib.h
 calibration.o: /usr/include/glib-2.0/glib/galloca.h
 calibration.o: /usr/include/glib-2.0/glib/gtypes.h
 calibration.o: /usr/lib/glib-2.0/include/glibconfig.h
@@ -745,11 +493,10 @@ calibration.o: /usr/include/glib-2.0/glib/gerror.h
 calibration.o: /usr/include/glib-2.0/glib/gquark.h
 calibration.o: /usr/include/glib-2.0/glib/gutils.h
 calibration.o: /usr/include/glib-2.0/glib/gatomic.h
-calibration.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-calibration.o: /usr/include/bits/sigset.h
+calibration.o: /usr/include/glib-2.0/glib/gbacktrace.h
 calibration.o: /usr/include/glib-2.0/glib/gbase64.h
 calibration.o: /usr/include/glib-2.0/glib/gbitlock.h
-calibration.o: /usr/include/glib-2.0/glib/gbookmarkfile.h /usr/include/time.h
+calibration.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
 calibration.o: /usr/include/glib-2.0/glib/gcache.h
 calibration.o: /usr/include/glib-2.0/glib/glist.h
 calibration.o: /usr/include/glib-2.0/glib/gmem.h
@@ -795,253 +542,39 @@ calibration.o: /usr/include/glib-2.0/glib/gtree.h
 calibration.o: /usr/include/glib-2.0/glib/gurifuncs.h
 calibration.o: /usr/include/glib-2.0/glib/gvarianttype.h
 calibration.o: /usr/include/glib-2.0/glib/gvariant.h aul/include/aul/common.h
-calibration.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-calibration.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-calibration.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-calibration.o: /usr/include/sys/types.h /usr/include/sys/select.h
-calibration.o: /usr/include/bits/select.h /usr/include/bits/time.h
-calibration.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-calibration.o: /usr/include/alloca.h /usr/include/inttypes.h
-calibration.o: /usr/include/stdint.h /usr/include/bits/wchar.h kernel.h
-calibration.o: aul/include/aul/log.h aul/include/aul/exception.h
-calibration.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-calibration.o: /usr/include/sched.h /usr/include/bits/sched.h
-buffer.o: /usr/include/string.h /usr/include/features.h
-buffer.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-buffer.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-buffer.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h
-buffer.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
-buffer.o: /usr/include/glib-2.0/glib/gtypes.h
-buffer.o: /usr/lib/glib-2.0/include/glibconfig.h
-buffer.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-buffer.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-buffer.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-buffer.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
-buffer.o: /usr/include/glib-2.0/glib/garray.h
-buffer.o: /usr/include/glib-2.0/glib/gasyncqueue.h
-buffer.o: /usr/include/glib-2.0/glib/gthread.h
-buffer.o: /usr/include/glib-2.0/glib/gerror.h
-buffer.o: /usr/include/glib-2.0/glib/gquark.h
-buffer.o: /usr/include/glib-2.0/glib/gutils.h
-buffer.o: /usr/include/glib-2.0/glib/gatomic.h
-buffer.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-buffer.o: /usr/include/bits/sigset.h /usr/include/glib-2.0/glib/gbase64.h
-buffer.o: /usr/include/glib-2.0/glib/gbitlock.h
-buffer.o: /usr/include/glib-2.0/glib/gbookmarkfile.h /usr/include/time.h
-buffer.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-buffer.o: /usr/include/glib-2.0/glib/gcache.h
-buffer.o: /usr/include/glib-2.0/glib/glist.h
-buffer.o: /usr/include/glib-2.0/glib/gmem.h
-buffer.o: /usr/include/glib-2.0/glib/gslice.h
-buffer.o: /usr/include/glib-2.0/glib/gchecksum.h
-buffer.o: /usr/include/glib-2.0/glib/gcompletion.h
-buffer.o: /usr/include/glib-2.0/glib/gconvert.h
-buffer.o: /usr/include/glib-2.0/glib/gdataset.h
-buffer.o: /usr/include/glib-2.0/glib/gdate.h
-buffer.o: /usr/include/glib-2.0/glib/gdir.h
-buffer.o: /usr/include/glib-2.0/glib/gfileutils.h
-buffer.o: /usr/include/glib-2.0/glib/ghash.h
-buffer.o: /usr/include/glib-2.0/glib/ghook.h
-buffer.o: /usr/include/glib-2.0/glib/ghostutils.h
-buffer.o: /usr/include/glib-2.0/glib/giochannel.h
-buffer.o: /usr/include/glib-2.0/glib/gmain.h
-buffer.o: /usr/include/glib-2.0/glib/gpoll.h
-buffer.o: /usr/include/glib-2.0/glib/gslist.h
-buffer.o: /usr/include/glib-2.0/glib/gstring.h
-buffer.o: /usr/include/glib-2.0/glib/gunicode.h
-buffer.o: /usr/include/glib-2.0/glib/gkeyfile.h
-buffer.o: /usr/include/glib-2.0/glib/gmappedfile.h
-buffer.o: /usr/include/glib-2.0/glib/gmarkup.h
-buffer.o: /usr/include/glib-2.0/glib/gmessages.h
-buffer.o: /usr/include/glib-2.0/glib/gnode.h
-buffer.o: /usr/include/glib-2.0/glib/goption.h
-buffer.o: /usr/include/glib-2.0/glib/gpattern.h
-buffer.o: /usr/include/glib-2.0/glib/gprimes.h
-buffer.o: /usr/include/glib-2.0/glib/gqsort.h
-buffer.o: /usr/include/glib-2.0/glib/gqueue.h
-buffer.o: /usr/include/glib-2.0/glib/grand.h
-buffer.o: /usr/include/glib-2.0/glib/grel.h
-buffer.o: /usr/include/glib-2.0/glib/gregex.h
-buffer.o: /usr/include/glib-2.0/glib/gscanner.h
-buffer.o: /usr/include/glib-2.0/glib/gsequence.h
-buffer.o: /usr/include/glib-2.0/glib/gshell.h
-buffer.o: /usr/include/glib-2.0/glib/gspawn.h
-buffer.o: /usr/include/glib-2.0/glib/gstrfuncs.h
-buffer.o: /usr/include/glib-2.0/glib/gtestutils.h
-buffer.o: /usr/include/glib-2.0/glib/gthreadpool.h
-buffer.o: /usr/include/glib-2.0/glib/gtimer.h
-buffer.o: /usr/include/glib-2.0/glib/gtree.h
-buffer.o: /usr/include/glib-2.0/glib/gurifuncs.h
-buffer.o: /usr/include/glib-2.0/glib/gvarianttype.h
-buffer.o: /usr/include/glib-2.0/glib/gvariant.h ./buffer.h kernel.h
-buffer.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-buffer.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-buffer.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-buffer.o: /usr/include/sys/types.h /usr/include/sys/select.h
-buffer.o: /usr/include/bits/select.h /usr/include/bits/time.h
-buffer.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-buffer.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-buffer.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-buffer.o: aul/include/aul/log.h aul/include/aul/exception.h
-buffer.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-buffer.o: /usr/include/sched.h /usr/include/bits/sched.h
-serialize.o: /usr/include/stdlib.h /usr/include/features.h
-serialize.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-serialize.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-serialize.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
-serialize.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-serialize.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-serialize.o: /usr/include/xlocale.h /usr/include/sys/types.h
-serialize.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
-serialize.o: /usr/include/time.h /usr/include/sys/select.h
-serialize.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
-serialize.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-serialize.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-serialize.o: /usr/include/unistd.h /usr/include/bits/posix_opt.h
-serialize.o: /usr/include/bits/environments.h /usr/include/bits/confname.h
-serialize.o: /usr/include/getopt.h /usr/include/string.h
-serialize.o: /usr/include/glib-2.0/glib.h
-serialize.o: /usr/include/glib-2.0/glib/galloca.h
-serialize.o: /usr/include/glib-2.0/glib/gtypes.h
-serialize.o: /usr/lib/glib-2.0/include/glibconfig.h
-serialize.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-serialize.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-serialize.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-serialize.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
-serialize.o: /usr/include/glib-2.0/glib/garray.h
-serialize.o: /usr/include/glib-2.0/glib/gasyncqueue.h
-serialize.o: /usr/include/glib-2.0/glib/gthread.h
-serialize.o: /usr/include/glib-2.0/glib/gerror.h
-serialize.o: /usr/include/glib-2.0/glib/gquark.h
-serialize.o: /usr/include/glib-2.0/glib/gutils.h
-serialize.o: /usr/include/glib-2.0/glib/gatomic.h
-serialize.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-serialize.o: /usr/include/glib-2.0/glib/gbase64.h
-serialize.o: /usr/include/glib-2.0/glib/gbitlock.h
-serialize.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
-serialize.o: /usr/include/glib-2.0/glib/gcache.h
-serialize.o: /usr/include/glib-2.0/glib/glist.h
-serialize.o: /usr/include/glib-2.0/glib/gmem.h
-serialize.o: /usr/include/glib-2.0/glib/gslice.h
-serialize.o: /usr/include/glib-2.0/glib/gchecksum.h
-serialize.o: /usr/include/glib-2.0/glib/gcompletion.h
-serialize.o: /usr/include/glib-2.0/glib/gconvert.h
-serialize.o: /usr/include/glib-2.0/glib/gdataset.h
-serialize.o: /usr/include/glib-2.0/glib/gdate.h
-serialize.o: /usr/include/glib-2.0/glib/gdir.h
-serialize.o: /usr/include/glib-2.0/glib/gfileutils.h
-serialize.o: /usr/include/glib-2.0/glib/ghash.h
-serialize.o: /usr/include/glib-2.0/glib/ghook.h
-serialize.o: /usr/include/glib-2.0/glib/ghostutils.h
-serialize.o: /usr/include/glib-2.0/glib/giochannel.h
-serialize.o: /usr/include/glib-2.0/glib/gmain.h
-serialize.o: /usr/include/glib-2.0/glib/gpoll.h
-serialize.o: /usr/include/glib-2.0/glib/gslist.h
-serialize.o: /usr/include/glib-2.0/glib/gstring.h
-serialize.o: /usr/include/glib-2.0/glib/gunicode.h
-serialize.o: /usr/include/glib-2.0/glib/gkeyfile.h
-serialize.o: /usr/include/glib-2.0/glib/gmappedfile.h
-serialize.o: /usr/include/glib-2.0/glib/gmarkup.h
-serialize.o: /usr/include/glib-2.0/glib/gmessages.h
-serialize.o: /usr/include/glib-2.0/glib/gnode.h
-serialize.o: /usr/include/glib-2.0/glib/goption.h
-serialize.o: /usr/include/glib-2.0/glib/gpattern.h
-serialize.o: /usr/include/glib-2.0/glib/gprimes.h
-serialize.o: /usr/include/glib-2.0/glib/gqsort.h
-serialize.o: /usr/include/glib-2.0/glib/gqueue.h
-serialize.o: /usr/include/glib-2.0/glib/grand.h
-serialize.o: /usr/include/glib-2.0/glib/grel.h
-serialize.o: /usr/include/glib-2.0/glib/gregex.h
-serialize.o: /usr/include/glib-2.0/glib/gscanner.h
-serialize.o: /usr/include/glib-2.0/glib/gsequence.h
-serialize.o: /usr/include/glib-2.0/glib/gshell.h
-serialize.o: /usr/include/glib-2.0/glib/gspawn.h
-serialize.o: /usr/include/glib-2.0/glib/gstrfuncs.h
-serialize.o: /usr/include/glib-2.0/glib/gtestutils.h
-serialize.o: /usr/include/glib-2.0/glib/gthreadpool.h
-serialize.o: /usr/include/glib-2.0/glib/gtimer.h
-serialize.o: /usr/include/glib-2.0/glib/gtree.h
-serialize.o: /usr/include/glib-2.0/glib/gurifuncs.h
-serialize.o: /usr/include/glib-2.0/glib/gvarianttype.h
-serialize.o: /usr/include/glib-2.0/glib/gvariant.h array.h ./buffer.h
-serialize.o: serialize.h kernel.h /usr/include/inttypes.h
-serialize.o: /usr/include/stdint.h /usr/include/bits/wchar.h
+calibration.o: ./kernel.h aul/include/aul/log.h aul/include/aul/exception.h
+calibration.o: aul/include/aul/string.h aul/include/aul/list.h
+calibration.o: ./kernel-priv.h aul/include/aul/mainloop.h
+calibration.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+buffer2.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
+buffer2.o: aul/include/aul/exception.h aul/include/aul/string.h
+buffer2.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+buffer2.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h ./buffer.h
+buffer2.o: ./buffer2.h
+serialize.o: serialize.h ./buffer.h ./buffer2.h ./kernel.h
 serialize.o: aul/include/aul/common.h aul/include/aul/log.h
 serialize.o: aul/include/aul/exception.h aul/include/aul/string.h
-serialize.o: aul/include/aul/list.h
-trigger.o: /usr/include/unistd.h /usr/include/features.h
-trigger.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-trigger.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-trigger.o: /usr/include/gnu/stubs-64.h /usr/include/bits/posix_opt.h
-trigger.o: /usr/include/bits/environments.h /usr/include/bits/types.h
-trigger.o: /usr/include/bits/typesizes.h /usr/include/bits/confname.h
-trigger.o: /usr/include/getopt.h /usr/include/string.h /usr/include/xlocale.h
-trigger.o: kernel.h /usr/include/stdlib.h /usr/include/bits/waitflags.h
-trigger.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-trigger.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-trigger.o: /usr/include/sys/types.h /usr/include/time.h
-trigger.o: /usr/include/sys/select.h /usr/include/bits/select.h
-trigger.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
-trigger.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-trigger.o: /usr/include/alloca.h /usr/include/inttypes.h
-trigger.o: /usr/include/stdint.h /usr/include/bits/wchar.h
-trigger.o: aul/include/aul/common.h aul/include/aul/log.h
+serialize.o: aul/include/aul/list.h ./kernel-priv.h
+serialize.o: aul/include/aul/mainloop.h aul/include/aul/mutex.h
+serialize.o: aul/include/aul/hashtable.h
+trigger.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
 trigger.o: aul/include/aul/exception.h aul/include/aul/string.h
-trigger.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-trigger.o: /usr/include/bits/sched.h
-exec.o: /usr/include/string.h /usr/include/features.h
-exec.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-exec.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-exec.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h kernel.h
-exec.o: /usr/include/stdlib.h /usr/include/bits/waitflags.h
-exec.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-exec.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-exec.o: /usr/include/sys/types.h /usr/include/bits/types.h
-exec.o: /usr/include/bits/typesizes.h /usr/include/time.h
-exec.o: /usr/include/sys/select.h /usr/include/bits/select.h
-exec.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
-exec.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-exec.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-exec.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-exec.o: aul/include/aul/log.h aul/include/aul/exception.h
-exec.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-exec.o: /usr/include/sched.h /usr/include/bits/sched.h
-luaenv.o: /usr/include/string.h /usr/include/features.h
-luaenv.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
-luaenv.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-luaenv.o: /usr/include/gnu/stubs-64.h /usr/include/xlocale.h
+trigger.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+trigger.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+exec.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
+exec.o: aul/include/aul/exception.h aul/include/aul/string.h
+exec.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+exec.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
 luaenv.o: /usr/include/lua5.1/lua.h /usr/include/lua5.1/luaconf.h
-luaenv.o: /usr/include/limits.h /usr/include/bits/posix1_lim.h
-luaenv.o: /usr/include/bits/local_lim.h /usr/include/linux/limits.h
-luaenv.o: /usr/include/bits/posix2_lim.h /usr/include/bits/xopen_lim.h
-luaenv.o: /usr/include/bits/stdio_lim.h /usr/include/lua5.1/lauxlib.h
-luaenv.o: /usr/include/stdio.h /usr/include/bits/types.h
-luaenv.o: /usr/include/bits/typesizes.h /usr/include/libio.h
-luaenv.o: /usr/include/_G_config.h /usr/include/wchar.h
-luaenv.o: /usr/include/bits/sys_errlist.h /usr/include/lua5.1/lualib.h
-luaenv.o: kernel.h /usr/include/stdlib.h /usr/include/bits/waitflags.h
-luaenv.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
-luaenv.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-luaenv.o: /usr/include/sys/types.h /usr/include/time.h
-luaenv.o: /usr/include/sys/select.h /usr/include/bits/select.h
-luaenv.o: /usr/include/bits/sigset.h /usr/include/bits/time.h
-luaenv.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-luaenv.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-luaenv.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-luaenv.o: aul/include/aul/log.h aul/include/aul/exception.h
-luaenv.o: aul/include/aul/string.h aul/include/aul/list.h kernel-priv.h
-luaenv.o: /usr/include/sched.h /usr/include/bits/sched.h
-math.o: /usr/include/matheval.h /usr/include/glib-2.0/glib.h
-math.o: /usr/include/glib-2.0/glib/galloca.h
+luaenv.o: /usr/include/lua5.1/lauxlib.h /usr/include/lua5.1/lualib.h
+luaenv.o: ./kernel.h aul/include/aul/common.h aul/include/aul/log.h
+luaenv.o: aul/include/aul/exception.h aul/include/aul/string.h
+luaenv.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+luaenv.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h
+math.o: /usr/include/glib-2.0/glib.h /usr/include/glib-2.0/glib/galloca.h
 math.o: /usr/include/glib-2.0/glib/gtypes.h
 math.o: /usr/lib/glib-2.0/include/glibconfig.h
-math.o: /usr/include/glib-2.0/glib/gmacros.h /usr/include/limits.h
-math.o: /usr/include/features.h /usr/include/bits/predefs.h
-math.o: /usr/include/sys/cdefs.h /usr/include/bits/wordsize.h
-math.o: /usr/include/gnu/stubs.h /usr/include/gnu/stubs-64.h
-math.o: /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h
-math.o: /usr/include/linux/limits.h /usr/include/bits/posix2_lim.h
-math.o: /usr/include/bits/xopen_lim.h /usr/include/bits/stdio_lim.h
+math.o: /usr/include/glib-2.0/glib/gmacros.h
 math.o: /usr/include/glib-2.0/glib/garray.h
 math.o: /usr/include/glib-2.0/glib/gasyncqueue.h
 math.o: /usr/include/glib-2.0/glib/gthread.h
@@ -1049,11 +582,10 @@ math.o: /usr/include/glib-2.0/glib/gerror.h
 math.o: /usr/include/glib-2.0/glib/gquark.h
 math.o: /usr/include/glib-2.0/glib/gutils.h
 math.o: /usr/include/glib-2.0/glib/gatomic.h
-math.o: /usr/include/glib-2.0/glib/gbacktrace.h /usr/include/signal.h
-math.o: /usr/include/bits/sigset.h /usr/include/glib-2.0/glib/gbase64.h
+math.o: /usr/include/glib-2.0/glib/gbacktrace.h
+math.o: /usr/include/glib-2.0/glib/gbase64.h
 math.o: /usr/include/glib-2.0/glib/gbitlock.h
-math.o: /usr/include/glib-2.0/glib/gbookmarkfile.h /usr/include/time.h
-math.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
+math.o: /usr/include/glib-2.0/glib/gbookmarkfile.h
 math.o: /usr/include/glib-2.0/glib/gcache.h
 math.o: /usr/include/glib-2.0/glib/glist.h /usr/include/glib-2.0/glib/gmem.h
 math.o: /usr/include/glib-2.0/glib/gslice.h
@@ -1093,16 +625,8 @@ math.o: /usr/include/glib-2.0/glib/gtimer.h
 math.o: /usr/include/glib-2.0/glib/gtree.h
 math.o: /usr/include/glib-2.0/glib/gurifuncs.h
 math.o: /usr/include/glib-2.0/glib/gvarianttype.h
-math.o: /usr/include/glib-2.0/glib/gvariant.h kernel.h /usr/include/stdlib.h
-math.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
-math.o: /usr/include/endian.h /usr/include/bits/endian.h
-math.o: /usr/include/bits/byteswap.h /usr/include/xlocale.h
-math.o: /usr/include/sys/types.h /usr/include/sys/select.h
-math.o: /usr/include/bits/select.h /usr/include/bits/time.h
-math.o: /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h
-math.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-math.o: /usr/include/bits/wchar.h aul/include/aul/common.h
-math.o: /usr/include/string.h aul/include/aul/log.h
+math.o: /usr/include/glib-2.0/glib/gvariant.h ./kernel.h
+math.o: aul/include/aul/common.h aul/include/aul/log.h
 math.o: aul/include/aul/exception.h aul/include/aul/string.h
-math.o: aul/include/aul/list.h kernel-priv.h /usr/include/sched.h
-math.o: /usr/include/bits/sched.h
+math.o: aul/include/aul/list.h ./kernel-priv.h aul/include/aul/mainloop.h
+math.o: aul/include/aul/mutex.h aul/include/aul/hashtable.h

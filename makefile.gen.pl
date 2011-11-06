@@ -46,7 +46,7 @@ clean:
 	( [ -f clean.part.bash ] && bash clean.part.bash ) || true
 
 depend: \$(SRCS)
-	makedepend \$(DEFINES) \$(INCLUDES) \$^
+	makedepend \$(DEFINES) \$(INCLUDES) \$^ 2>/dev/null
 	rm -f Makefile.bak
 
 .c.o:

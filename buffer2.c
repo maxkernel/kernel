@@ -1,3 +1,4 @@
+#include <sys/sendfile.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -16,7 +17,7 @@ buffer_t buffer_dup(buffer_t src)
 	return memfs_dupfd(src);
 }
 
-void buffer_write(buffer_t buffer, void * data, size_t size)
+void buffer_write(buffer_t buffer, const void * data, size_t size)
 {
 	ssize_t wrote = write(buffer, data, size);
 	if (wrote != size)
@@ -37,6 +38,21 @@ size_t buffer_read(buffer_t buffer, void * data, size_t bufsize)
 	return nread;
 }
 
+bool buffer_send(buffer_t buffer, int sock)
+{
+	off_t off = 0;
+	size_t size = buffer_size(buffer);
+
+	ssize_t wrote = sendfile(sock, buffer, &off, size);
+	if (wrote != size)
+	{
+		LOGK(LOG_WARN, "Could not send all data from buffer to socket (size=%zu): %s", size, strerror(errno));
+		return false;
+	}
+
+	return true;
+}
+
 void buffer_setpos(buffer_t buffer, size_t pos)
 {
 	memfs_setseekfd(buffer, pos);
@@ -44,7 +60,7 @@ void buffer_setpos(buffer_t buffer, size_t pos)
 
 size_t buffer_getpos(buffer_t buffer)
 {
-	memfs_getseekfd(buffer);
+	return memfs_getseekfd(buffer);
 }
 
 size_t buffer_size(buffer_t buffer)

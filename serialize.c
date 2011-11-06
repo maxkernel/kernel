@@ -1,11 +1,774 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <glib.h>
+#include <errno.h>
+#include <stdarg.h>
 
 #include <serialize.h>
 #include <kernel.h>
+#include <kernel-priv.h>
 
+static size_t headersize(const char * sig)
+{
+	size_t header_size = 0;
+	unsigned int i = 0;
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			case T_INTEGER:
+			case T_DOUBLE:
+			case T_CHAR:
+				header_size += sizeof(void *);
+				break;
+
+			case T_STRING:
+				header_size += sizeof(char *) + sizeof(char **);
+				break;
+		}
+
+		i++;
+	}
+
+	return header_size;
+}
+
+static size_t numparams(const char * sig)
+{
+	size_t params = 0;
+	unsigned int i = 0;
+
+	while (sig[i] != '\0')
+	{
+		switch(sig[i])
+		{
+			case T_BOOLEAN:
+			case T_INTEGER:
+			case T_DOUBLE:
+			case T_CHAR:
+			case T_STRING:
+				params += 1;
+				break;
+		}
+
+		i++;
+	}
+
+	return params;
+}
+
+
+char method_returntype(const char * sig)
+{
+	switch (sig[0])
+	{
+		case T_BOOLEAN:
+		case T_INTEGER:
+		case T_DOUBLE:
+		case T_CHAR:
+		case T_STRING:
+		case T_BUFFER:
+		case T_ARRAY_BOOLEAN:
+		case T_ARRAY_INTEGER:
+		case T_ARRAY_DOUBLE:
+		case T_VOID:
+			return sig[0];
+
+		case ':':
+		case '\0':
+			return T_VOID;
+	}
+
+#if defined(KERNEL)
+	LOG(LOG_WARN, "Unknown return type for method signature '%s'", sig);
+#endif
+
+	return '?';
+}
+
+const char * method_params(const char * sig)
+{
+	const char * ptr;
+	if ((ptr = strchr(sig, ':')) == NULL)
+	{
+		return sig;
+	}
+
+	if (*(ptr+1) == '\0')
+	{
+		return "v";
+	}
+
+	return ptr+1;
+}
+
+bool method_isequal(const char * sig1, const char * sig2)
+{
+	return strcmp(method_params(sig1), method_params(sig2)) == 0 && method_returntype(sig1) == method_returntype(sig2);
+}
+
+int signature_headerlen(const char * sig)
+{
+	return headersize(sig);
+}
+
+ssize_t serialize_2buffer(buffer_t buffer, const char * sig, ...)
+{
+	va_list args;
+	va_start(args, sig);
+	ssize_t ret = vserialize_2buffer(buffer, sig, args);
+	va_end(args);
+
+	return ret;
+}
+
+ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
+{
+	unsigned int i = 0;
+	ssize_t wrote = 0;
+
+	void copy(const void * ptr, size_t s)
+	{
+		buffer_write(buffer, ptr, s);
+		wrote += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				bool v = (bool)va_arg(args, int);
+				copy(&v, sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				int v = va_arg(args, int);
+				copy(&v, sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				double v = va_arg(args, double);
+				copy(&v, sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				char v = (char)va_arg(args, int);
+				copy(&v, sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				const char * v = va_arg(args, const char *);
+				copy(v, strlen(v) + 1);
+				break;
+			}
+		}
+		i++;
+	}
+
+	return wrote;
+}
+
+ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
+{
+	unsigned int i = 0;
+	ssize_t wrote = 0;
+
+	void copy(const void * ptr, size_t s)
+	{
+		buffer_write(buffer, ptr, s);
+		wrote += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				copy(args[i], sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				copy(args[i], sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				copy(args[i], sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				copy(args[i], sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				const char * str = *(const char **)args[i];
+				copy(str, strlen(str) + 1);
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+		i++;
+	}
+
+	return wrote;
+}
+
+ssize_t serialize_2array(void * array, size_t arraylen, const char * sig, ...)
+{
+	va_list args;
+	va_start(args, sig);
+	ssize_t ret = vserialize_2array(array, arraylen, sig, args);
+	va_end(args);
+
+	return ret;
+}
+
+ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_list args)
+{
+	LABELS(err_nomem);
+
+	unsigned int i = 0;
+	ssize_t wrote = 0;
+
+	void copy(const void * ptr, size_t s)
+	{
+		if ((wrote + s) > arraylen)
+		{
+			goto err_nomem;
+		}
+		memcpy((char *)array + wrote, ptr, s);
+		wrote += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				bool v = (bool)va_arg(args, int);
+				copy(&v, sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				int v = va_arg(args, int);
+				copy(&v, sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				double v = va_arg(args, double);
+				copy(&v, sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				char v = (char)va_arg(args, int);
+				copy(&v, sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				const char * v = va_arg(args, const char *);
+				copy(v, strlen(v) + 1);
+				break;
+			}
+		}
+		i++;
+	}
+
+	return wrote;
+
+err_nomem:
+	LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig);
+	errno = ENOBUFS;
+	return -1;
+}
+
+ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void ** args)
+{
+	LABELS(err_nomem);
+
+	unsigned int i = 0;
+	ssize_t wrote = 0;
+
+	void copy(const void * ptr, size_t s)
+	{
+		if ((wrote + s) > arraylen)
+		{
+			goto err_nomem;
+		}
+		memcpy((char *)array + wrote, ptr, s);
+		wrote += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				copy(args[i], sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				copy(args[i], sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				copy(args[i], sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				copy(args[i], sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				const char * str = *(const char **)args[i];
+				copy(str, strlen(str) + 1);
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+		i++;
+	}
+
+	return wrote;
+
+err_nomem:
+	LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig);
+	errno = ENOBUFS;
+	return -1;
+}
+
+ssize_t serialize_2array_wheader(void ** array, size_t arraylen, const char * sig, ...)
+{
+	va_list args;
+	va_start(args, sig);
+	ssize_t ret = vserialize_2array_wheader(array, arraylen, sig, args);
+	va_end(args);
+
+	return ret;
+}
+
+ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, const char * sig, va_list args)
+{
+	// Get the header size
+	size_t header_size = headersize(sig);
+	if (header_size > arraylen)
+	{
+		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
+		errno = ENOBUFS;
+		return -1;
+	}
+
+	// Create the header bit first
+	void ** head = array;
+	void ** ptrs = head + numparams(sig);
+	char * body = (char *)head + header_size;
+
+	unsigned int i = 0, p = 0;
+	size_t length = 0;
+
+	va_list cargs;
+	va_copy(cargs, args);
+
+	while (sig[i] != '\0')
+	{
+		head[i] = &body[length];
+
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				va_arg(cargs, int);
+				length += sizeof(bool);
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				va_arg(cargs, int);
+				length += sizeof(int);
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				va_arg(cargs, double);
+				length += sizeof(double);
+				break;
+			}
+
+			case T_CHAR:
+			{
+				va_arg(cargs, int);
+				length += sizeof(char);
+				break;
+			}
+
+			case T_STRING:
+			{
+				head[i] = &ptrs[p];
+				ptrs[p] = &body[length];
+				p++;
+
+				const char * str = va_arg(cargs, const char *);
+				length += strlen(str) + 1;
+
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		i++;
+	}
+
+	va_end(cargs);
+
+	ssize_t ret = vserialize_2array(body, arraylen-header_size, sig, args);
+	if (ret != length)
+	{
+		LOGK(LOG_ERR, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
+		return ret;
+	}
+
+	return ret + header_size;
+}
+
+ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * sig, void ** args)
+{
+	// Get the header size
+	size_t header_size = headersize(sig);
+	if (header_size > arraylen)
+	{
+		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
+		errno = ENOBUFS;
+		return -1;
+	}
+
+	// Create the header bit first
+	void ** head = array;
+	void ** ptrs = head + numparams(sig);
+	char * body = (char *)head + header_size;
+
+	unsigned int i = 0, p = 0;
+	size_t length = 0;
+
+	while (sig[i] != '\0')
+	{
+		head[i] = &body[length];
+
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				length += sizeof(bool);
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				length += sizeof(int);
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				length += sizeof(double);
+				break;
+			}
+
+			case T_CHAR:
+			{
+				length += sizeof(char);
+				break;
+			}
+
+			case T_STRING:
+			{
+				head[i] = &ptrs[p];
+				ptrs[p] = &body[length];
+				p++;
+
+				const char * str = *(const char **)args[i];
+				length += strlen(str) + 1;
+
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		i++;
+	}
+
+	ssize_t ret = aserialize_2array(body, arraylen-header_size, sig, args);
+	if (ret != length)
+	{
+		LOGK(LOG_ERR, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
+		return ret;
+	}
+
+	return ret + header_size;
+}
+
+ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
+{
+	va_list args;
+	va_start(args, arraylen);
+
+	// TODO - finish me
+
+	va_end(args);
+
+	return -1;
+}
+
+ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, void * array, size_t arraylen)
+{
+	// Get the header size
+	size_t header_size = headersize(sig);
+	if (header_size > headerlen)
+	{
+		LOGK(LOG_ERR, "Could not deserialize sig %s, header too small!", sig);
+		errno = ENOBUFS;
+		return -1;
+	}
+
+	// Create the header bit first
+	void ** ptrs = header + numparams(sig);
+
+	unsigned int i = 0, p = 0;
+	size_t length = 0;
+
+	while (sig[i] != '\0')
+	{
+		header[i] = (char *)array + length;
+
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				length += sizeof(bool);
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				length += sizeof(int);
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				length += sizeof(double);
+				break;
+			}
+
+			case T_CHAR:
+			{
+				length += sizeof(char);
+				break;
+			}
+
+			case T_STRING:
+			{
+				header[i] = &ptrs[p];
+				ptrs[p] = (char *)array + length;
+				p++;
+
+				const char * str = *(const char **)header[i];
+				length += strlen(str) + 1;
+
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not deserialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		i++;
+	}
+
+	return header_size;
+}
+
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)
+{
+	LABELS(err_nomem, err_bufsize);
+
+	// Get the header size
+	size_t header_size = headersize(sig);
+	if (header_size > headerlen)
+	{
+		goto err_nomem;
+	}
+
+	char * body = (char *)header + header_size;
+
+	unsigned int i = 0;
+	size_t wrote = 0;
+
+	void copy(size_t s)
+	{
+		if ((header_size + wrote + s) > headerlen)
+		{
+			goto err_nomem;
+		}
+
+		size_t r = buffer_read(buffer, &body[wrote], s);
+		if (r != s)
+		{
+			goto err_bufsize;
+		}
+
+		wrote += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_BOOLEAN:
+			{
+				copy(sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				copy(sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				copy(sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				copy(sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				char byte;
+				do
+				{
+					size_t r = buffer_read(buffer, &byte, sizeof(byte));
+					if (r != sizeof(byte))
+					{
+						goto err_bufsize;
+					}
+
+					if ((header_size + wrote + sizeof(byte)) > headerlen)
+					{
+						goto err_nomem;
+					}
+
+					body[wrote++] = byte;
+
+				} while (byte != '\0');
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		i++;
+	}
+
+	ssize_t ret = deserialize_2header(header, header_size, sig, body, wrote);
+	if (ret != header_size)
+	{
+		LOGK(LOG_ERR, "Header deserialization mismatch. Expected header of length %zd, got %zd", header_size, ret);
+		return ret;
+	}
+
+	return header_size + wrote;
+
+err_nomem:
+	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
+	errno = ENOBUFS;
+	return -1;
+
+err_bufsize:
+	LOGK(LOG_ERR, "Could not deserialize sig %s, buffer length error!", sig);
+	errno = ENOSPC;
+	return -1;
+}
+
+/* ------------------------------------------------------------------- */
+#if 0
 static size_t param_size(char type, void * data)
 {
 	switch (type)
@@ -151,103 +914,23 @@ bool deserialize(const char * sig, void ** params, buffer_t buffer)
 	return true;
 }
 
-char method_returntype(const char * sig)
-{
-	switch (sig[0])
-	{
-		case T_BOOLEAN:
-		case T_INTEGER:
-		case T_DOUBLE:
-		case T_CHAR:
-		case T_STRING:
-		case T_BUFFER:
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-		case T_VOID:
-			return sig[0];
-
-		case ':':
-			return T_VOID;
-	}
-
-	#if defined(KERNEL)
-		LOG(LOG_WARN, "Unknown return type for method signature '%s'", sig);
-	#endif
-
-	return '?';
-}
-
-const char * method_params(const char * sig)
-{
-	const char * ptr;
-	if ((ptr = strchr(sig, ':')) == NULL)
-	{
-		return sig;
-	}
-
-	if (*(ptr+1) == '\0')
-	{
-		return "v";
-	}
-
-	return ptr+1;
-}
-
-
-bool method_isequal(const char * sig1, const char * sig2)
-{
-	return strcmp(method_params(sig1), method_params(sig2)) == 0 && method_returntype(sig1) == method_returntype(sig2);
-}
-
-size_t param_arraysize(const char * sig)
-{
-	size_t s = 0;
-
-	int i=0;
-	for (; i<strlen(sig); i++)
-	{
-		switch (sig[i])
-		{
-			case T_VOID:
-				break;
-
-			case T_BOOLEAN:
-			case T_INTEGER:
-			case T_DOUBLE:
-			case T_CHAR:
-				s += 1;
-				break;
-
-			case T_STRING:
-			case T_BUFFER:
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-				s += 2;
-				break;
-		}
-	}
-
-	return sizeof(void *) * s;
-}
-
-void param_pack(void ** params, unsigned int maxparams, const char * sig, ...)
+void param_pack(void ** buffer, size_t buflen, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	vparam_pack(params, maxparams, sig, args);
+	ssize_t ret = vparam_pack(buffer, buflen, sig, args);
 	va_end(args);
+
+	return ret;
 }
 
-// TODO NOTE - strings take two params pointers
-void vparam_pack(void ** params, unsigned int maxparams, const char * sig, va_list args)
+ssize_t vparam_pack(void ** buffer, size_t buflen, const char * sig, va_list args)
 {
 	// Sanity check
 	{
-		if (params == NULL || sig == NULL)
+		if (buffer == NULL || sig == NULL)
 		{
-			LOGK(LOG_ERR, "Could not pack params with NULL list or NULL sig!");
+			LOGK(LOG_ERR, "Could not pack params with NULL buffer or NULL sig!");
 			return;
 		}
 
@@ -265,6 +948,7 @@ void vparam_pack(void ** params, unsigned int maxparams, const char * sig, va_li
 					break;
 
 				default:
+					// Everything is not allowed
 					LOGK(LOG_ERR, "Could not pack invalid parameter %d of sig %s", i+1, sig);
 					return;
 			}
@@ -273,97 +957,124 @@ void vparam_pack(void ** params, unsigned int maxparams, const char * sig, va_li
 		}
 	}
 
-#if 0
-	size_t sigi, taili, len;
-	len = taili = strlen(sig) * sizeof(void *);
-
-	for(sigi=0; sigi<strlen(sig); sigi++)
-	{
-		switch (sig[sigi])
-		{
-			case T_BOOLEAN:	len += sizeof(bool);		break;
-			case T_INTEGER:	len += sizeof(int);			break;
-			case T_DOUBLE:	len += sizeof(double);		break;
-			case T_CHAR:	len += sizeof(char);		break;
-
-			case T_STRING:
-			case T_BUFFER:
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-				len += sizeof(char *);
-				break;
-
-			case T_VOID:
-				break;
-
-			default:
-				#if defined(KERNEL)
-					LOG(LOG_WARN, "Invalid type '%c' in signature '%s'", sig[sigi], sig);
-				#endif
-				return NULL;
-		}
-	}
-#endif
-
-	// Pack the params into the given array
+	// Calculate the header size
+	size_t header_size = 0;
 	{
 		unsigned int i = 0;
-		while (*sig != '\0')
+		while (sig[i] != '\0')
 		{
-			switch (*sig)
+			switch (sig[i])
 			{
-				case T_BOOLEAN: sgkjsgk;
+				case T_BOOLEAN:
+				case T_INTEGER:
+				case T_DOUBLE:
+				case T_CHAR:
+					header_size += sizeof(void *);
+					break;
+
+				case T_STRING:
+					header_size += sizeof(char *) + sizeof(char **);
+					break;
 			}
 
-			sig++;
+			i++;
+		}
+
+		if (header_size > buflen)
+		{
+			errno = ENOBUFS;
+			return -1;
 		}
 	}
 
-	void ** array = g_malloc0(len);
-	for (sigi=0; sigi<strlen(sig); sigi++)
+	// Pack the params into the given array
+	char * header = (char *)buffer;
+	char * ptrs = header + (strlen(sig) * sizeof(void *));
+	char * body = header + header_size;
+	size_t bufsize = header_size;
+
+#define __vparam_pack_checklen(sz) if ((bufsize + (sz)) > buflen) { errno = ENOBUFS; return -1; }
+
+	while (*sig != '\0')
 	{
-		switch (sig[sigi])
+		switch (*sig)
 		{
-			#define __vparam_pack_elem(t1, t2) \
-				case t1: { \
-					t2 v = va_arg(args, t2); \
-					*(t2 *)(array[sigi] = (char *)array+taili) = v; \
-					taili += sizeof(t2); \
-					break; }
-
-			__vparam_pack_elem(T_INTEGER, int)
-			__vparam_pack_elem(T_DOUBLE, double)
-
 			case T_BOOLEAN:
 			{
-				bool v = (bool) va_arg(args, int);
-				*(bool *)(array[sigi] = (bool *)array+taili) = v;
-				taili += sizeof(bool);
+				__vparam_pack_checklen(sizeof(bool))
+				bool v = (bool)va_arg(args, int);
+
+				memcpy(body, &v, sizeof(bool));
+				*(bool **)header = &*(bool *)body;
+
+				body += sizeof(bool);
+				header += sizeof(bool *);
+
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				__vparam_pack_checklen(sizeof(int))
+				int v = va_arg(args, int);
+
+				memcpy(body, &v, sizeof(int));
+				*(int **)header = &*(int *)body;
+
+				body += sizeof(int);
+				header += sizeof(int *);
+
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				__vparam_pack_checklen(sizeof(double))
+				double v = va_arg(args, double);
+
+				memcpy(body, &v, sizeof(double));
+				*(double **)header = &*(double *)body;
+
+				body += sizeof(double);
+				header += sizeof(double *);
+
 				break;
 			}
 
 			case T_CHAR:
 			{
-				char v = (char) va_arg(args, int);
-				*(char *)(array[sigi] = (char *)array+taili) = v;
-				taili += sizeof(char);
+				__vparam_pack_checklen(sizeof(char))
+				char v = (char)va_arg(args, int);
+
+				memcpy(body, &v, sizeof(char));
+				*(char **)header = &*(char *)body;
+
+				body += sizeof(char);
+				header += sizeof(char *);
+
 				break;
 			}
 
-			__vparam_pack_elem(T_STRING, char *)
+			case T_STRING:
+			{
+				char * v = va_arg(args, char *);
+				__vparam_pack_checklen(strlen(v)+1)
 
-			__vparam_pack_elem(T_BUFFER, buffer_t)
-			__vparam_pack_elem(T_ARRAY_BOOLEAN, buffer_t)
-			__vparam_pack_elem(T_ARRAY_INTEGER, buffer_t)
-			__vparam_pack_elem(T_ARRAY_DOUBLE, buffer_t)
+				memcpy(body, v, strlen(v)+1);
+				*(char ***)header = &*(char **)ptrs;
+				*(char **)ptrs = &*(char *)body;
+
+				body += strlen(v)+1;
+				header += sizeof(char **);
+				ptrs += sizeof(char *);
+
+				break;
+			}
 		}
+
+		sig++;
 	}
 
-	return array;
+	return body - (char *)buffer;
 }
-
-void param_free(void ** array)
-{
-	g_free(array);
-}
+#endif

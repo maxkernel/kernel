@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <aul/string.h>
 #include <aul/exception.h>
@@ -12,11 +13,16 @@
 #include <kernel-priv.h>
 
 
-#if !defined(INSTALL) || !defined(MEMFS)
-#error "INSTALL and MEMFS directives must be defined"
+#ifndef MEMFS
+	#define MEMFS		"memfs"
 #endif
 
-#define MOUNT_PATH		(INSTALL "/" MEMFS)
+#ifndef INSTALL
+	#define MOUNT_PATH	("/tmp/" MEMFS)
+#else
+	#define MOUNT_PATH	(INSTALL "/" MEMFS)
+#endif
+
 #define MOUNT_NAME		"maxkernel_memfs"
 #define MOUNT_TYPE		"ramfs"
 
@@ -24,6 +30,7 @@
 void memfs_init(exception_t ** err)
 {
 	memfs_destroy(NULL);
+	mkdir(MOUNT_PATH, S_IRWXU);
 
 	int success = mount(MOUNT_NAME, MOUNT_PATH, MOUNT_TYPE, MS_NOSUID | MS_NOEXEC | MS_NODEV, NULL);
 	if (success != 0 && err != NULL)

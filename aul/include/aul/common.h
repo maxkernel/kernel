@@ -36,10 +36,13 @@ extern "C" {
 #define ABS(a)	   (((a) < 0) ? -(a) : (a))
 
 #undef	CLAMP
-#define CLAMP(x, low, high)  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+#define CLAMP(x, low, high)  			(((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 #undef  CHECK_PRINTF
 #define CHECK_PRINTF(fmt_arg, arg1)		__attribute__((format (printf, fmt_arg, arg1)))
+
+#undef  LABELS
+#define LABELS(...)						__label__ __VA_ARGS__
 
 
 #define ZERO(x)			memset(&(x), 0, sizeof(x))

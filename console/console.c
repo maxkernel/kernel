@@ -23,10 +23,31 @@ CFG_PARAM(enable_network, "i");
 
 typedef struct
 {
+	size_t headersize;
+	char type;
+	char * name;
+	char * sig;
+
+	size_t bodysize;
+	void * body[CONSOLE_HEADERSIZE];
+} message_t;
+
+typedef struct
+{
 	list_t free_list;
 	size_t size;
 	char buffer[CONSOLE_BUFFERMAX];
+
+	enum {
+		P_FRAMING = 0,
+		P_HEADER,
+		P_BODY,
+		P_ERROR,
+	} step;
+
+	message_t msg;
 } cbuffer_t;
+
 
 static list_t free_buffers;
 
@@ -42,28 +63,28 @@ static string_t addr2string(uint32_t ip)
 
 static buffer_t mkerror(const char * name, const char * msg)
 {
-	buffer_t mbuf = serialize(S_STRING, msg);
-	buffer_t ebuf = serialize("cssx", T_ERROR, name, "s", mbuf);
-	buffer_free(mbuf);
-	return ebuf;
+	int len = 1 + (strlen(name) + 1) + (strlen(msg) + 1);
+
+	buffer_t buf = buffer_new();
+	serialize_2buffer(buf, "icsss", len, T_ERROR, name, S_STRING, msg);
+	buffer_setpos(buf, 0);
+
+	return buf;
 }
 
 
 static void console_replyclient(int fd, buffer_t reply)
 {
-	ssize_t sent = send(fd, reply, buffer_size(reply), 0);
-	if (sent == -1)
+	if (!buffer_send(reply, fd))
 	{
-		LOG(LOG_WARN, "Error while sending reply: %s", strerror(errno));
-	}
-	else if (sent != buffer_size(reply))
-	{
-		LOG(LOG_WARN, "Could not send full reply buffer to client");
+		LOG(LOG_WARN, "Error while sending console reply: %s", strerror(errno));
 	}
 }
 
 static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
+	LABELS(err_badparse);
+
 	cbuffer_t * buffer = userdata;
 
 	// Get data and put in buffer
@@ -86,6 +107,57 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 	// Increment the buffer length
 	buffer->size += bytesread;
 
+	switch (buffer->step)
+	{
+		case P_FRAMING:
+		{
+			if (buffer->size < sizeof(int))
+			{
+				break;
+			}
+
+			int frame = *(int *)&(buffer->buffer[0]);
+			if (frame != CONSOLE_FRAMEING)
+			{
+				LOG(LOG_WARN, "Framing error while parsing message packet");
+				buffer->step = P_ERROR;
+				break;
+			}
+			else
+			{
+				// Framing passed, move on to next step
+				buffer->step = P_HEADER;
+			}
+		}
+
+		case P_HEADER:
+		{
+			// Get the buffer without the framing parts
+			void * n_buffer = &buffer->buffer[sizeof(int)];
+			size_t n_size = buffer->size - sizeof(int);
+
+			if ((buffer->msg.headersize = deserialize_2args("css", n_buffer, n_size, &buffer->msg.type, &buffer->msg.name, &buffer->msg.sig)) == -1)
+			{
+				// Couldn't parse out the header, wait until next pass
+				break;
+			}
+		}
+
+		case P_BODY:
+		{
+
+		}
+	}
+
+	if (buffer->step == P_ERROR)
+	{
+		// TODO - finish me
+	}
+
+
+
+
+#if 0
 	// Start processing packet
 	if (buffer->size >= sizeof(size_t))
 	{
@@ -107,10 +179,11 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 		{
 			// We have a full packet, parse it
 
-			void ** array = malloc0(param_arraysize("cssx"));
-			if (!deserialize("cssx", array, (buffer_t)buffer->buffer))
+			void * array[CONSOLE_HEADERSIZE];
+
+			if (deserialize_2header(array, sizeof(array), "cssx", buffer->buffer + sizeof(size_t), buffer->size - sizeof(size_t)) == -1)
 			{
-				LOG(LOG_WARN, "Could not deserialize syscall buffer");
+				LOG(LOG_WARN, "Could not deserialize syscall buffer: %s", strerror(errno));
 				goto done;
 			}
 
@@ -176,17 +249,16 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 					break;
 			}
 
-done:
-			FREE(array);
 		}
 
-
+err_badparse:
 		// Re-align new packet
 		memmove(buffer->buffer, buffer->buffer + buffer->size, buffer->size - packetsize);
 		buffer->size -= packetsize;
 	}
 
 	return true;
+#endif
 
 }
 
@@ -200,14 +272,14 @@ static bool console_newunixclient(mainloop_t * loop, int fd, fdcond_t condition,
 	else
 	{
 		// Get a free buffer
-		cbuffer_t * buf = list_entry(free_buffers.next, cbuffer_t, free_list);
-		list_remove(&buf->free_list);
+		cbuffer_t * msg = list_entry(free_buffers.next, cbuffer_t, free_list);
+		list_remove(&msg->free_list);
 
-		// Set up the buffer
-		buf->size = 0;
+		// Clear the buffer
+		PZERO(msg, sizeof(cbuffer_t));
 
 		// Add socket to mainloop watch
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buf);
+		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, msg);
 		LOG(LOG_DEBUG, "New UNIX console client (%s)", CONSOLE_SOCKFILE);
 	}
 
@@ -227,15 +299,15 @@ static bool console_newtcpclient(mainloop_t * loop, int fd, fdcond_t condition, 
 	else
 	{
 		// Get a free buffer
-		cbuffer_t * buf = list_entry(free_buffers.next, cbuffer_t, free_list);
-		list_remove(&buf->free_list);
+		cbuffer_t * msg = list_entry(free_buffers.next, cbuffer_t, free_list);
+		list_remove(&msg->free_list);
 
-		// Set up the buffer
-		buf->size = 0;
+		// Clear the buffer
+		PZERO(msg, sizeof(cbuffer_t));
 
 		// Add socket to mainloop watch
 		string_t str_addr = addr2string(addr.sin_addr.s_addr);
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buf);
+		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, msg);
 		LOG(LOG_DEBUG, "New TCP console client (%s)", str_addr.string);
 	}
 	
