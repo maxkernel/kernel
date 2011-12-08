@@ -22,10 +22,7 @@ int udp_server(uint16_t port, exception_t ** err)
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not create datagram socket: %s", strerror(errno));
-		}
+		exception_set(err, errno, "Could not create datagram socket: %s", strerror(errno));
 		return -1;
 	}
 
@@ -38,10 +35,7 @@ int udp_server(uint16_t port, exception_t ** err)
 
 	if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not bind datagram to port %d: %s", port, strerror(errno));
-		}
+		exception_set(err, errno, "Could not bind datagram to port %d: %s", port, strerror(errno));
 		close(sock);
 		return -1;
 	}
@@ -60,29 +54,23 @@ int tcp_server(uint16_t port, exception_t ** err)
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not create tcp socket: %s", strerror(errno));
-		}
+		exception_set(err, errno, "Could not create tcp socket: %s", strerror(errno));
 		return -1;
 	}
 
 	int yes = 1;
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not set socket options: %s", strerror(errno));
-		}
+		exception_set(err, errno, "Could not set socket options: %s", strerror(errno));
 		close(sock);
 		return -1;
 	}
 
+	// Set O_NONBLOCK on the file descriptor
 	int flags = fcntl(sock, F_GETFL, 0);
-	if (flags != -1)
+	if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1)
 	{
-		//try to set O_NONBLOCK, ignore if we can't
-		fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not set non-blocking option on tcp socket to port %d: %s", port, strerror(errno));
 	}
 
 
@@ -95,20 +83,14 @@ int tcp_server(uint16_t port, exception_t ** err)
 
 	if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not bind socket to port %d: %s", port, strerror(errno));
-		}
+		exception_set(err, errno, "Could not bind socket to port %d: %s", port, strerror(errno));
 		close(sock);
 		return -1;
 	}
 
 	if (listen(sock, AUL_NET_BACKLOG) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not listen for incoming connections on port %d: %s", port, strerror(errno));
-		}
+		exception_set(err, errno, "Could not listen for incoming connections on port %d: %s", port, strerror(errno));
 		close(sock);
 		return -1;
 	}
@@ -128,10 +110,7 @@ int unix_server(const char * path, exception_t ** err)
 	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not create unix socket %s: %s", path, strerror(errno));
-		}
+		exception_set(err, errno, "Could not create unix socket %s: %s", path, strerror(errno));
 		return -1;
 	}
 
@@ -139,20 +118,17 @@ int unix_server(const char * path, exception_t ** err)
 	{
 		if (errno != ENOENT)
 		{
-			if (err != NULL)
-			{
-				*err = exception_new(errno, "Could not create unix socket file %s: %s", path, strerror(errno));
-			}
+			exception_set(err, errno, "Could not create unix socket file %s: %s", path, strerror(errno));
 			close(sock);
 			return -1;
 		}
 	}
 
+	// Set O_NONBLOCK on the file descriptor
 	int flags = fcntl(sock, F_GETFL, 0);
-	if (flags != -1)
+	if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1)
 	{
-		//try to set O_NONBLOCK, ignore if we can't
-		fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not set non-blocking option on unix socket %s: %s", path, strerror(errno));
 	}
 
 
@@ -160,24 +136,57 @@ int unix_server(const char * path, exception_t ** err)
 	ZERO(addr);
 
 	addr.sun_family = AF_UNIX;
-	strcpy(addr.sun_path, path);
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
 
 	if (bind(sock, (struct sockaddr *)&addr, sizeof(addr.sun_family) + strlen(addr.sun_path)) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not bind unix socket %s: %s", path, strerror(errno));
-		}
+		exception_set(err, errno, "Could not bind unix socket %s: %s", path, strerror(errno));
 		close(sock);
 		return -1;
 	}
 
 	if (listen(sock, AUL_NET_BACKLOG) == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Could not listen for incoming connections on socket %s: %s", path, strerror(errno));
-		}
+		exception_set(err, errno, "Could not listen for incoming connections on socket %s: %s", path, strerror(errno));
+		close(sock);
+		return -1;
+	}
+
+	return sock;
+}
+
+int unix_client(const char * path, exception_t ** err)
+{
+	if (exception_check(err))
+	{
+		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function unix_client");
+		return -1;
+	}
+
+	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sock == -1)
+	{
+		exception_set(err, errno, "Could not create unix socket %s: %s", path, strerror(errno));
+		return -1;
+	}
+
+	// Set O_NONBLOCK on the file descriptor
+	int flags = fcntl(sock, F_GETFL, 0);
+	if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not set non-blocking option on unix socket %s: %s", path, strerror(errno));
+	}
+
+
+	struct sockaddr_un addr;
+	ZERO(addr);
+
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
+
+	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr.sun_family) + strlen(addr.sun_path)) == -1)
+	{
+		exception_set(err, errno, "Could not connect unix socket %s: %s", path, strerror(errno));
 		close(sock);
 		return -1;
 	}

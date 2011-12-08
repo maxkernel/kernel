@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 int serial_open(const char * port, speed_t speed);
-
+speed_t serial_getspeed(int baud);
 
 #ifdef __cplusplus
 }

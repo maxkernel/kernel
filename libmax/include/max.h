@@ -4,8 +4,8 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
+#include <aul/common.h>
 #include <aul/exception.h>
-#include <aul/string.h>
 #include <aul/hashtable.h>
 #include <aul/mutex.h>
 
@@ -25,8 +25,11 @@ extern "C" {
 #define T_CHAR			'c'
 #define T_STRING		's'
 
-#define UNIXSOCK_ADDR	"unix:///var/local/maxkern.sock"
+#define HOST_UNIXSOCK	"unix:"
+#define HOST_IP			"ip:"
+#define HOST_UID		"uid:"
 
+#define DEFAULT_TIMEOUT	100
 
 typedef void * (*malloc_f)(size_t size);
 typedef void (*free_f)(void * ptr);
@@ -34,8 +37,6 @@ typedef void (*memerr_f)();
 
 typedef struct
 {
-	exception_t * error;
-
 	malloc_f malloc;
 	free_f free;
 	memerr_f memerr;
@@ -44,6 +45,7 @@ typedef struct
 
 	int sock;
 	mutex_t sock_mutex;
+	int timeout;
 } maxhandle_t;
 
 typedef struct
@@ -57,6 +59,8 @@ typedef struct
 		int t_integer;
 		double t_double;
 		char t_char;
+		char t_string[AUL_STRING_MAXLEN];
+		exception_t error;	// TODO - support returning exceptions?
 	} data;
 } return_t;
 
@@ -65,20 +69,20 @@ void max_init(maxhandle_t * hand);
 void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc);
 void max_memerr();
 
-bool max_connect(maxhandle_t * hand, const char * host);
-#define max_connectlocal(hand) max_connect(hand, UNIXSOCK_ADDR)
+bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host);
+bool max_connectlocal(maxhandle_t * hand, exception_t ** err);
+void max_close(maxhandle_t * hand);
 
 string_t max_syscallsig(maxhandle_t * hand, const char * name);
 bool max_syscallcache(maxhandle_t * hand, const char * name, const char * sig);
 bool max_syscallexists(maxhandle_t * hand, const char * name, const char * sig);
 
-return_t max_syscall(maxhandle_t * hand, const char * syscall, ...);
-return_t max_vsyscall(maxhandle_t * hand, const char * syscall, va_list args);
-return_t max_asyscall(maxhandle_t * hand, const char * syscall, void ** args);
+bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...);
+bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args);
+//return_t max_asyscall(maxhandle_t * hand, const char * syscall, const char * sig, void ** args);
 
-bool max_iserror(maxhandle_t * hand);
-const char * max_error(maxhandle_t * hand);
-void max_clearerror(maxhandle_t * hand);
+void max_settimeout(maxhandle_t * hand, int newtimeout);
+int max_gettimeout(maxhandle_t * hand);
 
 #ifdef __cplusplus
 }

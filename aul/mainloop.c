@@ -195,7 +195,6 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	resolve_loop();
 
 	watcher_t * watcher = NULL;
-	struct epoll_event event;
 
 	// Retrieve a free watcher_t structure
 	mutex_lock(&mainloop_lock);
@@ -228,6 +227,7 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	mutex_unlock(&loop->runlock);
 
 	// Add it to epoll
+	struct epoll_event event;
 	ZERO(event);
 	event.events = cond;
 	event.data.ptr = watcher;
@@ -329,9 +329,12 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 		return;
 	}
 
+	struct epoll_event event;
+	ZERO(event);
+	event.events = cond;
 
 	// Remove the watcher from epoll
-	epoll_ctl(loop->epollfd, EPOLL_CTL_DEL, cond, NULL);
+	epoll_ctl(loop->epollfd, EPOLL_CTL_DEL, fd, &event);
 
 	// Add the watcher to the empty list
 	mutex_lock(&mainloop_lock);

@@ -25,6 +25,20 @@ string_t string_new(const char * fmt, ...)
 	return str;
 }
 
+void string_set(string_t * str, const char * fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	string_vset(str, fmt, args);
+	va_end(args);
+}
+
+void string_vset(string_t * str, const char * fmt, va_list args)
+{
+	string_clear(str);
+	string_vappend(str, fmt, args);
+}
+
 void string_append(string_t * str, const char * fmt, ...)
 {
 	va_list args;

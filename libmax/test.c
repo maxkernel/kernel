@@ -3,35 +3,118 @@
 #include <unistd.h>
 #include <stdarg.h>
 
+#include <math.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "max.h"
 
 int main()
-{	
-	maxhandle_t * hand = max_local();
+{
+	maxhandle_t hand;
+	exception_t * e = NULL;
 	
-	if (max_iserror(hand))
+	max_init(&hand);
+	max_connectlocal(&hand, &e);
+	
+	if (e != NULL)
 	{
-		printf("ERROR: %s\n", max_error(hand));
+		printf("ERROR: (%d) %s\n", e->code, e->message);
 		return 1;
 	}
+	printf("SUCCESS: conected\n");
 	
-	char * s = NULL;
-	double d = 0.0;
 	
-	s = NULL;
-	printf("Calling kernel_id()\n");
-	printf("Result: %d", max_syscall(hand, "kernel_id", "s:v", &s));
-	printf(" (%s)\n", max_error(hand));
-	printf("Returned: %s\n", s);
-	free(s);
 	
-	printf("=======\n");
+	return_t r;
 	
-	d = 0.0;
-	printf("Calling math_eval(\"cos( 2 * pi )\")\n");
-	printf("Result: %d", max_syscall(hand, "math_eval", "d:s", &d, "cos( 2 * pi )"));
-	printf(" (%s)\n", max_error(hand));
-	printf("Returned %f\n", d);
+	bool s = max_syscall(&hand, &e, &r, "kernel_installed", "i:v", 2, 3);
+	if (e != NULL)
+	{
+		printf("ERROR: (%d) %s\n", e->code, e->message);
+		return 1;
+	}
+	printf("SYSCALL %d, %c, %d\n", s, r.type, r.data.t_integer);
 	
 	return 0;
 }
+
+#if 0
+int main()
+{
+	
+	maxhandle_t * hand = malloc(sizeof(maxhandle_t));
+	max_init(hand);
+	max_connectlocal(hand);
+	max_settimeout(hand, 1);
+	
+	if (max_iserror(hand))
+	{
+		int code;
+		const char * msg;
+		
+		code = max_error(hand, &msg);
+		printf("ERROR: (%d) %s\n", code, msg);
+		return 1;
+	}
+	else
+	{
+		printf("SUCCESS: conected\n");
+	}
+	
+	
+	
+	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == -1)
+	{
+		printf("Could not create datagram socket: %s\n", strerror(errno));
+		return -1;
+	}
+
+	struct sockaddr_in addr;
+	ZERO(addr);
+
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(10301);
+	addr.sin_addr.s_addr = INADDR_ANY;
+
+	if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+	{
+		printf("Could not bind datagram to port %d: %s\n", 10301, strerror(errno));
+		close(sock);
+		return -1;
+	}
+	
+	while (1)
+	{
+		int buf[4] = {0,0,0,0};
+		
+		int r = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
+		if (r != sizeof(buf))
+		{
+			printf("Could not receive all data from host!\n");
+			continue;
+		}
+		
+		if (buf[0] != 0xA5A5A5A5)
+		{
+			printf("Framing error!\n");
+			continue;
+		}
+		
+		//printf("Got data! %d %d %d\n", buf[1], buf[2], buf[3]);
+		printf(".");
+		
+		max_syscall(hand, "doio", "v:ii", 0, buf[1]);	// Throttle
+		max_syscall(hand, "doio", "v:ii", 1, buf[2]);	// Stearing
+		max_syscall(hand, "doio", "v:ii", 2, buf[3]);	// Aux
+		
+	}
+	
+	max_close(hand);
+
+	return 0;
+}
+#endif
+

@@ -15,6 +15,7 @@ int udp_server(uint16_t port, exception_t ** err);
 int tcp_server(uint16_t port, exception_t ** err);
 
 int unix_server(const char * path, exception_t ** err);
+int unix_client(const char * path, exception_t ** err);
 
 #ifdef __cplusplus
 }

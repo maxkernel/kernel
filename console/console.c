@@ -3,7 +3,6 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 
 #include <aul/common.h>
@@ -11,47 +10,21 @@
 #include <aul/mainloop.h>
 #include <aul/list.h>
 
-#include <console.h>
 #include <kernel.h>
 #include <serialize.h>
+#include <console.h>
+#include <message.h>
 
 MOD_INIT(module_init);
 
-int enable_network = 0;
-CFG_PARAM(enable_network, "i");
-
-
-typedef struct
-{
-	size_t headersize;
-	char type;
-	char * name;
-	char * sig;
-
-	size_t bodysize;
-	void * body[CONSOLE_HEADERSIZE];
-} message_t;
-
-typedef struct
-{
-	list_t free_list;
-	size_t size;
-	char buffer[CONSOLE_BUFFERMAX];
-
-	enum {
-		P_FRAMING = 0,
-		P_HEADER,
-		P_BODY,
-		P_ERROR,
-	} step;
-
-	message_t msg;
-} cbuffer_t;
+CFG_PARAM(enable_network, "b");
+bool enable_network = false;
 
 
 static list_t free_buffers;
 
 
+#if 0
 static string_t addr2string(uint32_t ip)
 {
 	unsigned char a4 = (ip & 0xFF000000) >> 24;
@@ -60,101 +33,114 @@ static string_t addr2string(uint32_t ip)
 	unsigned char a1 = ip & 0xFF;
 	return string_new("%d.%d.%d.%d", a1, a2, a3, a4);
 }
-
-static buffer_t mkerror(const char * name, const char * msg)
-{
-	int len = 1 + (strlen(name) + 1) + (strlen(msg) + 1);
-
-	buffer_t buf = buffer_new();
-	serialize_2buffer(buf, "icsss", len, T_ERROR, name, S_STRING, msg);
-	buffer_setpos(buf, 0);
-
-	return buf;
-}
-
-
-static void console_replyclient(int fd, buffer_t reply)
-{
-	if (!buffer_send(reply, fd))
-	{
-		LOG(LOG_WARN, "Error while sending console reply: %s", strerror(errno));
-	}
-}
+#endif
 
 static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
-	LABELS(err_badparse);
+	msgbuffer_t * buffer = userdata;
+	msgstate_t state = message_readfd(fd, buffer);
 
-	cbuffer_t * buffer = userdata;
-
-	// Get data and put in buffer
-	ssize_t bytesread = recv(fd, &buffer->buffer, CONSOLE_BUFFERMAX - buffer->size, 0);
-	if (bytesread <= 0)
+	if (state >= P_ERROR)
 	{
-		// Socket has closed or error'd
-		if (bytesread != 0)
-		{
-			LOG(LOG_WARN, "Could not receive data from console client: %s", strerror(bytesread));
-		}
-
-		// Return buffer to free list
+		// Add buffer back to free list
 		list_add(&free_buffers, &buffer->free_list);
 
-		close(fd);
 		return false;
 	}
 
-	// Increment the buffer length
-	buffer->size += bytesread;
-
-	switch (buffer->step)
+	if (state == P_DONE)
 	{
-		case P_FRAMING:
+		message_t * msg = message_getmessage(buffer);
+		switch (msg->type)
 		{
-			if (buffer->size < sizeof(int))
+			case T_METHOD:
 			{
+				if (syscall_exists(msg->name, msg->sig))
+				{
+					// Execute the syscall
+					void * r = asyscall_exec(msg->name, msg->body);
+
+					// Pack and send a return message
+					char rsig[] = { method_returntype(msg->sig), '\0' };
+
+					switch (method_returntype(msg->sig))
+					{
+						case T_VOID:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig);
+							break;
+						}
+
+						case T_BOOLEAN:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig, *(bool *)r);
+							break;
+						}
+
+						case T_INTEGER:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig, *(int *)r);
+							break;
+						}
+
+						case T_DOUBLE:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig, *(double *)r);
+							break;
+						}
+
+						case T_CHAR:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig, *(char *)r);
+							break;
+						}
+
+						case T_STRING:
+						{
+							message_writefd(fd, T_RETURN, msg->name, rsig, *(char **)r);
+							break;
+						}
+					}
+
+					// Free up resources
+					syscall_free(r);
+				}
+				else
+				{
+					LOG(LOG_WARN, "Could not execute syscall %s with sig %s. Syscall doesn't exist!", msg->name, msg->sig);
+
+					// Syscall doesn't exist, return error
+					string_t payload = string_new("Syscall %s with signature '%s' doesn't exist!", msg->name, msg->sig);
+					message_writefd(fd, T_ERROR, msg->name, "s", payload.string);
+				}
+
 				break;
 			}
 
-			int frame = *(int *)&(buffer->buffer[0]);
-			if (frame != CONSOLE_FRAMEING)
+			case T_ERROR:
 			{
-				LOG(LOG_WARN, "Framing error while parsing message packet");
-				buffer->step = P_ERROR;
+				// Client sent an error, just log it
+				LOG(LOG_WARN, "Console received an error from client: (%s) %s", msg->name, (strcmp(msg->sig, "s") == 0)? *(char **)msg->body[0] : "Unknown error");
 				break;
 			}
-			else
+
+			case T_RETURN:
 			{
-				// Framing passed, move on to next step
-				buffer->step = P_HEADER;
+				LOG(LOG_WARN, "Unexpected return type message received in console (name=%s)", msg->name);
+				break;
 			}
-		}
 
-		case P_HEADER:
-		{
-			// Get the buffer without the framing parts
-			void * n_buffer = &buffer->buffer[sizeof(int)];
-			size_t n_size = buffer->size - sizeof(int);
-
-			if ((buffer->msg.headersize = deserialize_2args("css", n_buffer, n_size, &buffer->msg.type, &buffer->msg.name, &buffer->msg.sig)) == -1)
+			default:
 			{
-				// Couldn't parse out the header, wait until next pass
+				LOG(LOG_WARN, "Unknown message type received in console (name=%s, type=%c)", msg->name, msg->type);
 				break;
 			}
 		}
 
-		case P_BODY:
-		{
-
-		}
+		message_reset(buffer);
 	}
 
-	if (buffer->step == P_ERROR)
-	{
-		// TODO - finish me
-	}
-
-
+	return true;
 
 
 #if 0
@@ -262,55 +248,27 @@ err_badparse:
 
 }
 
-static bool console_newunixclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
+static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	int client = accept(fd, NULL, NULL);
 	if (client == -1)
 	{
-		LOG(LOG_WARN, "Could not accept new UNIX console client socket: %s", strerror(errno));
+		LOG(LOG_WARN, "Could not accept new console client socket: %s", strerror(errno));
 	}
 	else
 	{
 		// Get a free buffer
-		cbuffer_t * msg = list_entry(free_buffers.next, cbuffer_t, free_list);
+		msgbuffer_t * msg = list_entry(free_buffers.next, msgbuffer_t, free_list);
 		list_remove(&msg->free_list);
 
-		// Clear the buffer
-		PZERO(msg, sizeof(cbuffer_t));
+		// Clear the message
+		message_clear(msg);
 
 		// Add socket to mainloop watch
 		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, msg);
-		LOG(LOG_DEBUG, "New UNIX console client (%s)", CONSOLE_SOCKFILE);
+		LOG(LOG_DEBUG, "New console client.");
 	}
 
-	return true;
-}
-
-static bool console_newtcpclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
-{
-	struct sockaddr_in addr;
-	socklen_t size = sizeof(addr);
-
-	int client = accept(fd, (struct sockaddr *)&addr, &size);
-	if (client == -1)
-	{
-		LOG(LOG_WARN, "Could not accept new TCP console client socket: %s", strerror(errno));
-	}
-	else
-	{
-		// Get a free buffer
-		cbuffer_t * msg = list_entry(free_buffers.next, cbuffer_t, free_list);
-		list_remove(&msg->free_list);
-
-		// Clear the buffer
-		PZERO(msg, sizeof(cbuffer_t));
-
-		// Add socket to mainloop watch
-		string_t str_addr = addr2string(addr.sin_addr.s_addr);
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, msg);
-		LOG(LOG_DEBUG, "New TCP console client (%s)", str_addr.string);
-	}
-	
 	return true;
 }
 
@@ -322,7 +280,7 @@ void module_init()
 
 	// Initialize buffers
 	LIST_INIT(&free_buffers);
-	cbuffer_t * buffers = malloc0(sizeof(cbuffer_t) * CONSOLE_BUFFERS);
+	msgbuffer_t * buffers = malloc0(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 
 	size_t i = 0;
 	for (; i<CONSOLE_BUFFERS; i++)
@@ -334,14 +292,14 @@ void module_init()
 	int unixsock = unix_server(CONSOLE_SOCKFILE, &err);
 	if (err != NULL)
 	{
-		LOG(LOG_WARN, "Error creating unix server socket: %s", err->message.string);
+		LOG(LOG_WARN, "Error creating unix server socket: %s", err->message);
 		exception_free(err);
 	}
 	else
 	{
 		// Change permissions on socket (user:rw,group:rw,other:rw)
 		chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-		mainloop_addwatch(NULL, unixsock, FD_READ, console_newunixclient, NULL);
+		mainloop_addwatch(NULL, unixsock, FD_READ, console_newclient, NULL);
 		LOG(LOG_DEBUG, "Awaiting UNIX console clients on file %s", CONSOLE_SOCKFILE);
 	}
 
@@ -353,12 +311,12 @@ void module_init()
 		int tcpsock = tcp_server(CONSOLE_TCPPORT, &err);
 		if (err != NULL)
 		{
-			LOG(LOG_WARN, "Error creating network server socket: %s", err->message.string);
+			LOG(LOG_WARN, "Error creating network server socket: %s", err->message);
 			exception_free(err);
 		}
 		else
 		{
-			mainloop_addwatch(NULL, tcpsock, FD_READ, console_newtcpclient, NULL);
+			mainloop_addwatch(NULL, tcpsock, FD_READ, console_newclient, NULL);
 			LOG(LOG_DEBUG, "Awaiting TCP console clients on port %d", CONSOLE_TCPPORT);
 		}
 	}

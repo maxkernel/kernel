@@ -41,3 +41,18 @@ int serial_open(const char * port, speed_t speed)
 
 	return fd;
 }
+
+speed_t serial_getspeed(int baud)
+{
+	switch (baud)
+	{
+		case 2400:		return B2400;
+		case 4800:		return B4800;
+		case 9600:		return B9600;
+		case 19200:		return B19200;
+		case 38400:		return B38400;
+		case 57600:		return B57600;
+		case 115200:	return B115200;
+		default:		return 0;
+	}
+}

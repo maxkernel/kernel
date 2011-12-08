@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <time.h>
 #include <regex.h>
 
 #include <kernel.h>
@@ -7,33 +8,60 @@
 #include <aul/mainloop.h>
 
 
-MOD_VERSION("0.1");
+MOD_VERSION("1.0");
 MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
 MOD_DESCRIPTION("Reads from a serial GPS module outputting NMEA format");
 MOD_INIT(module_init);
 
 
-char * serial_port				= "/dev/ttyUSB0";
+DEF_BLOCK(device, gps_new, "si");
+BLK_ONUPDATE(device, gps_update);
+BLK_ONDESTROY(device, gps_destroy);
+
+BLK_OUTPUT(device, lastupdate, "i");
+BLK_OUTPUT(device, lock, "b");
+//BLK_OUTPUT(device, time, "s"); // TODO - add UTC time as string
+BLK_OUTPUT(device, latitude, "d");
+BLK_OUTPUT(device, longitude, "d");
+BLK_OUTPUT(device, heading, "d");
+BLK_OUTPUT(device, speed, "d");
+BLK_OUTPUT(device, elevation, "d");
+BLK_OUTPUT(device, satellites, "i");
+BLK_OUTPUT(device, hdop, "d");
 
 
-//config values
-CFG_PARAM(serial_port, "s");
+#define GPS_RETRY_TIMEOUT		(5 * NANOS_PER_SECOND)		// Retry opening port if haven't received GPS data after this long
+#define GPS_BUFFER_SIZE			200
 
+typedef struct
+{
+	string_t serial_port;
+	speed_t serial_speed;
 
-BLK_OUTPUT(STATIC, stream, "x");
-BLK_ONUPDATE(STATIC, gps_update);
+	int fd;
+	bool readsuccess;
 
+	char buffer[GPS_BUFFER_SIZE];
+	size_t size;
+
+	mutex_t update_mutex;
+	int lastupdate;			// milliseconds when struct was last updated
+	bool lock;
+	string_t date;
+	string_t time;
+	double lat;
+	double lon;
+	double heading;
+	double speed;
+	double elevation;
+	int satellites;
+	double hdop;
+} gps_t;
 
 // static local vars
-static bool readsuccess = false;
-static int gpsfd = 0;
-
 static regex_t gpgga_match;
 static regex_t gprms_match;
 static regex_t latlong_match;
-
-static mutex_t stream_mutex;
-static string_t stream = STRING_INIT;
 
 static double mtod(char * start, regmatch_t * m)
 {
@@ -74,101 +102,95 @@ static inline char mtoc(char * start, regmatch_t * match)
 
 static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
-	static char buffer[200] = {0};
-	static char line[200] = {0};
-	static size_t buffer_size = 0;
-	
-	ssize_t numread;
-	numread = read(fd, buffer+buffer_size, sizeof(buffer)-buffer_size-1);
-	if (numread <= 0)
+	gps_t * gps = userdata;
+	if (gps == NULL)
 	{
-		//end stream!
-		LOG(LOG_WARN, "End of stream reached in GPS serial port %s", serial_port);
 		return false;
 	}
-	buffer_size += numread;
-	readsuccess = true;
 	
-	char * eol = NULL;
-	if ((eol = strchr(buffer, '\n')) != NULL)
+	ssize_t bytesread = read(fd, &gps->buffer[gps->size], sizeof(gps->buffer) - gps->size - 1);
+	if (bytesread <= 0)
 	{
-		size_t len = eol - buffer + 1;
+		//end stream!
+		LOG(LOG_WARN, "End of stream reached in GPS serial port %s", gps->serial_port.string);
+		return false;
+	}
+	
+	gps->size += bytesread;
+	gps->readsuccess = true;
+
+	char * eol = NULL;
+	if ((eol = strchr(gps->buffer, '\n')) != NULL)
+	{
+		*eol = '\0';	// We now have a complete null-terminated line in our buffer
+
+		regmatch_t match[11];
+		ZERO(match);
 		
-		// copy the line into the line buffer
-		memcpy(line, buffer, len);
-		
+		if (regexec(&gpgga_match, gps->buffer, 11, match, 0) == 0)
 		{
-			static bool rmsline = false;
-			static string_t date = STRING_INIT;
-			static double speed = 0.0;
-			static double heading = 0.0;
-			
-			regmatch_t match[11];
-			ZERO(match);
-			
-			if (rmsline && regexec(&gpgga_match, line, 11, match, 0) == 0)
+			mutex_lock(&gps->update_mutex);
 			{
-				int hh = mtoi(line, &match[1]);
-				int mm = mtoi(line, &match[2]);
-				int ss = mtoi(line, &match[3]);
-				
-				double lat = mtoll(line, &match[4]) * (mtoc(line, &match[5]) == 'S'? -1 : 1);
-				double lon = mtoll(line, &match[6]) * (mtoc(line, &match[7]) == 'W'? -1 : 1);
-				
-				double elev = mtod(line, &match[10]);
-				int sat = mtoi(line, &match[8]);
-				double hdop = mtod(line, &match[9]);
-				
-				mutex_lock(&stream_mutex);
-				{
-					string_clear(&stream);
-					string_append(&stream, "time=%s%02d:%02d:%02dUTC,lat=%f,lon=%f,heading=%f,speed=%f,elevation=%f,satellites=%d,hdop=%f",
-								date.string, hh, mm, ss, lat, lon, heading, speed, elev, sat, hdop);
-				}
-				mutex_unlock(&stream_mutex);
+				int hh = mtoi(gps->buffer, &match[1]);
+				int mm = mtoi(gps->buffer, &match[2]);
+				int ss = mtoi(gps->buffer, &match[3]);
+				string_set(&gps->time, "%02d:%02d:%02dUTC", hh, mm, ss);
+
+				gps->lat = mtoll(gps->buffer, &match[4]) * (mtoc(gps->buffer, &match[5]) == 'S'? -1 : 1);
+				gps->lon = mtoll(gps->buffer, &match[6]) * (mtoc(gps->buffer, &match[7]) == 'W'? -1 : 1);
+
+				gps->elevation = mtod(gps->buffer, &match[10]);
+				gps->satellites = mtoi(gps->buffer, &match[8]);
+				gps->hdop = mtod(gps->buffer, &match[9]);
+
+				gps->lock = true;
+				gps->lastupdate = time(NULL);
 			}
-			else if (regexec(&gprms_match, line, 6, match, 0) == 0)
+			mutex_unlock(&gps->update_mutex);
+		}
+		else if (regexec(&gprms_match, gps->buffer, 6, match, 0) == 0)
+		{
+			mutex_lock(&gps->update_mutex);
 			{
-				speed = mtod(line, &match[1]) * 0.514444444;
-				heading = mtod(line, &match[2]);
-				
-				int dd = mtoi(line, &match[3]);
-				int mm = mtoi(line, &match[4]);
-				int yy = mtoi(line, &match[5]);
-				string_clear(&date);
-				string_append(&date, "20%02d-%02d-%02dT", yy, mm, dd);
-				
-				rmsline = true;
+				gps->speed = mtod(gps->buffer, &match[1]) * 0.514444444;
+				gps->heading = mtod(gps->buffer, &match[2]);
+
+				int dd = mtoi(gps->buffer, &match[3]);
+				int mm = mtoi(gps->buffer, &match[4]);
+				int yy = mtoi(gps->buffer, &match[5]);
+				string_set(&gps->date, "20%02d-%02d-%02dT", yy, mm, dd);
 			}
+			mutex_unlock(&gps->update_mutex);
 		}
 		
-		// clear the line buffer
-		memset(line, 0, sizeof(line));
-		
 		// shift the rest of the buffer data to beginning of buffer
-		memmove(buffer, buffer+len, buffer_size-len);
-		buffer_size -= len;
+		size_t len = strlen(gps->buffer) + 1;
+		memmove(gps->buffer, &gps->buffer[len], gps->size - len);
+		gps->size -= len;
 		
 		// clear the out-of-bounds data in the buffer
-		memset(buffer+buffer_size, 0, sizeof(buffer)-buffer_size);
+		memset(&gps->buffer[gps->size], 0, sizeof(gps->buffer) - gps->size);
 		
 	}
 	
 	return true;
 }
 
-static bool gps_readtimeout()
+static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
-	if (!readsuccess)
+	gps_t * gps = userdata;
+
+	if (!gps->readsuccess)
 	{
 		// Have not read any data from serial port in 2 seconds, close and reopen
 		// fixes bug where computer can't read serial data from GPS
-		LOG(LOG_WARN, "Haven't received any GPS data from serial port '%s'. Retrying connection", serial_port);
+		LOG(LOG_WARN, "Haven't received any GPS data from serial port %s. Retrying connection", gps->serial_port.string);
 	
-		mainloop_removewatch(NULL, gpsfd, FD_READ);
-		close(gpsfd);
-		gpsfd = serial_open(serial_port, B4800);
-		mainloop_addwatch(NULL, gpsfd, FD_READ, gps_newdata, NULL);
+		mainloop_removewatch(NULL, gps->fd, FD_READ);
+		close(gps->fd);
+
+		gps->fd = serial_open(gps->serial_port.string, gps->serial_speed);
+		mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, NULL);
 		
 		return true;
 	}
@@ -179,25 +201,93 @@ static bool gps_readtimeout()
 	}
 }
 
+void * gps_new(char * serial_port, int baud)
+{
+	// Check input
+	speed_t speed = serial_getspeed(baud);
+	if (speed == 0)
+	{
+		LOG(LOG_WARN, "Invalid speed setting on GPS device %s: %d", serial_port, baud);
+		return NULL;
+	}
+
+	gps_t * gps = malloc0(sizeof(gps_t));
+
+	string_set(&gps->serial_port, "%s", serial_port);
+	gps->serial_speed = speed;
+
+	gps->fd = -1;
+	gps->readsuccess = false;
+
+	mutex_init(&gps->update_mutex, M_RECURSIVE);
+	gps->lastupdate = 0;
+	gps->lock = false;
+	string_clear(&gps->date);
+	string_clear(&gps->time);
+	gps->lat = gps->lon = 0.0;
+	gps->heading = gps->speed = 0;
+	gps->elevation = 0.0;
+	gps->satellites = 0;
+	gps->hdop = 0.0;
+
+	// Set up serial port
+	gps->fd = serial_open(gps->serial_port.string, gps->serial_speed);
+	if (gps->fd != -1)
+	{
+		mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, gps);
+		mainloop_addtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps);
+	}
+	else
+	{
+		LOG(LOG_WARN, "Could not open GPS serial device %s", gps->serial_port.string);
+		FREE(gps);
+		return NULL;
+	}
+
+	return gps;
+}
+
 void gps_update(void * object)
 {
-	mutex_lock(&stream_mutex);
+	gps_t * gps = object;
+
+	// Validate the GPS object
+	if (gps == NULL || gps->fd == -1)
 	{
-		if (stream.length > 0)
-		{
-			buffer_t buf = buffer_new(stream.length);
-			memcpy(buffer_data(buf), stream.string, stream.length);
-			OUTPUT_NOCOPY(stream, &buf);
-		}
+		// GPS device not initialized properly
+		return;
 	}
-	mutex_unlock(&stream_mutex);
+
+	mutex_lock(&gps->update_mutex);
+	{
+		OUTPUT(lastupdate, &gps->lastupdate);
+		OUTPUT(lock, &gps->lock);
+		OUTPUT(latitude, &gps->lat);
+		OUTPUT(longitude, &gps->lon);
+		OUTPUT(heading, &gps->heading);
+		OUTPUT(speed, &gps->speed);
+		OUTPUT(elevation, &gps->elevation);
+		OUTPUT(satellites, &gps->satellites);
+		OUTPUT(hdop, &gps->hdop);
+	}
+	mutex_unlock(&gps->update_mutex);
+}
+
+void gps_destroy(void * object)
+{
+	gps_t * gps = object;
+
+	// Validate the GPS object
+	if (gps == NULL || gps->fd == -1)
+	{
+		// GPS device not initialized properly
+		return;
+	}
+
+	close(gps->fd);
 }
 
 void module_init() {
-	// Init the mutex and string stream
-	mutex_init(&stream_mutex, PTHREAD_MUTEX_NORMAL);
-	string_clear(&stream);
-	
 	// Set up $GPGGA regex (NMEA protocol)
 	if (regcomp(&gpgga_match, "^\\$GPGGA,\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\.[[:digit:]]\\{3\\},\\([[:digit:].]\\+\\),"
 					"\\([NS]\\),\\([[:digit:].]\\+\\),\\([EW]\\),[12],\\([[:digit:]]\\+\\),\\(\[[:digit:].]\\+\\),\\(\[[:digit:].\\\\-]\\+\\),"
@@ -207,17 +297,5 @@ void module_init() {
 	    regcomp(&latlong_match, "^\\([[:digit:]]\\{2,3\\}\\)\\([[:digit:]]\\{2\\}\\.[[:digit:]]\\{4\\}\\)$", 0) != 0)
 	{
 		LOG(LOG_FATAL, "Could not compile regular expression to match GPS stream!!");
-	}
-	
-	// Set up serial port
-	gpsfd = serial_open(serial_port, B4800);	
-	if (gpsfd != -1)
-	{
-		mainloop_addwatch(NULL, gpsfd, FD_READ, gps_newdata, NULL);
-		mainloop_addtimer(NULL, "GPS read timeout", NANOS_PER_SECOND * 2, gps_readtimeout, NULL);
-	}
-	else
-	{
-		LOG(LOG_WARN, "Could not open GPS serial device '%s'", serial_port);
 	}
 }

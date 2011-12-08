@@ -71,7 +71,7 @@ void module_init()
 
 	if (err != NULL)
 	{
-		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, err->message.string);
+		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, err->message);
 		exception_free(err);
 		return;
 	}

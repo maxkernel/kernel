@@ -4,9 +4,16 @@
 #include <errno.h>
 #include <stdarg.h>
 
+#include <aul/common.h>
+
 #include <serialize.h>
-#include <kernel.h>
-#include <kernel-priv.h>
+
+#if defined(KERNEL)
+	#include <kernel.h>
+	#include <kernel-priv.h>
+#else
+	#define LOGK(...)	// Undefine LOGK (we are not compiling in kernel space here
+#endif
 
 static size_t headersize(const char * sig)
 {
@@ -81,10 +88,7 @@ char method_returntype(const char * sig)
 			return T_VOID;
 	}
 
-#if defined(KERNEL)
-	LOG(LOG_WARN, "Unknown return type for method signature '%s'", sig);
-#endif
-
+	LOGK(LOG_WARN, "Unknown return type for method signature '%s'", sig);
 	return '?';
 }
 
@@ -114,6 +118,7 @@ int signature_headerlen(const char * sig)
 	return headersize(sig);
 }
 
+#if defined(KERNEL)
 ssize_t serialize_2buffer(buffer_t buffer, const char * sig, ...)
 {
 	va_list args;
@@ -139,6 +144,11 @@ ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
 	{
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				bool v = (bool)va_arg(args, int);
@@ -195,6 +205,11 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 	{
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				copy(args[i], sizeof(bool));
@@ -239,6 +254,8 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 	return wrote;
 }
 
+#endif
+
 ssize_t serialize_2array(void * array, size_t arraylen, const char * sig, ...)
 {
 	va_list args;
@@ -270,6 +287,11 @@ ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_li
 	{
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				bool v = (bool)va_arg(args, int);
@@ -337,6 +359,11 @@ ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void 
 	{
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				copy(args[i], sizeof(bool));
@@ -424,6 +451,11 @@ ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				va_arg(cargs, int);
@@ -512,6 +544,11 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				length += sizeof(bool);
@@ -571,18 +608,100 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
 {
+	LABELS(err_nomem);
+
 	va_list args;
 	va_start(args, arraylen);
 
-	// TODO - finish me
+	unsigned int i = 0;
+	size_t length = 0;
+
+	void copy(void * ptr, size_t s)
+	{
+		if ((length + s) > arraylen)
+		{
+			goto err_nomem;
+		}
+		memcpy(ptr, (char *)array + length, s);
+		length += s;
+	}
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_VOID:
+			{
+				break;
+			}
+
+			case T_BOOLEAN:
+			{
+				bool * ptr = va_arg(args, bool *);
+				copy(ptr, sizeof(bool));
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				int * ptr = va_arg(args, int *);
+				copy(ptr, sizeof(int));
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				double * ptr = va_arg(args, double *);
+				copy(ptr, sizeof(double));
+				break;
+			}
+
+			case T_CHAR:
+			{
+				char * ptr = va_arg(args, char *);
+				copy(ptr, sizeof(char));
+				break;
+			}
+
+			case T_STRING:
+			{
+				char ** ptr = va_arg(args, char **);
+				*ptr = (char *)array + length;
+				length += strlen(*ptr) + 1;
+
+				if (length > arraylen)
+				{
+					goto err_nomem;
+				}
+
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not deserialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		i++;
+	}
 
 	va_end(args);
 
+	return length;
+
+err_nomem:
+	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
+	errno = ENOBUFS;
 	return -1;
 }
 
 ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, void * array, size_t arraylen)
 {
+	LABELS(err_nomem);
+
 	// Get the header size
 	size_t header_size = headersize(sig);
 	if (header_size > headerlen)
@@ -604,6 +723,11 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				length += sizeof(bool);
@@ -648,11 +772,23 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 			}
 		}
 
+		if (length > arraylen)
+		{
+			goto err_nomem;
+		}
+
 		i++;
 	}
 
-	return header_size;
+	return length;
+
+err_nomem:
+	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
+	errno = ENOBUFS;
+	return -1;
 }
+
+#if defined(KERNEL)
 
 ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)
 {
@@ -690,6 +826,11 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 	{
 		switch (sig[i])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				copy(sizeof(bool));
@@ -766,6 +907,8 @@ err_bufsize:
 	errno = ENOSPC;
 	return -1;
 }
+
+#endif
 
 /* ------------------------------------------------------------------- */
 #if 0

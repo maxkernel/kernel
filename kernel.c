@@ -49,7 +49,7 @@ static char cache_syscalls[CACHESTR_SIZE] = {0};
 static char cache_modules[CACHESTR_SIZE] = {0};
 
 static struct {
-	//char * groundstation;
+	// TODO
 } args = { };
 
 /*------------ SIGNALS -------------*/
@@ -69,10 +69,10 @@ static void sig_coredump(const char * name, const char * code)
 	string_t file = string_new("%s/%s.%s.log", LOGDIR, code, timebuf);
 	string_t cmd = string_new("/bin/bash %s/debug/core.debug.bash %d %s '%s'", INSTALL, getpid(), file.string, name);
 
-	//execute the script file the uses gdb to grab a stack trace
+	// Execute the script file the uses gdb to grab a stack trace
 	system(cmd.string);
 
-	//now output the log
+	// Now output the log
 	FILE * fp = fopen(file.string, "a");
 	if (fp != NULL)
 	{
@@ -113,14 +113,7 @@ static error_t parse_args(int key, char * arg, struct argp_state * state)
 {
 	switch (key)
 	{
-		/*
-		case 'g':
-		{
-			args.groundstation = calloc(strlen(arg)+1, sizeof(char));
-			strcpy(args.groundstation, arg);
-			break;
-		}
-		*/
+		// TODO
 		
 	}
 	
@@ -129,7 +122,6 @@ static error_t parse_args(int key, char * arg, struct argp_state * state)
 
 static struct argp_option arg_opts[] = {
 	//TODO - add more args
-	//{ "ground-station", 'g', "IP", 0, "Use IP as ground station IP, don't attempt to autodetect", 0 },
 	{ 0 }
 };
 
@@ -726,6 +718,7 @@ int main(int argc, char * argv[])
 	log_openfile(LOGDIR "/" LOGFILE, NULL);
 	log_addlistener(log_appendbuf, NULL, NULL);
 	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
+	LOGK(LOG_DEBUG, "Kernel compiled %s %s", __DATE__, __TIME__);
 
 	//log time
 	{
@@ -781,7 +774,7 @@ int main(int argc, char * argv[])
 		memfs_init(&err);
 		if (err != NULL)
 		{
-			LOGK(LOG_FATAL, "%s", err->message.string);
+			LOGK(LOG_FATAL, "%s", err->message);
 			// Will exit
 		}
 	}
@@ -1044,7 +1037,7 @@ int main(int argc, char * argv[])
 		memfs_destroy(&err);
 		if (err != NULL)
 		{
-			LOGK(LOG_ERR, "%s", err->message.string);
+			LOGK(LOG_ERR, "%s", err->message);
 			exception_free(err);
 		}
 	}

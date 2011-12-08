@@ -1,277 +1,323 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <unistd.h>
-#include <string.h>
-#include <stdarg.h>
-#include <glib.h>
-#include <gnet.h>
+#include <stdio.h>
+#include <errno.h>
+#include <poll.h>
 
-#include <serialize.h>
-#include <buffer.h>
-#include <array.h>
+#include <aul/net.h>
+
 #include <console.h>
+#include <message.h>
+#include <serialize.h>
 #include <max.h>
 
-#define LOCAL		1
-#define REMOTE		2
 
-#define DOM			g_quark_from_static_string("libmax")
-
-#define E_CON		1001
-#define E_NOCON		1002
-#define E_READ		1003
-#define E_WRITE		1004
-#define E_SER		1005
-#define E_SIG		1006
-#define E_SYSCALL	1007
-#define E_SYNC		1008
-
-int max_asyscall(maxhandle_t * hand, const char * syscall, const char * signature, void * return_value, void ** args)
+typedef struct
 {
-	GError * err = NULL;
-	
-	//clear the error before executing
-	max_clearerror(hand);
+	const char * name;
+	const char * sig;
+	const char * description;
 
-	if (hand->sock == NULL)
+	hashentry_t syscalls_entry;
+} syscall_t;
+
+#if 0
+#define bad_malloc(handle, ptr) __bad_malloc(handle, ptr, __FILE__, __LINE__)
+static inline bool __bad_malloc(maxhandle_t * hand, void * ptr, const char * file, unsigned int line)
+{
+	if (ptr == NULL)
 	{
-		//sock not connected
-		hand->gerror = g_error_new_literal(DOM, E_NOCON, "Not connected to kernel");
-		return -1;
+		exception_make(hand->error, ENOMEM, "Failed to allocate memory (%s:%d)", file, line);
+		hand->memerr();
+		return true;
 	}
 
-	buffer_t pbuf = aserialize(method_params(signature), args);
-	buffer_t buf = serialize("cssx", T_METHOD, syscall, signature, pbuf);
-	if (pbuf == NULL || buf == NULL)
-	{
-		hand->gerror = g_error_new_literal(DOM, E_SER, "Error during message serialization");
-		buffer_free(pbuf);
-		buffer_free(buf);
-		return -1;
-	}
-	buffer_free(pbuf);
+	return false;
+}
+#endif
 
-	gsize len = buffer_size(buf);
-	gsize sent, read;
-	GIOStatus status;
-	
-	status = g_io_channel_write_chars((GIOChannel *)hand->sock_io, (char *)buf, len, &sent, &err);
-	buffer_free(buf);
 
-	if (status != G_IO_STATUS_NORMAL || err != NULL || sent != len)
-	{
-		hand->gerror = g_error_new(DOM, E_WRITE, "Could not write to IO stream: %s", (err == NULL)? "??" : err->message);
+void max_init(maxhandle_t * hand)
+{
+	PZERO(hand, sizeof(maxhandle_t));
 
-		if (err != NULL)
-		{
-			g_error_free(err);
-		}
-		return -1;
-	}
+	hand->malloc = malloc;
+	hand->free = free;
+	hand->memerr = max_memerr;
 
-	//receive response
-	//switching from buffer_* mem functions to malloc/realloc/free functions
-	buf = g_malloc0(sizeof(size_t)); //receive size first
+	HASHTABLE_INIT(&hand->syscalls, hash_str, hash_streq);
 
-	status = g_io_channel_read_chars((GIOChannel *)hand->sock_io, (char *)buf, sizeof(size_t), &read, &err);
-	if (status != G_IO_STATUS_NORMAL || err != NULL || read != sizeof(size_t))
-	{
-		hand->gerror = g_error_new(DOM, E_READ, "Could not read from IO stream: %s", (err == NULL)? "??" : err->message);
+	hand->sock = -1;
+	mutex_init(&hand->sock_mutex, M_RECURSIVE);
 
-		if (err != NULL)
-		{
-			g_error_free(err);
-		}
-		g_free(buf);
-		return -1;
-	}
-
-	buf = g_realloc(buf, *(size_t *)buf); //now receive rest
-	len = buffer_size(buf);
-
-	status = g_io_channel_read_chars((GIOChannel *)hand->sock_io, (char *)buf+sizeof(size_t), len-sizeof(size_t), &read, &err);
-	if (status != G_IO_STATUS_NORMAL || err != NULL || read != len-sizeof(size_t))
-	{
-		hand->gerror = g_error_new(DOM, E_READ, "Could not read from IO stream: %s", (err == NULL)? "??" : err->message);
-
-		if (err != NULL)
-		{
-			g_error_free(err);
-		}
-		g_free(buf);
-		return -1;
-	}
-
-	//deserialize
-	void ** arg_array = g_malloc0(param_arraysize("cssx"));
-	if (!deserialize("cssx", arg_array, buf))
-	{
-		//serialize error
-		hand->gerror = g_error_new_literal(DOM, E_SER, "Error during deserialization");
-		goto done;
-	}
-
-	char type = *(char *)arg_array[0];
-	char * name = *(char **)arg_array[1];
-	char * sig = *(char **)arg_array[2];
-	buffer_t params = *(buffer_t *)arg_array[3];
-
-	if (strcmp(name, syscall) != 0)
-	{
-		//did not respond with correct name (sync error)
-		hand->gerror = g_error_new(DOM, E_SYNC, "Got response to other syscall! (given: %s, gotten: %s)", syscall, name);
-		goto done;
-	}
-
-	switch (type)
-	{
-		case T_RETURN:
-		{
-			if (return_value == NULL)
-				break;
-
-			switch (sig[0])
-			{
-				#define __max_asyscall_elem(t1, t2) \
-					case t1: { \
-						*(t2 *)return_value = *(t2 *)buffer_data(params); \
-						break; }
-
-				__max_asyscall_elem(T_BOOLEAN, bool)
-				__max_asyscall_elem(T_INTEGER, int)
-				__max_asyscall_elem(T_DOUBLE, double)
-				__max_asyscall_elem(T_CHAR, char)
-
-				case T_STRING:
-				{
-					char * s = (gchar *)buffer_data(params);
-					size_t l = strlen(s)+1;
-					char * v = malloc(l);
-					strncpy(v, s, l);
-					*(char **)return_value = v;
-					break;
-				}
-
-				case T_ARRAY_BOOLEAN:
-				case T_ARRAY_INTEGER:
-				case T_ARRAY_DOUBLE:
-				case T_BUFFER:
-				{
-					buffer_t v = buffer_copy((buffer_t)buffer_data(params));
-					*(buffer_t *)return_value = v;
-					break;
-				}
-			}
-
-			break;
-		}
-
-		case T_ERROR:
-		{
-			hand->gerror = g_error_new(DOM, E_SYSCALL, "Syscall returned an error: %s", (char *)buffer_data(params));
-			break;
-		}
-	}
-
-done:
-	g_free(arg_array);
-	g_free(buf);
-	
-	return (hand->gerror == NULL)? 0 : -1;
+	hand->timeout = DEFAULT_TIMEOUT;
 }
 
-int max_vsyscall(maxhandle_t * hand, const char * syscall, const char * signature, void * return_value, va_list args)
+void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc)
 {
-	max_clearerror(hand);
-
-	const char * sig = method_params(signature);
-	void ** arg_array = vparam_pack(sig, args);
-	int ret = max_asyscall(hand, syscall, signature, return_value, arg_array);
-	param_free(arg_array);
-	return ret;
+	if (mfunc != NULL) hand->malloc = mfunc;
+	if (ffunc != NULL) hand->free = ffunc;
+	if (efunc != NULL) hand->memerr = efunc;
 }
 
-int max_syscall(maxhandle_t * hand, const char * syscall, const char * signature, void * return_value, ...)
+void max_memerr()
 {
-	va_list args;
-	va_start(args, return_value);
-	int ret = max_vsyscall(hand, syscall, signature, return_value, args);
-	va_end(args);
-	return ret;
+	fprintf(stderr, "Error: Out of memory\n");
+	fflush(NULL);
+	exit(EXIT_FAILURE);
 }
 
-maxhandle_t * max_local()
+
+
+bool max_connectlocal(maxhandle_t * hand, exception_t ** err)
 {
-	gnet_init();
-	maxhandle_t * hand = g_malloc0(sizeof(maxhandle_t));
-
-	if (!g_file_test(CONSOLE_SOCKFILE, G_FILE_TEST_EXISTS))
-	{
-		hand->gerror = g_error_new_literal(DOM, E_CON, "Could not connect to local kernel");
-		return hand;
-	}
-
-	GUnixSocket * sock = gnet_unix_socket_new(CONSOLE_SOCKFILE);
-	if (sock == NULL)
-	{
-		hand->gerror = g_error_new_literal(DOM, E_CON, "Could not connect to local kernel");
-		return hand;
-	}
-
-	hand->sock_type = LOCAL;
-	hand->sock = sock;
-	hand->sock_io = gnet_unix_socket_get_io_channel(sock);
-
-	return hand;
+	return max_connect(hand, err, HOST_UNIXSOCK CONSOLE_SOCKFILE);
 }
 
-maxhandle_t * max_remote(const char * host)
+bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host)
 {
-	gnet_init();
-	maxhandle_t * hand = g_malloc0(sizeof(maxhandle_t));
-
-	GTcpSocket * sock = gnet_tcp_socket_connect(host, CONSOLE_TCPPORT);
-	if (sock == NULL)
+	if (exception_check(err))
 	{
-		hand->gerror = g_error_new(DOM, E_CON, "Could not connect to remote kernel (host: %s, port: %d)", host, CONSOLE_TCPPORT);
-		return hand;
+		// Exception already set
+		return false;
 	}
 
-	gnet_tcp_socket_set_tos(sock, GNET_TOS_LOWDELAY);
+	if (hand->sock != -1)
+	{
+		// Socket already open
+		exception_set(err, EALREADY, "Socket already open!");
+		return false;
+	}
 
-	hand->sock_type = REMOTE;
-	hand->sock = sock;
-	hand->sock_io = gnet_tcp_socket_get_io_channel(sock);
+	if (strprefix(host, HOST_UNIXSOCK))
+	{
+		// Connect over unix socket
+		const char * file = &host[strlen(HOST_UNIXSOCK)];
+		int sock = unix_client(file, err);
 
-	return hand;
+		if (exception_check(err))
+		{
+			// Something bad happened while setting up the unix socket
+			return false;
+		}
+
+		hand->sock = sock;
+	}
+	else if (strprefix(host, HOST_IP))
+	{
+		// Connect directly to IP
+		exception_set(err, ENOSYS, "Unsupported (future release)");
+		return false;
+	}
+	else if (strprefix(host, HOST_UID))
+	{
+		// Connect to the kernel with the given UID
+		exception_set(err, ENOSYS, "Unsupported (future release)");
+		return false;
+	}
+	else
+	{
+		exception_set(err, EINVAL, "Unknown protocol/host: %s", host);
+		return false;
+	}
+
+	return true;
 }
 
 void max_close(maxhandle_t * hand)
 {
-	//TODO - finish me
+	close(hand->sock);
 }
 
-
-int max_iserror(maxhandle_t * hand)
+bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...)
 {
-	return hand->gerror != NULL;
+	va_list args;
+	va_start(args, sig);
+	bool r = max_vsyscall(hand, err, ret, syscall, sig, args);
+	va_end(args);
+
+	return r;
 }
 
-void max_clearerror(maxhandle_t * hand)
+bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args)
 {
-	if (hand->gerror != NULL)
+	if (exception_check(err))
 	{
-		g_error_free((GError *)hand->gerror);
-		hand->gerror = NULL;
+		// Error already set
+		return false;
 	}
+
+	if (!message_vwritefd(hand->sock, T_METHOD, syscall, sig, args))
+	{
+		exception_set(err, errno, "Could not send syscall %s rpc: %s", syscall, strerror(errno));
+		return false;
+	}
+
+	struct pollfd pfd;
+	pfd.fd = hand->sock;
+	pfd.events = POLLIN | POLLERR;
+
+	msgbuffer_t msgbuf;
+	message_clear(&msgbuf);
+
+	errno = 0;
+	while (message_getstate(&msgbuf) < P_DONE)
+	{
+		// TODO - we should probably wait a *maximum* of hand->timeout throughout *all* poll's, not just for each poll
+
+		int status = poll(&pfd, 1, hand->timeout);
+		if (status < 0)
+		{
+			exception_set(err, errno, "Could not poll for response to syscall %s: %s", syscall, strerror(errno));
+			return false;
+		}
+		else if (status == 0)
+		{
+			exception_set(err, ETIMEDOUT, "Timed out waiting for response to syscall %s", syscall);
+			return false;
+		}
+
+		message_readfd(hand->sock, &msgbuf);
+	}
+
+	if (message_getstate(&msgbuf) != P_DONE)
+	{
+		exception_set(err, errno, "Error while reading syscall %s response", syscall);
+		return false;
+	}
+
+	message_t * msg = message_getmessage(&msgbuf);
+
+	return_t r = {
+		.handle = hand,
+		.type = method_returntype(msg->sig),
+	};
+
+	void copy(const void * ptr, size_t s)
+	{
+		memcpy(&r.data, ptr, s);
+	}
+
+	switch (r.type)
+	{
+		case T_VOID:
+		{
+			break;
+		}
+
+		case T_BOOLEAN:
+		{
+			copy(msg->body[0], sizeof(bool));
+			break;
+		}
+
+		case T_INTEGER:
+		{
+			copy(msg->body[0], sizeof(int));
+			break;
+		}
+
+		case T_DOUBLE:
+		{
+			copy(msg->body[0], sizeof(double));
+			break;
+		}
+
+		case T_CHAR:
+		{
+			copy(msg->body[0], sizeof(char));
+			break;
+		}
+
+		case T_STRING:
+		{
+			char ** strp = msg->body[0];
+			copy(*strp, strlen(*strp)+1);
+			break;
+		}
+
+		default:
+		{
+			exception_set(err, EINVAL, "Unknown return type returned from syscall %s: %c", syscall, r.type);
+			return false;
+		}
+	}
+
+
+	if (ret != NULL)
+	{
+		memcpy(ret, &r, sizeof(return_t));
+	}
+
+	return true;
 }
 
-const char * max_error(maxhandle_t * hand)
+#if 0
+return_t max_asyscall(maxhandle_t * hand, const char * syscall, const char * sig, void ** args)
 {
-	if (!max_iserror(hand))
-		return "no error";
+	char buffer[CONSOLE_BUFFERMAX];
 
-	return ((GError *)hand->gerror)->message;
+	errno = 0;
+
+	ssize_t hlength = serialize_2array(buffer, sizeof(buffer), "icss", CONSOLE_FRAMEING, T_METHOD, syscall, sig);
+	if (hlength == -1)
+	{
+		return make_error(hand, errno, "Could not serialize packet header");
+	}
+
+	ssize_t blength = aserialize_2array(buffer+hlength, sizeof(buffer) - hlength, method_params(sig), args);
+	if (blength == -1)
+	{
+		return make_error(hand, errno, "Could not serialize packet parameters");
+	}
+
+	ssize_t wrote = write(hand->sock, buffer, hlength + blength);
+	if (wrote != (hlength + blength))
+	{
+		return make_error(hand, (errno != 0)? errno : EIO, "Could not write all data");
+	}
+
+	struct pollfd pfd;
+	pfd.fd = hand->sock;
+	pfd.events = POLLIN | POLLERR;
+
+	int status = poll(&pfd, 1, hand->timeout);
+	if (status < 0)
+	{
+		return make_error(hand, errno, "Could not poll for response to syscall");
+	}
+	else if (status == 0)
+	{
+		return make_error(hand, ETIMEDOUT, "Timed out waiting for response");
+	}
+
+	if (pfd.revents & POLLIN)
+	{
+		// Parse out response
+
+		//TODO - finish this function!
+		return_t ret;
+		ret.handle = hand;
+		ret.type = T_VOID;
+
+		return ret;
+	}
+	else if (pfd.revents & POLLERR)
+	{
+		// Error happened on the file descriptor
+		return make_error(hand, EIO, "Error while polling file descriptor");
+	}
+
+	return make_error(hand, EIO, "Should not have gotten here!");
+}
+#endif
+
+void max_settimeout(maxhandle_t * hand, int newtimeout)
+{
+	hand->timeout = newtimeout;
 }
 
-
+int max_gettimeout(maxhandle_t * hand)
+{
+	return hand->timeout;
+}

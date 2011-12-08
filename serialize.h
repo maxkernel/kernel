@@ -5,7 +5,11 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#include <buffer.h>
+#if defined(KERNEL)
+	#include <buffer.h>
+#endif
+
+#include <kernel-types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,9 +21,11 @@ bool method_isequal(const char * sig1, const char * sig2);
 
 int signature_headerlen(const char * sig);
 
+#if defined(KERNEL)
 ssize_t serialize_2buffer(buffer_t buffer, const char * sig, ...);
 ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args);
 ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args);
+#endif
 
 ssize_t serialize_2array(void * array, size_t arraylen, const char * sig, ...);
 ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_list args);
@@ -31,8 +37,10 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...);
 ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, void * array, size_t arraylen);
-ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer);
 
+#if defined(KERNEL)
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer);
+#endif
 
 #if 0
 buffer_t serialize(const char * sig, ...);

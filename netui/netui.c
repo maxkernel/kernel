@@ -123,7 +123,7 @@ void module_init()
 	ctx = http_new(port, NULL, &err);
 	if (err != NULL)
 	{
-		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message.string);
+		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message);
 		exception_free(err);
 		return;
 	}

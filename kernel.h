@@ -10,6 +10,8 @@
 #include <aul/log.h>
 #include <aul/list.h>
 
+#include <kernel-types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,31 +19,6 @@ extern "C" {
 #define	VERSION			"0.1"
 #define	PROVIDER		"Senseta"
 #define	PROVIDER_URL	"http://www.senseta.com/"
-
-#define T_METHOD		'M'
-#define T_ERROR			'E'
-#define T_RETURN		'R'
-#define T_VOID			'v'
-#define T_BOOLEAN		'b'
-#define T_INTEGER		'i'
-#define T_DOUBLE		'd'
-#define T_CHAR			'c'
-#define T_STRING		's'
-#define T_ARRAY_BOOLEAN	'B'
-#define T_ARRAY_INTEGER	'I'
-#define T_ARRAY_DOUBLE	'D'
-#define T_BUFFER		'x'
-
-#define S_VOID			"v"
-#define S_BOOLEAN		"b"
-#define S_INTEGER		"i"
-#define S_DOUBLE		"d"
-#define S_CHAR			"c"
-#define S_STRING		"s"
-#define S_ARRAY_BOOLEAN	"B"
-#define S_ARRAY_INTEGER	"I"
-#define S_ARRAY_DOUBLE	"D"
-#define S_BUFFER		"x"
 
 #if defined(ALPHA) || defined(BETA)
   #define LOG(level, format, ...) log_write(level, "Module", "[%s in %s at %d]: " format, __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__)
@@ -140,7 +117,7 @@ void kthread_newthread(const char * name, int priority, handler_f threadfunc, ha
 bool kthread_requeststop();
 
 #define SYSCALL(name, ...) syscall_exec(name, ## __VA_ARGS__)
-#define SYSCALL_BUFFERMAX			128
+#define SYSCALL_BUFFERMAX		128
 bool syscall_exists(const char * name, const char * sig);
 void * syscall_exec(const char * name, ...);
 void * vsyscall_exec(const char * name, va_list args);

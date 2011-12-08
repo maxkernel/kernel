@@ -13,7 +13,10 @@ MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= ALPHA
 
-MODULES		= netui discovery console service httpserver network map propeller-ssc jpegcompress webcam gps maxpod test
+MODULES		= console netui httpserver ssc-32 map gps discovery
+OLD_MODULES = service network jpegcompress propeller-ssc webcam maxpod test
+UTILS		= 
+OLD_UTILS	= syscall client autostart kdump modinfo log
 HEADERS		= kernel.h buffer.h array.h serialize.h 
 
 SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer2.c serialize.c trigger.c exec.c luaenv.c math.c
@@ -55,7 +58,7 @@ all: prepare prereq $(TARGET)
 	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
-	( echo "In utils" >>buildlog && $(MAKE) -C utils 2>>buildlog) || ( cat buildlog && false )
+	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
 	cat buildlog
 
@@ -89,7 +92,7 @@ clean:
 rebuild: clean all
 
 depend: $(SRCS)
-	makedepend $(DEFINES) $(INCLUDES) -Y $^ 2>/dev/null
+	makedepend $(DEFINES) $(INCLUDES) $^ 2>/dev/null
 	$(MAKE) -C aul depend
 	$(MAKE) -C libmax depend
 	$(MAKE) -C unittest depend

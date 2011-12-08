@@ -1,15 +1,13 @@
 #ifndef __CONSOLE_H
 #define __CONSOLE_H
 
-#include <kernel.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // If you change these, you must also change the corresponding defines in libmax
 
-#define CONSOLE_BUFFERMAX		SYSCALL_BUFFERMAX
+#define CONSOLE_BUFFERMAX		128
 #define CONSOLE_HEADERSIZE		10
 #define CONSOLE_BUFFERS			5
 

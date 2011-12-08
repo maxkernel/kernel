@@ -68,7 +68,7 @@ void * asyscall_exec(const char * name, void ** args)
 				// BOOL is 1 byte
 				rtype = &ffi_type_uint8;	break;
 			case T_INTEGER:
-				rtype = &ffi_type_sint;		break;
+				rtype = &ffi_type_sint32;	break;
 			case T_DOUBLE:
 				rtype = &ffi_type_double;	break;
 			case T_CHAR:
@@ -102,7 +102,7 @@ void * asyscall_exec(const char * name, void ** args)
 						// BOOL is 1 byte
 						atype[sigi] = &ffi_type_uint8;		break;
 					case T_INTEGER:
-						atype[sigi] = &ffi_type_sint;		break;
+						atype[sigi] = &ffi_type_sint32;		break;
 					case T_DOUBLE:
 						atype[sigi] = &ffi_type_double;		break;
 					case T_CHAR:
