@@ -3,37 +3,44 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <time.h>
 
-#include <aul/common.h>
 #include <aul/exception.h>
 #include <aul/hashtable.h>
 #include <aul/mutex.h>
 
+#include <kernel-types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define HOST_UNIXSOCK		"unix:"
+#define HOST_IP				"ip:"
+#define HOST_UID			"uid:"
 
-#define T_METHOD		'M'
-#define T_ERROR			'E'
-#define T_RETURN		'R'
-#define T_VOID			'v'
-#define T_BOOLEAN		'b'
-#define T_INTEGER		'i'
-#define T_DOUBLE		'd'
-#define T_CHAR			'c'
-#define T_STRING		's'
+#define DEFAULT_TIMEOUT		100
 
-#define HOST_UNIXSOCK	"unix:"
-#define HOST_IP			"ip:"
-#define HOST_UID		"uid:"
+#define SYSCALL_CACHE_SIZE			75
+#define SYSCALL_CACHE_NAMELEN		50
+#define SYSCALL_CACHE_SIGLEN		10		// TODO - merge this with CONSOLE_HEADERSIZE
 
-#define DEFAULT_TIMEOUT	100
 
 typedef void * (*malloc_f)(size_t size);
 typedef void (*free_f)(void * ptr);
 typedef void (*memerr_f)();
+
+
+typedef struct
+{
+	char name[SYSCALL_CACHE_NAMELEN];
+	char sig[SYSCALL_CACHE_SIGLEN];
+	//const char * description;		// TODO - support description in syscall cache
+	time_t last_access;
+
+	hashentry_t syscalls_entry;
+	list_t syscalls_list;
+} syscall_t;
 
 typedef struct
 {
@@ -41,11 +48,13 @@ typedef struct
 	free_f free;
 	memerr_f memerr;
 
-	hashtable_t syscalls;
+	void * syscall_cache;
 
 	int sock;
 	mutex_t sock_mutex;
+
 	int timeout;
+	void * userdata;
 } maxhandle_t;
 
 typedef struct
@@ -53,6 +62,7 @@ typedef struct
 	maxhandle_t * handle;
 
 	char type;
+	char sig;
 	union
 	{
 		bool t_boolean;
@@ -65,13 +75,13 @@ typedef struct
 } return_t;
 
 
-void max_init(maxhandle_t * hand);
+void max_initialize(maxhandle_t * hand);
 void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc);
 void max_memerr();
 
 bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host);
 bool max_connectlocal(maxhandle_t * hand, exception_t ** err);
-void max_close(maxhandle_t * hand);
+void * max_destroy(maxhandle_t * hand);
 
 string_t max_syscallsig(maxhandle_t * hand, const char * name);
 bool max_syscallcache(maxhandle_t * hand, const char * name, const char * sig);
@@ -79,10 +89,21 @@ bool max_syscallexists(maxhandle_t * hand, const char * name, const char * sig);
 
 bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...);
 bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args);
-//return_t max_asyscall(maxhandle_t * hand, const char * syscall, const char * sig, void ** args);
+bool max_asyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, void ** args);
+
+void max_syscallcache_enable(maxhandle_t * hand);
+void max_syscallcache_destroy(maxhandle_t * hand);
+syscall_t * max_syscallcache_lookup(maxhandle_t * hand, exception_t ** err, const char * name);
+bool max_syscallcache_exists(maxhandle_t * hand, const char * name, const char * sig);
+const char * max_syscallcache_getsig(maxhandle_t * hand, const char * name);
 
 void max_settimeout(maxhandle_t * hand, int newtimeout);
 int max_gettimeout(maxhandle_t * hand);
+void max_setuserdata(maxhandle_t * hand, void * userdata);
+void * max_getuserdata(maxhandle_t * hand);
+
+size_t max_getbuffersize(maxhandle_t * hand);
+size_t max_getheadersize(maxhandle_t * hand);
 
 #ifdef __cplusplus
 }

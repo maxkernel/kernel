@@ -53,7 +53,7 @@ static int mt_kernentry_index(lua_State * L)
 
 		if (block == NULL)
 		{
-			luaL_error(L, "Module %s has no member block named %s", module->path, entry->name);
+			return luaL_error(L, "Module %s has no member block named %s", module->path, entry->name);
 		}
 
 		lua_pushlightuserdata(L, block);
@@ -76,8 +76,7 @@ static int mt_kernentry_index(lua_State * L)
 	}
 	else
 	{
-		luaL_error(L, "%s entry '%s' has no member '%s'", (entry->type == K_MODULE)? "Module" : "Block", entry->name, key);
-		return 0;
+		return luaL_error(L, "%s entry '%s' has no member '%s'", (entry->type == K_MODULE)? "Module" : "Block", entry->name, key);
 	}
 }
 
@@ -163,7 +162,7 @@ static int l_include(lua_State * L)
 	const char * filepath = resolvepath(file, PATH_FILE);
 	if (filepath == NULL)
 	{
-		luaL_error(L, "Include: Could not resolve file %s", file);
+		return luaL_error(L, "Include: Could not resolve file %s", file);
 	}
 	else
 	{
@@ -177,7 +176,7 @@ static int l_include(lua_State * L)
 		}
 		else
 		{
-			luaL_error(L, "Lua could not execute file %s: %s", file, lua_tostring(L, -1));
+			return luaL_error(L, "Lua could not execute file %s: %s", file, lua_tostring(L, -1));
 		}
 	}
 
@@ -237,7 +236,7 @@ static int l_newblock(lua_State * L)
 	block_inst_t * blk_inst = io_newblock(blk, params);
 	if (blk_inst == NULL)
 	{
-		luaL_error(L, "Could not create block instance of block %s in module %s", blk->name, blk->module->path);
+		return luaL_error(L, "Could not create block instance of block %s in module %s", blk->name, blk->module->path);
 	}
 
 	for (index=0; index<strlen(sig); index++)
@@ -336,17 +335,17 @@ static int l_route(lua_State * L)
 	// Do some error checking
 	if (bout == NULL)
 	{
-		luaL_error(L, "Could not route %s.%s, Not an output!", out_inst->block->name, out->name);
+		return luaL_error(L, "Could not route %s.%s, Not an output!", out_inst->block->name, out->name);
 	}
 	if (bin == NULL)
 	{
-		luaL_error(L, "Could not route %s.%s, Not an input!", in_inst->block->name, in->name);
+		return luaL_error(L, "Could not route %s.%s, Not an input!", in_inst->block->name, in->name);
 	}
 
 	// Now route it
 	if (!io_route(bout, bin))
 	{
-		luaL_error(L, "Failed to route IO %s.%s to %s.%s", out_inst->block->name, out->name, in_inst->block->name, in->name);
+		return luaL_error(L, "Failed to route IO %s.%s to %s.%s", out_inst->block->name, out->name, in_inst->block->name, in->name);
 	}
 
 	return 0;
@@ -369,12 +368,12 @@ static int l_newrategroup(lua_State * L)
 	{
 		if (index == GROUP_MAX)
 		{
-			luaL_error(L, "Too many rategroup items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+			return luaL_error(L, "Too many rategroup items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
 		}
 
 		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1))
 		{
-			luaL_error(L, "Encountered unknown value for item %s in rategroup table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
+			return luaL_error(L, "Encountered unknown value for item %s in rategroup table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
 		}
 
 		if (lua_rawequal(L, -1, -4))
@@ -382,7 +381,7 @@ static int l_newrategroup(lua_State * L)
 			kernentry_t * entry = lua_touserdata(L, -2);
 			if (entry->type != K_BLOCKINST || strlen(entry->name) != 0)
 			{
-				luaL_error(L, "Invalid type for item %s in rategroup table", lua_tostring(L, -3));
+				return luaL_error(L, "Invalid type for item %s in rategroup table", lua_tostring(L, -3));
 			}
 
 			insts[index++] = (block_inst_t *)entry->data;
@@ -406,12 +405,12 @@ static int l_newrategroup(lua_State * L)
 
 			if (!found)
 			{
-				luaL_error(L, "Invalid type for item %s in rategroup table, module does not have a static block instance", lua_tostring(L, -3));
+				return luaL_error(L, "Invalid type for item %s in rategroup table, module does not have a static block instance", lua_tostring(L, -3));
 			}
 		}
 		else
 		{
-			luaL_error(L, "Encountered unknown userdata value for item %s in rategroup table", lua_tostring(L, -3));
+			return luaL_error(L, "Encountered unknown userdata value for item %s in rategroup table", lua_tostring(L, -3));
 		}
 
 
@@ -475,19 +474,19 @@ static int l_newsyscall(lua_State * L)
 	{
 		if (index == GROUP_MAX)
 		{
-			luaL_error(L, "Too many syscall member items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+			return luaL_error(L, "Too many syscall member items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
 		}
 
 		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1) || !lua_rawequal(L, -1, -4))
 		{
-			luaL_error(L, "Encountered unknown value for item %s in syscall table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
+			return luaL_error(L, "Encountered unknown value for item %s in syscall table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
 		}
 		lua_pop(L, 1);
 
 		kernentry_t * entry = lua_touserdata(L, -1);
 		if (strlen(entry->name) == 0)
 		{
-			luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
+			return luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
 		}
 
 		const block_inst_t * in_inst = NULL;
@@ -518,7 +517,7 @@ static int l_newsyscall(lua_State * L)
 
 				if (!found)
 				{
-					luaL_error(L, "Invalid module for item %s in syscall member table. Module does not have a static block.", lua_tostring(L, -2));
+					return luaL_error(L, "Invalid module for item %s in syscall member table. Module does not have a static block.", lua_tostring(L, -2));
 				}
 
 				break;
@@ -539,7 +538,7 @@ static int l_newsyscall(lua_State * L)
 
 		if (bin == NULL)
 		{
-			luaL_error(L, "Invalid syscall input %s.%s for syscall %s", in_inst->block->name, entry->name, name);
+			return luaL_error(L, "Invalid syscall input %s.%s for syscall %s", in_inst->block->name, entry->name, name);
 		}
 
 		inputs[index++] = bin;

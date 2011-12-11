@@ -1,21 +1,31 @@
-OBJECTS		= maxlua.o
-PACKAGES	= glib-2.0 lua5.1 
-DEFINES		=
-
+SRCS		= maxlua.c
 TARGET		= max.so
-LIBS		= $(shell pkg-config --libs $(PACKAGES)) -L.. -lmax
-CFLAGS		= -pipe -ggdb3 -Wall -I. -I.. -I../.. -DLIBMAX -DLUA_LIB $(DEFINES) -fpic $(shell pkg-config --cflags $(PACKAGES))
+PACKAGES	= lua5.1
+INCLUDES	= -I. -I../.. -I../include -I../../aul/include
+DEFINES		= -DLIBMAX -DLUA_LIB -D_GNU_SOURCE
+CFLAGS		= -pipe -ggdb3 -Wall -fpic -shared $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
+LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -lmax
+LFLAGS		= -L..
+
+OBJS		= $(SRCS:.c=.o)
 
 
-all: $(OBJECTS)
-	$(CC) -o $(TARGET) -shared -fpic $(OBJECTS) $(LIBS)
-	rm -f $(OBJECTS)
+.PHONY: install clean rebuild depend
 
-clean:
-	rm -f $(TARGET)
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
 install:
 	cp -f $(TARGET) /usr/lib/lua/5.1/
 
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+rebuild: clean all
+
 %.o: %.c
-	$(CC) -c $(CFLAGS) $*.c -o $*.o
+	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o
+
+

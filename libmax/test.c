@@ -15,7 +15,7 @@ int main()
 	maxhandle_t hand;
 	exception_t * e = NULL;
 	
-	max_init(&hand);
+	max_initialize(&hand);
 	max_connectlocal(&hand, &e);
 	
 	if (e != NULL)

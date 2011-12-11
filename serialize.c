@@ -66,53 +66,6 @@ static size_t numparams(const char * sig)
 	return params;
 }
 
-
-char method_returntype(const char * sig)
-{
-	switch (sig[0])
-	{
-		case T_BOOLEAN:
-		case T_INTEGER:
-		case T_DOUBLE:
-		case T_CHAR:
-		case T_STRING:
-		case T_BUFFER:
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-		case T_VOID:
-			return sig[0];
-
-		case ':':
-		case '\0':
-			return T_VOID;
-	}
-
-	LOGK(LOG_WARN, "Unknown return type for method signature '%s'", sig);
-	return '?';
-}
-
-const char * method_params(const char * sig)
-{
-	const char * ptr;
-	if ((ptr = strchr(sig, ':')) == NULL)
-	{
-		return sig;
-	}
-
-	if (*(ptr+1) == '\0')
-	{
-		return "v";
-	}
-
-	return ptr+1;
-}
-
-bool method_isequal(const char * sig1, const char * sig2)
-{
-	return strcmp(method_params(sig1), method_params(sig2)) == 0 && method_returntype(sig1) == method_returntype(sig2);
-}
-
 int signature_headerlen(const char * sig)
 {
 	return headersize(sig);
@@ -604,6 +557,141 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 	}
 
 	return ret + header_size;
+}
+
+ssize_t serialize_2array_fromcb(void * array, size_t arraylen, const char * sig, args_f args)
+{
+
+	unsigned int i = 0;
+	ssize_t wrote = 0;
+
+	while (sig[i] != '\0')
+	{
+		switch (sig[i])
+		{
+			case T_VOID:
+			{
+				break;
+			}
+
+			case T_BOOLEAN:
+			case T_INTEGER:
+			case T_DOUBLE:
+			case T_CHAR:
+			case T_STRING:
+			{
+				exception_t * err = NULL;
+				ssize_t w = args((char *)array + wrote, arraylen - wrote, &err, sig, i);
+				if (exception_check(&err) || w <= 0)
+				{
+					LOGK(LOG_ERR, "Could not serialize index %d (type %c): %s", i, sig[i], err == NULL? "Unknown error" : err->message);
+					errno = EINVAL;
+					return -1;
+				}
+
+				wrote += w;
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		if (wrote > arraylen)
+		{
+			// Buffer overflow
+			LOGK(LOG_ERR, "Could not serialize sig %s, body array too small!", sig);
+			errno = ENOBUFS;
+			return -1;
+		}
+
+		i++;
+	}
+
+	return wrote;
+}
+
+ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const char * sig, args_f args)
+{
+	// Get the header size
+	size_t header_size = headersize(sig);
+	if (header_size > arraylen)
+	{
+		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
+		errno = ENOBUFS;
+		return -1;
+	}
+
+	// Create the header bit first
+	void ** head = array;
+	void ** ptrs = head + numparams(sig);
+	char * body = (char *)head + header_size;
+
+	unsigned int i = 0, p = 0;
+	ssize_t wrote = 0;
+
+	while (sig[i] != '\0')
+	{
+		head[i] = &body[wrote];
+
+		switch (sig[i])
+		{
+			case T_VOID:
+			{
+				break;
+			}
+
+			case T_STRING:
+			{
+				head[i] = &ptrs[p];
+				ptrs[p] = &body[wrote];
+				p++;
+
+				// No break here, we want to fall into the next case statement
+			}
+
+			case T_BOOLEAN:
+			case T_INTEGER:
+			case T_DOUBLE:
+			case T_CHAR:
+			{
+				exception_t * err = NULL;
+				ssize_t w = args((char *)body + wrote, arraylen - header_size - wrote, &err, sig, i);
+				if (exception_check(&err) || w <= 0)
+				{
+					LOGK(LOG_ERR, "Could not serialize index %d (type %c): %s", i, sig[i], err == NULL? "Unknown error" : err->message);
+					errno = EINVAL;
+					return -1;
+				}
+
+				wrote += w;
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
+		if (wrote > (arraylen - header_size))
+		{
+			// Buffer overflow
+			LOGK(LOG_ERR, "Could not serialize sig %s, body array too small!", sig);
+			errno = ENOBUFS;
+			return -1;
+		}
+
+		i++;
+	}
+
+	return header_size + wrote;
 }
 
 ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)

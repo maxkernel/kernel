@@ -113,7 +113,7 @@ static inline size_t hashtable_size(hashtable_t * table)
  */
 #define hashtable_foreach(pos, table) \
 		for ((pos) = list_entry((table)->iterator.next, hashentry_t, itr); \
-		(pos) != &(table)->iterator; \
+		&(pos)->itr != &(table)->iterator; \
 		(pos) = list_entry((pos)->itr.next, hashentry_t, itr))
 
 /**
@@ -124,7 +124,7 @@ static inline size_t hashtable_size(hashtable_t * table)
  */
 #define hashtable_foreach_safe(pos, n, table) \
 	for ((pos) = list_entry((table)->iterator.next, hashentry_t, itr), (n) = list_entry(pos->itr.next, hashentry_t, itr); \
-	(pos) != &(table)->iterator; \
+	&(pos)->itr != &(table)->iterator; \
 	(pos) = (n), (n) = list_entry((pos)->itr.next, hashentry_t, itr))
 
 

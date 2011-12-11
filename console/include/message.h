@@ -53,7 +53,7 @@ typedef struct
 msgstate_t message_readfd(int fd, msgbuffer_t * buf);
 bool message_writefd(int fd, char msgtype, const char * name, const char * sig, ...);
 bool message_vwritefd(int fd, char msgtype, const char * name, const char * sig, va_list args);
-//bool message_awritefd(int fd, char msgtype, const char * name, const char * sig, void ** args);
+bool message_awritefd(int fd, char msgtype, const char * name, const char * sig, void ** args);
 
 message_t * message_getmessage(msgbuffer_t * buf);
 msgstate_t message_getstate(msgbuffer_t * buf);

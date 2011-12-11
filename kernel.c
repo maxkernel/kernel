@@ -674,7 +674,7 @@ const char * module_list()
 	return cache_modules;
 }
 
-const char * info(char * syscall_name)
+const char * syscall_info(char * syscall_name)
 {
 	syscall_t * sys = syscall_get(syscall_name);
 	if (sys == NULL)
@@ -683,6 +683,17 @@ const char * info(char * syscall_name)
 	}
 
 	return sys->desc;
+}
+
+const char * syscall_signature(char * syscall_name)
+{
+	syscall_t * sys = syscall_get(syscall_name);
+	if (sys == NULL)
+	{
+		return "";
+	}
+
+	return sys->sig;
 }
 
 
@@ -794,11 +805,12 @@ int main(int argc, char * argv[])
 	module_kernelinit();	//a generic module that points to kernel space
 	
 	//register syscalls
-	KERN_DEFSYSCALL(	info,				"s:s",		"Returns description of the given syscall (param 1)");
 	KERN_DEFSYSCALL(	module_list,		"s:v",		"Returns a string concatenation of paths of all loaded modules");
 	KERN_DEFSYSCALL(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
+	KERN_DEFSYSCALL(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
 	KERN_DEFSYSCALL(	syscall_list,		"s:v",		"Returns a string concatenation of all registered syscalls");
 	KERN_DEFSYSCALL(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
+	KERN_DEFSYSCALL(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
 	KERN_DEFSYSCALL(	max_model,			"s:v",		"Returns the model name of the robot");
 	KERN_DEFSYSCALL(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
 	KERN_DEFSYSCALL(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");

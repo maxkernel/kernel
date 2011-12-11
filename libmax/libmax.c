@@ -12,15 +12,6 @@
 #include <max.h>
 
 
-typedef struct
-{
-	const char * name;
-	const char * sig;
-	const char * description;
-
-	hashentry_t syscalls_entry;
-} syscall_t;
-
 #if 0
 #define bad_malloc(handle, ptr) __bad_malloc(handle, ptr, __FILE__, __LINE__)
 static inline bool __bad_malloc(maxhandle_t * hand, void * ptr, const char * file, unsigned int line)
@@ -37,7 +28,7 @@ static inline bool __bad_malloc(maxhandle_t * hand, void * ptr, const char * fil
 #endif
 
 
-void max_init(maxhandle_t * hand)
+void max_initialize(maxhandle_t * hand)
 {
 	PZERO(hand, sizeof(maxhandle_t));
 
@@ -45,12 +36,25 @@ void max_init(maxhandle_t * hand)
 	hand->free = free;
 	hand->memerr = max_memerr;
 
-	HASHTABLE_INIT(&hand->syscalls, hash_str, hash_streq);
+	hand->syscall_cache = NULL;
 
 	hand->sock = -1;
 	mutex_init(&hand->sock_mutex, M_RECURSIVE);
 
 	hand->timeout = DEFAULT_TIMEOUT;
+}
+
+void * max_destroy(maxhandle_t * hand)
+{
+	max_syscallcache_destroy(hand);
+
+	if (hand->sock != -1)
+	{
+		close(hand->sock);
+		hand->sock = -1;
+	}
+
+	return hand->userdata;
 }
 
 void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc)
@@ -124,11 +128,6 @@ bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host)
 	return true;
 }
 
-void max_close(maxhandle_t * hand)
-{
-	close(hand->sock);
-}
-
 bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...)
 {
 	va_list args;
@@ -139,20 +138,8 @@ bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const c
 	return r;
 }
 
-bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args)
+static bool max_waitreply(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall)
 {
-	if (exception_check(err))
-	{
-		// Error already set
-		return false;
-	}
-
-	if (!message_vwritefd(hand->sock, T_METHOD, syscall, sig, args))
-	{
-		exception_set(err, errno, "Could not send syscall %s rpc: %s", syscall, strerror(errno));
-		return false;
-	}
-
 	struct pollfd pfd;
 	pfd.fd = hand->sock;
 	pfd.events = POLLIN | POLLERR;
@@ -188,9 +175,12 @@ bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 
 	message_t * msg = message_getmessage(&msgbuf);
 
+	// TODO - make sure that this response is actually the response to the syscall we just sent
+
 	return_t r = {
 		.handle = hand,
-		.type = method_returntype(msg->sig),
+		.type = msg->type,
+		.sig = method_returntype(msg->sig),
 	};
 
 	void copy(const void * ptr, size_t s)
@@ -198,36 +188,13 @@ bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 		memcpy(&r.data, ptr, s);
 	}
 
-	switch (r.type)
+	switch (r.sig)
 	{
-		case T_VOID:
-		{
-			break;
-		}
-
-		case T_BOOLEAN:
-		{
-			copy(msg->body[0], sizeof(bool));
-			break;
-		}
-
-		case T_INTEGER:
-		{
-			copy(msg->body[0], sizeof(int));
-			break;
-		}
-
-		case T_DOUBLE:
-		{
-			copy(msg->body[0], sizeof(double));
-			break;
-		}
-
-		case T_CHAR:
-		{
-			copy(msg->body[0], sizeof(char));
-			break;
-		}
+		case T_VOID:												break;
+		case T_BOOLEAN:		copy(msg->body[0], sizeof(bool));		break;
+		case T_INTEGER:		copy(msg->body[0], sizeof(int));		break;
+		case T_DOUBLE:		copy(msg->body[0], sizeof(double));		break;
+		case T_CHAR:		copy(msg->body[0], sizeof(char));		break;
 
 		case T_STRING:
 		{
@@ -238,7 +205,7 @@ bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 
 		default:
 		{
-			exception_set(err, EINVAL, "Unknown return type returned from syscall %s: %c", syscall, r.type);
+			exception_set(err, EINVAL, "Unknown return type returned from syscall %s: %c", syscall, r.sig);
 			return false;
 		}
 	}
@@ -250,6 +217,58 @@ bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 	}
 
 	return true;
+}
+
+bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args)
+{
+	if (exception_check(err))
+	{
+		// Error already set
+		return false;
+	}
+
+	bool r = false;
+	mutex_lock(&hand->sock_mutex);
+	{
+		if (!message_vwritefd(hand->sock, T_METHOD, syscall, sig, args))
+		{
+			exception_set(err, errno, "Could not send syscall %s rpc: %s", syscall, strerror(errno));
+			r = false;
+		}
+		else
+		{
+			r = max_waitreply(hand, err, ret, syscall);
+		}
+	}
+	mutex_unlock(&hand->sock_mutex);
+
+	return r;
+}
+
+bool max_asyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, void ** args)
+{
+	if (exception_check(err))
+	{
+		// Error already set
+		return false;
+	}
+
+	bool r = false;
+	mutex_lock(&hand->sock_mutex);
+	{
+		if (!message_awritefd(hand->sock, T_METHOD, syscall, sig, args))
+		{
+			exception_set(err, errno, "Could not send syscall %s rpc: %s", syscall, strerror(errno));
+			r = false;
+		}
+		else
+		{
+			r = max_waitreply(hand, err, ret, syscall);
+		}
+	}
+	mutex_unlock(&hand->sock_mutex);
+
+	return r;
 }
 
 #if 0
@@ -320,4 +339,24 @@ void max_settimeout(maxhandle_t * hand, int newtimeout)
 int max_gettimeout(maxhandle_t * hand)
 {
 	return hand->timeout;
+}
+
+void max_setuserdata(maxhandle_t * hand, void * userdata)
+{
+	hand->userdata = userdata;
+}
+
+void * max_getuserdata(maxhandle_t * hand)
+{
+	return hand->userdata;
+}
+
+size_t max_getbuffersize(maxhandle_t * hand)
+{
+	return CONSOLE_BUFFERMAX;
+}
+
+size_t max_getheadersize(maxhandle_t * hand)
+{
+	return CONSOLE_HEADERSIZE;
 }

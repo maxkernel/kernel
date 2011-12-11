@@ -1,4 +1,4 @@
-SRCS		= libmax.c serialize.c message.c
+SRCS		= libmax.c syscallcache.c serialize.c message.c
 TARGET		= libmax.so
 PACKAGES	= 
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../console -I../console/include
@@ -16,7 +16,7 @@ all: $(TARGET) test
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
-	#$(MAKE) -C lua all
+	$(MAKE) -C lua all
 
 test: test.o
 	$(CC) -o test test.o -L. -lmax

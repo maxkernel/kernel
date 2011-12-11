@@ -257,6 +257,13 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 	}
 	else
 	{
+		if (list_isempty(&free_buffers))
+		{
+			LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
+			close(client);
+			return true;
+		}
+
 		// Get a free buffer
 		msgbuffer_t * msg = list_entry(free_buffers.next, msgbuffer_t, free_list);
 		list_remove(&msg->free_list);

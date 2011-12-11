@@ -141,6 +141,32 @@ bool message_vwritefd(int fd, char msgtype, const char * name, const char * sig,
 	return true;
 }
 
+bool message_awritefd(int fd, char msgtype, const char * name, const char * sig, void ** args)
+{
+	char buffer[CONSOLE_BUFFERMAX];
+	errno = 0;
+
+	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), "icss", CONSOLE_FRAMEING, msgtype, name, sig);
+	if (hlen == -1)
+	{
+		return false;
+	}
+
+	ssize_t blen = aserialize_2array(buffer + hlen, sizeof(buffer) - hlen, method_params(sig), args);
+	if (blen == -1)
+	{
+		return false;
+	}
+
+	ssize_t wrote = write(fd, buffer, hlen + blen);
+	if (wrote != (hlen + blen))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 message_t * message_getmessage(msgbuffer_t * buf)
 {
 	return &buf->msg;

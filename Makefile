@@ -17,7 +17,7 @@ MODULES		= console netui httpserver ssc-32 map gps discovery
 OLD_MODULES = service network jpegcompress propeller-ssc webcam maxpod test
 UTILS		= 
 OLD_UTILS	= syscall client autostart kdump modinfo log
-HEADERS		= kernel.h buffer.h array.h serialize.h 
+HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
 
 SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer2.c serialize.c trigger.c exec.c luaenv.c math.c
 OBJS		= $(SRCS:.c=.o)
