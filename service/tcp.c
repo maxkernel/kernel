@@ -198,7 +198,7 @@ void tcp_init()
 
 			if (err != NULL)
 			{
-				LOG(LOG_ERR, "Could not create service TCP server on port %d: %s", tcp_port, err->message.string);
+				LOG(LOG_ERR, "Could not create service TCP server on port %d: %s", tcp_port, err->message);
 				exception_free(err);
 			}
 			else

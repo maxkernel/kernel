@@ -136,7 +136,7 @@ void udp_init()
 
 			if (err != NULL)
 			{
-				LOG(LOG_ERR, "Could not create service UDP server on port %d: %s", udp_port, err->message.string);
+				LOG(LOG_ERR, "Could not create service UDP server on port %d: %s", udp_port, err->message);
 				exception_free(err);
 			}
 			else

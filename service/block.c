@@ -17,12 +17,23 @@ void * s_bufstream_new(const char * id, const char * name, const char * format, 
 
 void s_bufstream_update(void * userdata)
 {
-	if (ISNULL(buffer))
+	service_h handle = userdata;
+
+	const buffer_t * buffer = INPUT(buffer);
+	if (buffer == NULL)
 	{
+		// No data to process
 		return;
 	}
 
-	service_h handle = userdata;
-	buffer_t buffer = INPUTT(buffer_t, buffer);
-	service_writedata(handle, kernel_timestamp(), buffer_data(buffer), buffer_datasize(buffer));
+	char data[buffer_size(*buffer)];
+	size_t read = buffer_read(*buffer, data, sizeof(data));		// TODO - Don't do this!! The buffer might be *huge* and blow the stack!
+
+	if (read != sizeof(data))
+	{
+		LOG(LOG_WARN, "Could not read all buffer data");
+		return;
+	}
+
+	service_writedata(handle, kernel_timestamp(), data, sizeof(data));
 }

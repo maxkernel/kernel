@@ -13,8 +13,8 @@ MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= ALPHA
 
-MODULES		= console netui httpserver ssc-32 map gps discovery
-OLD_MODULES = service network jpegcompress propeller-ssc webcam maxpod test
+MODULES		= console netui httpserver ssc-32 map gps discovery network service maxpod
+OLD_MODULES = jpegcompress propeller-ssc webcam test
 UTILS		= 
 OLD_UTILS	= syscall client autostart kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 

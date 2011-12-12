@@ -131,10 +131,7 @@ bool property_isset(const char * name);
 
 const void * io_input(const char * name);
 void io_output(const char * name, const void * value);
-
-#define ISNULL(name)				(INPUT(name) == NULL)
 #define INPUT(name)					io_input(#name)
-#define INPUTT(type, name)			(*(const type *)INPUT(name))
 #define OUTPUT(name, value)			io_output(#name, value)
 
 const char * max_model();

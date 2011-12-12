@@ -492,6 +492,7 @@ void io_output(const char * name, const void * value)
 
 
 /*---------- LINK FUNCTIONS -------------------*/
+// TODO - standardize outputting NULL values
 static void link_noop(const void * out, void * in, size_t outsize, size_t insize)
 {
 	// This is a noop function, used when there is an incompatible out -> in
