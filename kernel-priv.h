@@ -317,6 +317,7 @@ void memfs_destroy(exception_t ** err);
 int memfs_orphanfd();
 void memfs_closefd(int fd);
 int memfs_dupfd(int fd);
+void memfs_syncfd(int fd);
 off_t memfs_sizefd(int fd);
 void memfs_setseekfd(int fd, off_t position);
 off_t memfs_getseekfd(int fd);

@@ -104,6 +104,11 @@ off_t memfs_sizefd(int fd)
 	return len;
 }
 
+void memfs_syncfd(int fd)
+{
+	fsync(fd);
+}
+
 void memfs_setseekfd(int fd, off_t position)
 {
 	lseek(fd, position, SEEK_SET);

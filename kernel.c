@@ -720,7 +720,7 @@ int main(int argc, char * argv[])
 	}
 
 	//do not prevent any unmounting
-	chdir("/");
+	chdir("/");		// TODO - probably should make this the root install dir
 	
 	//set up signals
 	sig_init();

@@ -293,13 +293,13 @@ static buffer_t webcam_readframe(webcam_t * webcam)
 
 	if (xioctl(webcam->fd, VIDIOC_DQBUF, &buf) == -1) {
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_DQBUF (dequeue buffer) on %s: %s", webcam->path, strerror(errno));
-		return NULL;
+		return -1;
 	}
 
 	if (buf.index >= webcam->n_buffers)
 	{
 		LOG(LOG_ERR, "Webcam: Buffer overrun detected on capture buffers");
-		return NULL;
+		return -1;
 	}
 
 	/*
@@ -315,9 +315,9 @@ static buffer_t webcam_readframe(webcam_t * webcam)
 	*/
 
 	size_t expect_size = webcam->buffers[buf.index].length;
-	buffer_t frame = buffer_new(expect_size);
 
-	memcpy(buffer_data(frame), webcam->buffers[buf.index].start, expect_size);
+	buffer_t frame = buffer_new();
+	buffer_write(frame, webcam->buffers[buf.index].start, expect_size);
 
 	if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
@@ -392,10 +392,13 @@ void webcam_update(void * object)
 		return;
 	}
 
-	if (!ISNULL(width) && !ISNULL(height) && (INPUTT(int, width) != webcam->width || INPUTT(int, height) != webcam->height))
+	const int * width = INPUT(width);
+	const int * height = INPUT(height);
+
+	if (width != NULL && height != NULL && (*width != webcam->width || *height != webcam->height))
 	{
-		webcam->width = INPUTT(int, width);
-		webcam->height = INPUTT(int, height);
+		webcam->width = *width;
+		webcam->height = *height;
 
 		webcam_destroy(object);
 		webcam->fd = webcam_open(webcam->path);
@@ -428,15 +431,16 @@ void webcam_update(void * object)
 	if ((r = select(webcam->fd+1, &fds, NULL, NULL, &tv)) > 0)
 	{
 		buffer_t frame = webcam_readframe(webcam);
-		if (frame != NULL)
+		if (frame != -1)
 		{
 
 			OUTPUT(width, &webcam->width);
 			OUTPUT(height, &webcam->height);
-			OUTPUT_NOCOPY(frame, &frame);
+			OUTPUT(frame, &frame);
 
 			//LOG(LOG_INFO, "FRAME");
 		}
+		buffer_free(frame);
 	}
 	else if (r < 0)
 	{

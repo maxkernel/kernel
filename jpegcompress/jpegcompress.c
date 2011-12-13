@@ -42,7 +42,6 @@ typedef struct
 	JSAMPLE * row;
 	jmp_buf jmp;
 
-	buffer_t output_frame;
 	JOCTET * buffer;
 	size_t buffer_length;
 
@@ -110,7 +109,7 @@ void jpeg_free(void * data)
 
 	jpeg_t * jpeg = data;
 	jpeg_freecompress(jpeg);
-	free(jpeg->output_frame);
+	free(jpeg->buffer);
 	free(jpeg);
 }
 
@@ -132,10 +131,9 @@ void jpeg_destinit(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
 
-	if (jpeg->output_frame == NULL)
+	if (jpeg->buffer == NULL)
 	{
-		jpeg->output_frame = malloc(BUFFER_STEP + sizeof(size_t));
-		jpeg->buffer = jpeg->output_frame + sizeof(size_t);
+		jpeg->buffer = malloc(BUFFER_STEP);
 		jpeg->buffer_length = BUFFER_STEP;
 	}
 
@@ -146,9 +144,7 @@ void jpeg_destinit(j_compress_ptr cinfo)
 void jpeg_destterm(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
-
-	size_t imglen = cinfo->dest->next_output_byte - jpeg->buffer;
-	*(size_t *)jpeg->output_frame = imglen + sizeof(size_t);
+	jpeg->buffer_length = cinfo->dest->next_output_byte - jpeg->buffer;
 }
 
 boolean jpeg_destempty(j_compress_ptr cinfo)
@@ -159,8 +155,7 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 	size_t oldlen = jpeg->buffer_length;
 	size_t newlen = jpeg->buffer_length + BUFFER_STEP;
 
-	jpeg->output_frame = realloc(jpeg->output_frame, newlen + sizeof(size_t));
-	jpeg->buffer = jpeg->output_frame + sizeof(size_t);
+	jpeg->buffer = realloc(jpeg->buffer, newlen);
 	jpeg->buffer_length = newlen;
 
 	jpeg->dest->next_output_byte = jpeg->buffer+(newlen-oldlen);
@@ -172,20 +167,22 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 /*-------------------------- THE BEEF OF THE MODULE ------------------------*/
 static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
 {
-	unsigned char * frame = buffer_data(from);
-
 	size_t rowindex = row * width * 2;
 	size_t toindex = 0;
 
 	while (toindex < width*3)
 	{
-		to[toindex++] = frame[rowindex];
-		to[toindex++] = frame[rowindex+1];
-		to[toindex++] = frame[rowindex+3];
+		unsigned char data[4];
+		buffer_setpos(from, rowindex);			// TODO - optimize this!!
+		buffer_read(from, data, sizeof(data));
 
-		to[toindex++] = frame[rowindex+2];
-		to[toindex++] = frame[rowindex+1];
-		to[toindex++] = frame[rowindex+3];
+		to[toindex++] = data[0];
+		to[toindex++] = data[1];
+		to[toindex++] = data[3];
+
+		to[toindex++] = data[2];
+		to[toindex++] = data[1];
+		to[toindex++] = data[3];
 
 		rowindex += 4;
 	}
@@ -193,8 +190,6 @@ static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 
 static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
 {
-	unsigned char * frame = buffer_data(from);
-
 	size_t yindex = row * width;
 	size_t uindex = (width * height) + (row * width)/4;
 	size_t vindex = uindex + (width * height)/4;
@@ -202,13 +197,18 @@ static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 	size_t toindex = 0;
 	while (toindex < width*3)
 	{
-		to[toindex++] = frame[yindex];
-		to[toindex++] = frame[uindex];
-		to[toindex++] = frame[vindex];
+		unsigned char data[4];
+		buffer_setpos(from, yindex);	buffer_read(from, &data[0], 2);	// TODO - optimize this!!
+		buffer_setpos(from, uindex);	buffer_read(from, &data[2], 1);
+		buffer_setpos(from, vindex);	buffer_read(from, &data[3], 1);
 
-		to[toindex++] = frame[yindex+1];
-		to[toindex++] = frame[uindex];
-		to[toindex++] = frame[vindex];
+		to[toindex++] = data[0];
+		to[toindex++] = data[2];
+		to[toindex++] = data[3];
+
+		to[toindex++] = data[1];
+		to[toindex++] = data[2];
+		to[toindex++] = data[3];
 
 		yindex += 2;
 		uindex++;
@@ -218,13 +218,17 @@ static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 
 void jpeg_update(void * object)
 {
-	if (object == NULL || ISNULL(width) || ISNULL(height) || ISNULL(frame))
+	const int * width = INPUT(width);
+	const int * height = INPUT(height);
+	const buffer_t * frame = INPUT(frame);
+
+	if (object == NULL || width == NULL || height == NULL || frame == NULL)
 	{
 		//required input parameters not there!
 		return;
 	}
 
-	if (INPUTT(int, width) == 0 || INPUTT(int, height) == 0)
+	if (*width == 0 || *height == 0)
 	{
 		//invalid input dimensions
 		return;
@@ -235,13 +239,11 @@ void jpeg_update(void * object)
 	struct jpeg_error_mgr * jerr = jpeg->jerr;
 	struct jpeg_destination_mgr * dest = jpeg->dest;
 
-	size_t newwidth = INPUTT(int, width), newheight = INPUTT(int, height);
-
-	if (newwidth != jpeg->width || newheight != jpeg->height)
+	if (*width != jpeg->width || *height != jpeg->height)
 	{
 		jpeg_freecompress(jpeg);
-		jpeg->width = newwidth;
-		jpeg->height = newheight;
+		jpeg->width = *width;
+		jpeg->height = *height;
 
 		free(jpeg->row);
 		jpeg->row = NULL;
@@ -296,14 +298,18 @@ void jpeg_update(void * object)
 
 		JSAMPROW rowdata[1] = {jpeg->row};
 		int rownum = 0;
+
 		for (; rownum < jpeg->height; rownum++)
 		{
-			jpeg->converter(rownum, jpeg->width, jpeg->height, INPUTT(buffer_t, frame), jpeg->row);
+			jpeg->converter(rownum, jpeg->width, jpeg->height, *frame, jpeg->row);
 			jpeg_write_scanlines(cinfo, rowdata, 1);
 		}
 
 		jpeg_finish_compress(cinfo);
 
-		OUTPUT(frame, &jpeg->output_frame);
+		buffer_t out = buffer_new();
+		buffer_write(out, jpeg->buffer, jpeg->buffer_length);
+		OUTPUT(frame, &out);
+		buffer_free(out);
 	}
 }

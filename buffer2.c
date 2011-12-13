@@ -70,5 +70,6 @@ size_t buffer_size(buffer_t buffer)
 
 void buffer_free(buffer_t buffer)
 {
+	//memfs_syncfd(buffer);	// BAAAD latency!
 	memfs_closefd(buffer);
 }
