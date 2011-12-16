@@ -136,5 +136,8 @@ void module_init()
 
 void module_destroy()
 {
-	http_destroy(ctx);
+	if (ctx != NULL)
+	{
+		http_destroy(ctx);
+	}
 }

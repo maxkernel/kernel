@@ -283,7 +283,7 @@ static bool webcam_stop(webcam_t * webcam)
 	return true;
 }
 
-static buffer_t webcam_readframe(webcam_t * webcam)
+static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 {
 	struct v4l2_buffer buf;
 
@@ -315,9 +315,7 @@ static buffer_t webcam_readframe(webcam_t * webcam)
 	*/
 
 	size_t expect_size = webcam->buffers[buf.index].length;
-
-	buffer_t frame = buffer_new();
-	buffer_write(frame, webcam->buffers[buf.index].start, expect_size);
+	buffer_write(frame, webcam->buffers[buf.index].start, 0, expect_size);
 
 	if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
@@ -430,7 +428,8 @@ void webcam_update(void * object)
 
 	if ((r = select(webcam->fd+1, &fds, NULL, NULL, &tv)) > 0)
 	{
-		buffer_t frame = webcam_readframe(webcam);
+		buffer_t frame = buffer_new();
+		webcam_readframe(webcam, frame);
 		if (frame != -1)
 		{
 

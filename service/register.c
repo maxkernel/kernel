@@ -10,7 +10,6 @@
 #define SERVICE_CLASS		"Service"
 #define SERVICE_NAME		"service"
 
-extern mutex_t servicelock;
 extern GHashTable * service_table;
 extern GHashTable * stream_table;
 
@@ -24,11 +23,11 @@ static void service_free(void * object)
 {
 	service_t * s = object;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		g_hash_table_remove(service_table, s->handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	FREES(s->name);
 	FREES(s->format);
@@ -41,12 +40,12 @@ void service_dispatchdata(service_h service_handle, client_h client_handle, stre
 	stream_t * stream = NULL;
 	service_t * service = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		service = g_hash_table_lookup(service_table, service_handle);
 		stream = g_hash_table_lookup(stream_table, stream_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (service == NULL)
 	{
@@ -95,12 +94,12 @@ void service_startstream(service_h service_handle, stream_h stream_handle)
 	stream_t * stream = NULL;
 	service_t * service = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		service = g_hash_table_lookup(service_table, service_handle);
 		stream = g_hash_table_lookup(stream_table, stream_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (stream == NULL)
 	{
@@ -157,12 +156,12 @@ void service_stopstream(service_h service_handle, stream_h stream_handle)
 	stream_t * stream = NULL;
 	service_t * service = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		service = g_hash_table_lookup(service_table, service_handle);
 		stream = g_hash_table_lookup(stream_table, stream_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (stream == NULL)
 	{
@@ -256,11 +255,11 @@ service_h service_register(const char * id, const char * name, const char * form
 
 	LOG(LOG_DEBUG, "Registered service '%s' with id '%s' using format %s", s->name, s->handle, s->format);
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		g_hash_table_insert(service_table, s->handle, s);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	return s->handle;
 }
@@ -269,11 +268,11 @@ void service_writedata(service_h service_handle, uint64_t timestamp_us, const vo
 {
 	service_t * service = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		service = g_hash_table_lookup(service_table, service_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (service == NULL)
 	{
@@ -300,12 +299,12 @@ void service_writeclientdata(service_h service_handle, stream_h stream_handle, u
 	service_t * service = NULL;
 	stream_t * stream = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		service = g_hash_table_lookup(service_table, service_handle);
 		stream = g_hash_table_lookup(stream_table, stream_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (service == NULL)
 	{

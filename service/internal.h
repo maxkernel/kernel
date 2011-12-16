@@ -138,7 +138,7 @@ typedef struct __client_t
 	stream_t * streams[PROTOCOL_NUM];
 } client_t;
 
-extern mutex_t servicelock;
+extern mutex_t service_lock;
 
 void send_init();
 void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp, const void * data, size_t length);
@@ -167,11 +167,11 @@ static inline bool isunique(char * str, GHashTable * table)
 {
 	bool unique;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		unique = g_hash_table_lookup(table, str) == NULL;
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	return unique;
 }

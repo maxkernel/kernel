@@ -186,18 +186,12 @@ static inline size_t list_size(list_t * head)
 	size_t i = 0;
 	list_t * pos = head;
 
-	if (UNLIKELY(list_isempty(head)))
+	while ((pos = pos->next) != head)
 	{
-		return 0;
+		i += 1;
 	}
-	else
-	{
-		while ((pos = pos->next) != head)
-		{
-			i += 1;
-		}
-		return i;
-	}
+
+	return i;
 }
 
 

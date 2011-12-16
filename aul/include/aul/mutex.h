@@ -15,6 +15,7 @@ extern "C" {
 typedef pthread_mutex_t mutex_t;
 #define mutex_lock(m)		pthread_mutex_lock(m)
 #define mutex_unlock(m)		pthread_mutex_unlock(m)
+#define mutex_trylock(m)	(pthread_mutex_trylock(m) == 0)
 
 static inline void mutex_init(mutex_t * mutex, int type)
 {

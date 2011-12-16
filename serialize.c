@@ -89,7 +89,7 @@ ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
 
 	void copy(const void * ptr, size_t s)
 	{
-		buffer_write(buffer, ptr, s);
+		buffer_write(buffer, ptr, wrote, s);
 		wrote += s;
 	}
 
@@ -150,7 +150,7 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 
 	void copy(const void * ptr, size_t s)
 	{
-		buffer_write(buffer, ptr, s);
+		buffer_write(buffer, ptr, wrote, s);
 		wrote += s;
 	}
 
@@ -878,7 +878,7 @@ err_nomem:
 
 #if defined(KERNEL)
 
-ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)		// TODO - This function sucks! Make it better
 {
 	LABELS(err_nomem, err_bufsize);
 
@@ -892,22 +892,22 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 	char * body = (char *)header + header_size;
 
 	unsigned int i = 0;
-	size_t wrote = 0;
+	size_t read = 0;
 
 	void copy(size_t s)
 	{
-		if ((header_size + wrote + s) > headerlen)
+		if ((header_size + read + s) > headerlen)
 		{
 			goto err_nomem;
 		}
 
-		size_t r = buffer_read(buffer, &body[wrote], s);
+		size_t r = buffer_read(buffer, &body[read], read, s);
 		if (r != s)
 		{
 			goto err_bufsize;
 		}
 
-		wrote += s;
+		read += s;
 	}
 
 	while (sig[i] != '\0')
@@ -948,18 +948,18 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 				char byte;
 				do
 				{
-					size_t r = buffer_read(buffer, &byte, sizeof(byte));
+					size_t r = buffer_read(buffer, &byte, read, sizeof(byte));
 					if (r != sizeof(byte))
 					{
 						goto err_bufsize;
 					}
 
-					if ((header_size + wrote + sizeof(byte)) > headerlen)
+					if ((header_size + read + sizeof(byte)) > headerlen)
 					{
 						goto err_nomem;
 					}
 
-					body[wrote++] = byte;
+					body[read++] = byte;
 
 				} while (byte != '\0');
 				break;
@@ -976,14 +976,14 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 		i++;
 	}
 
-	ssize_t ret = deserialize_2header(header, header_size, sig, body, wrote);
+	ssize_t ret = deserialize_2header(header, header_size, sig, body, read);
 	if (ret != header_size)
 	{
 		LOGK(LOG_ERR, "Header deserialization mismatch. Expected header of length %zd, got %zd", header_size, ret);
 		return ret;
 	}
 
-	return header_size + wrote;
+	return header_size + read;
 
 err_nomem:
 	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);

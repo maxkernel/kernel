@@ -22,7 +22,7 @@ static void s_list_replyservices(service_h service_handle, stream_h stream_handl
 	size_t i=0;
 
 	i += snprintf(buf + i, S_LIST_BUFSIZE - i, "<servicelist>");
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		GHashTableIter itr;
 		g_hash_table_iter_init(&itr, service_table);
@@ -41,7 +41,7 @@ static void s_list_replyservices(service_h service_handle, stream_h stream_handl
 			i += snprintf(buf + i, S_LIST_BUFSIZE - i, "</service>");
 		}
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 	i += snprintf(buf + i, S_LIST_BUFSIZE - i, "</servicelist>");
 
 	service_writeclientdata(service_handle, stream_handle, kernel_timestamp(), buf, i);

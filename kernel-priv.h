@@ -12,6 +12,8 @@
 #include <aul/list.h>
 #include <aul/mainloop.h>
 
+#include <kernel.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -36,7 +38,7 @@ typedef bool (*trigger_f)(void * object);
 typedef void * (*blk_constructor_f)();
 typedef void (*blk_onupdate_f)(void * userdata);
 typedef void (*blk_destroy_f)(void * userdata);
-typedef void (*blk_link_f)(const void * output, void * input, size_t outsize, size_t insize);
+typedef void (*blk_link_f)(const void * output, bool output_isnull, size_t outsize, void * input, bool input_isnull, size_t insize);
 typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
 
 
@@ -247,10 +249,10 @@ typedef struct __boutput_inst_t
 
 	bio_t * output;
 
-	void * data;
-	void * copybuf;
-	bool output_valid;
-	bool output_modified;
+	void * stage1;
+	void * stage2;
+	bool stage1_isnull;
+	bool stage2_isnull;
 
 	list_t links;
 } boutput_inst_t;
@@ -264,11 +266,8 @@ typedef struct __binput_inst_t
 	boutput_inst_t * src_inst;
 	list_t boutput_inst_list;
 
-	void * data;
-	bool src_valid;
-	bool src_modified;
-	bool input_valid;
-	bool input_modified;
+	void * stage3;
+	bool stage3_isnull;
 } binput_inst_t;
 
 typedef struct __kthread_t
@@ -292,7 +291,7 @@ typedef struct
 } kthread_task_t;
 
 #define LOGFILE					"maxkernel.log"
-#define LOGBUF_SIZE				(200 * 1024)		/* 200 KB */
+#define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 #define CACHESTR_SIZE			(1024)				/* 1 KB */
 
 #define PATH_MAX_SIZE			2048
@@ -311,7 +310,6 @@ module_t * module_load(const char * name);
 void module_kernelinit();
 
 // memfs functions (complementary with the buffer system)
-//#define
 void memfs_init(exception_t ** err);
 void memfs_destroy(exception_t ** err);
 int memfs_orphanfd();

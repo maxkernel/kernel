@@ -16,7 +16,7 @@ MOD_INIT(module_init);
 DEF_SYSCALL(service_getstreamconfig, "s:v", "Get the new-line seperated key=value string of stream configuration options");
 
 
-mutex_t servicelock;
+mutex_t service_lock;
 mainloop_t * serviceloop = NULL;
 char streamconfig_cache[200];
 
@@ -35,11 +35,11 @@ void service_freestream(stream_t * stream)
 	}
 
 	//remove stream from lookup table
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		g_hash_table_remove(stream_table, stream->handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	//call destroy on the stream
 	if (stream->destroy != NULL)
@@ -48,7 +48,7 @@ void service_freestream(stream_t * stream)
 	}
 
 	//remove it from all services
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		GHashTableIter itr;
 		g_hash_table_iter_init(&itr, service_table);
@@ -80,7 +80,7 @@ void service_freestream(stream_t * stream)
 			mutex_unlock(&service->lock);
 		}
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	//remove it from client list
 	client_t * client = stream->client;
@@ -101,7 +101,7 @@ void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestr
 	char * a = array;
 	stream_t * pdata = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		size_t i=0;
 		for (; i<SERVICE_CLIENTS_MAX; i++)
@@ -126,7 +126,7 @@ void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestr
 			a += size;
 		}
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (pdata == NULL)
 	{
@@ -140,11 +140,11 @@ client_t * service_getclient(char * client_handle)
 {
 	client_t * client = NULL;
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		client = g_hash_table_lookup(client_table, client_handle);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (client != NULL)
 	{
@@ -152,7 +152,7 @@ client_t * service_getclient(char * client_handle)
 	}
 
 	//client doesn't exist yet
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		size_t i=0;
 		for (; i<SERVICE_CLIENTS_MAX; i++)
@@ -167,7 +167,7 @@ client_t * service_getclient(char * client_handle)
 			}
 		}
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	if (client == NULL)
 	{
@@ -178,11 +178,11 @@ client_t * service_getclient(char * client_handle)
 	generateid(client->handle, client_table);
 	mutex_init(&client->lock, M_RECURSIVE);
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		g_hash_table_insert(client_table, client->handle, client);
 	}
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	LOG(LOG_DEBUG, "Created service client (%s)", client->handle);
 	return client;
@@ -195,7 +195,7 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 	client_t * client = NULL;
 	int64_t now = kernel_timestamp();
 
-	mutex_lock(&servicelock);
+	mutex_lock(&service_lock);
 	{
 		g_hash_table_iter_init(&itr, client_table);
 		while (g_hash_table_iter_next(&itr, NULL, (void **)&client))
@@ -221,7 +221,7 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 		}
 	}
 
-	mutex_unlock(&servicelock);
+	mutex_unlock(&service_lock);
 
 	return true;
 }
@@ -248,7 +248,7 @@ void module_preactivate()
 {
 	PZERO(clients, sizeof(clients));
 
-	mutex_init(&servicelock, M_RECURSIVE);
+	mutex_init(&service_lock, M_RECURSIVE);
 	service_table = g_hash_table_new(g_str_hash, g_str_equal);
 	client_table = g_hash_table_new(g_str_hash, g_str_equal);
 	stream_table = g_hash_table_new(g_str_hash, g_str_equal);

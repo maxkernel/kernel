@@ -22,6 +22,8 @@
 #include <aul/mainloop.h>
 #include <aul/mutex.h>
 
+#include <buffer.h>
+
 #include <kernel.h>
 #include <kernel-priv.h>
 
@@ -53,12 +55,12 @@ static struct {
 } args = { };
 
 /*------------ SIGNALS -------------*/
-static void sig_int(int signo)
+static void signal_int(int signo)
 {
 	mainloop_stop(NULL);
 }
 
-static void sig_coredump(const char * name, const char * code)
+static void signal_coredump(const char * name, const char * code)
 {
 	signal(SIGABRT, SIG_DFL);
 
@@ -88,22 +90,22 @@ static void sig_coredump(const char * name, const char * code)
 	LOGK(LOG_FATAL, "%s.", name);
 }
 
-static void sig_segv(int signo)
+static void signal_segv(int signo)
 {
-	sig_coredump("Segmentation fault", "segv");
+	signal_coredump("Segmentation fault", "segv");
 }
 
-static void sig_abrt(int signo)
+static void signal_abrt(int signo)
 {
-	sig_coredump("Abort", "abrt");
+	signal_coredump("Abort", "abrt");
 }
 
-static void sig_init()
+static void signal_init()
 {
-	signal(SIGINT, sig_int);
-	signal(SIGSEGV, sig_segv);
-	signal(SIGBUS, sig_segv);
-	signal(SIGABRT, sig_abrt);
+	signal(SIGINT, signal_int);
+	signal(SIGSEGV, signal_segv);
+	signal(SIGBUS, signal_segv);
+	signal(SIGABRT, signal_abrt);
 	signal(SIGHUP, SIG_IGN);
 	signal(SIGPIPE, SIG_IGN);
 }
@@ -333,7 +335,9 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 void kobj_register(kobject_t * object)
 {
 	mutex_lock(&kobj_mutex);
-	list_push(&objects, &object->kobjdb);
+	{
+		list_push(&objects, &object->kobjdb);
+	}
 	mutex_unlock(&kobj_mutex);
 }
 
@@ -345,18 +349,18 @@ void kobj_destroy(kobject_t * object)
 	}
 
 	mutex_lock(&kobj_mutex);
-
-	LOGK(LOG_DEBUG, "Destroying %s: %s", object->class_name, object->obj_name);
-	if (object->destructor != NULL)
 	{
-		object->destructor(object);
+		LOGK(LOG_DEBUG, "Destroying %s: %s", object->class_name, object->obj_name);
+		if (object->destructor != NULL)
+		{
+			object->destructor(object);
+		}
+
+		list_remove(&object->kobjdb);
+
+		FREES(object->obj_name);
+		FREE(object);
 	}
-
-	list_remove(&object->kobjdb);
-
-	FREES(object->obj_name);
-	FREE(object);
-
 	mutex_unlock(&kobj_mutex);
 }
 
@@ -713,25 +717,26 @@ static void kern_defsyscall(syscall_f func, char * name, char * sig, char * desc
 /*-------------------- MAIN -----------------------*/
 int main(int argc, char * argv[])
 {
-	//make sure i'm root
+	// Make sure i'm root
 	if (getuid() != 0)
 	{
 		LOGK(LOG_FATAL, "Must be root!");
 	}
 
-	//do not prevent any unmounting
+	// Do not prevent any unmounting
 	chdir("/");		// TODO - probably should make this the root install dir
 	
-	//set up signals
-	sig_init();
+	// Set up signals
+	signal_init();
 
-	//init logging
+
+	// Init logging
 	log_openfile(LOGDIR "/" LOGFILE, NULL);
 	log_addlistener(log_appendbuf, NULL, NULL);
 	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
 	LOGK(LOG_DEBUG, "Kernel compiled %s %s", __DATE__, __TIME__);
 
-	//log time
+	// Log time
 	{
 		char timebuf[50];
 		time_t now = time(NULL);
@@ -739,7 +744,20 @@ int main(int argc, char * argv[])
 		LOGK(LOG_INFO, "The time is now %s", timebuf);
 	}
 
-	//initialize global variables
+	// Configure memory for realtime
+	if (mlockall(MCL_CURRENT | MCL_FUTURE))
+	{
+		LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
+	}
+	mallopt(M_TRIM_THRESHOLD, -1);
+
+	// Set up buffers
+	buffer_init();
+
+	// Initialize library functions
+	bfd_init();
+
+	// Initialize global variables
 	LIST_INIT(&modules);
 	LIST_INIT(&calentries);
 	LIST_INIT(&objects);
@@ -751,17 +769,10 @@ int main(int argc, char * argv[])
 	syscalls = g_hash_table_new(g_str_hash, g_str_equal);
 	mutex_init(&io_lock, M_RECURSIVE);
 
-	//set start time
+	// Set start time
 	starttime = kernel_timestamp();
 
-	//configure memory for realtime
-	if (mlockall(MCL_CURRENT | MCL_FUTURE))
-	{
-		LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
-	}
-	mallopt(M_TRIM_THRESHOLD, -1);
-
-	//seed random number gen
+	// Seed random number gen
 	srand(time(NULL));
 
 	//add some basic properties
@@ -792,9 +803,6 @@ int main(int argc, char * argv[])
 
 	//init mainloop
 	mainloop_init();
-
-	//initialize library functions
-	bfd_init();
 
 	//initialize profiler
 #ifdef EN_PROFILE

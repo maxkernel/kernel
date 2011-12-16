@@ -172,17 +172,19 @@ static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 
 	while (toindex < width*3)
 	{
-		unsigned char data[4];
-		buffer_setpos(from, rowindex);			// TODO - optimize this!!
-		buffer_read(from, data, sizeof(data));
+		unsigned char y1, y2, u, v;
+		buffer_read(from, &y1, rowindex+0, sizeof(unsigned char));
+		buffer_read(from, &u,  rowindex+1, sizeof(unsigned char));
+		buffer_read(from, &y2, rowindex+2, sizeof(unsigned char));
+		buffer_read(from, &v,  rowindex+3, sizeof(unsigned char));
 
-		to[toindex++] = data[0];
-		to[toindex++] = data[1];
-		to[toindex++] = data[3];
+		to[toindex++] = y1;
+		to[toindex++] = u;
+		to[toindex++] = v;
 
-		to[toindex++] = data[2];
-		to[toindex++] = data[1];
-		to[toindex++] = data[3];
+		to[toindex++] = y2;
+		to[toindex++] = u;
+		to[toindex++] = v;
 
 		rowindex += 4;
 	}
@@ -197,18 +199,19 @@ static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t 
 	size_t toindex = 0;
 	while (toindex < width*3)
 	{
-		unsigned char data[4];
-		buffer_setpos(from, yindex);	buffer_read(from, &data[0], 2);	// TODO - optimize this!!
-		buffer_setpos(from, uindex);	buffer_read(from, &data[2], 1);
-		buffer_setpos(from, vindex);	buffer_read(from, &data[3], 1);
+		unsigned char y1, y2, u, v;
+		buffer_read(from, &y1, yindex,   sizeof(unsigned char));
+		buffer_read(from, &y2, yindex+1, sizeof(unsigned char));
+		buffer_read(from, &u,  uindex,   sizeof(unsigned char));
+		buffer_read(from, &v,  vindex,   sizeof(unsigned char));
 
-		to[toindex++] = data[0];
-		to[toindex++] = data[2];
-		to[toindex++] = data[3];
+		to[toindex++] = y1;
+		to[toindex++] = u;
+		to[toindex++] = v;
 
-		to[toindex++] = data[1];
-		to[toindex++] = data[2];
-		to[toindex++] = data[3];
+		to[toindex++] = y2;
+		to[toindex++] = u;
+		to[toindex++] = v;
 
 		yindex += 2;
 		uindex++;
@@ -308,7 +311,7 @@ void jpeg_update(void * object)
 		jpeg_finish_compress(cinfo);
 
 		buffer_t out = buffer_new();
-		buffer_write(out, jpeg->buffer, jpeg->buffer_length);
+		buffer_write(out, jpeg->buffer, 0, jpeg->buffer_length);
 		OUTPUT(frame, &out);
 		buffer_free(out);
 	}

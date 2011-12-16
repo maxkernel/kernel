@@ -27,7 +27,7 @@ void s_bufstream_update(void * userdata)
 	}
 
 	char data[buffer_size(*buffer)];
-	size_t read = buffer_read(*buffer, data, sizeof(data));		// TODO - Don't do this!! The buffer might be *huge* and blow the stack!
+	size_t read = buffer_read(*buffer, data, 0, sizeof(data));		// TODO - Don't do this!! The buffer might be *huge* and blow the stack!
 
 	if (read != sizeof(data))
 	{

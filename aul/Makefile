@@ -47,10 +47,15 @@ exception.o: /usr/include/time.h /usr/include/sys/select.h
 exception.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
 exception.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
 exception.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
-exception.o: /usr/include/string.h include/aul/common.h
-exception.o: /usr/include/inttypes.h /usr/include/stdint.h
-exception.o: /usr/include/bits/wchar.h include/aul/exception.h
-exception.o: include/aul/string.h
+exception.o: /usr/include/string.h /usr/include/stdio.h /usr/include/libio.h
+exception.o: /usr/include/_G_config.h /usr/include/wchar.h
+exception.o: /usr/include/bits/stdio_lim.h /usr/include/bits/sys_errlist.h
+exception.o: include/aul/common.h /usr/include/inttypes.h
+exception.o: /usr/include/stdint.h /usr/include/bits/wchar.h
+exception.o: include/aul/exception.h /usr/include/errno.h
+exception.o: /usr/include/bits/errno.h /usr/include/linux/errno.h
+exception.o: /usr/include/asm/errno.h /usr/include/asm-generic/errno.h
+exception.o: /usr/include/asm-generic/errno-base.h include/aul/string.h
 log.o: /usr/include/stdio.h /usr/include/features.h
 log.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 log.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -123,9 +128,12 @@ serial.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
 serial.o: /usr/include/xlocale.h /usr/include/alloca.h
 serial.o: /usr/include/inttypes.h /usr/include/stdint.h
 serial.o: /usr/include/bits/wchar.h /usr/include/string.h include/aul/log.h
-serial.o: include/aul/exception.h include/aul/string.h include/aul/serial.h
-serial.o: /usr/include/termios.h /usr/include/bits/termios.h
-serial.o: /usr/include/sys/ttydefaults.h
+serial.o: include/aul/exception.h /usr/include/errno.h
+serial.o: /usr/include/bits/errno.h /usr/include/linux/errno.h
+serial.o: /usr/include/asm/errno.h /usr/include/asm-generic/errno.h
+serial.o: /usr/include/asm-generic/errno-base.h include/aul/string.h
+serial.o: include/aul/serial.h /usr/include/termios.h
+serial.o: /usr/include/bits/termios.h /usr/include/sys/ttydefaults.h
 string.o: /usr/include/stdio.h /usr/include/features.h
 string.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 string.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
@@ -185,5 +193,8 @@ hashtable.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
 hashtable.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
 hashtable.o: /usr/include/inttypes.h /usr/include/stdint.h
 hashtable.o: /usr/include/bits/wchar.h include/aul/log.h
-hashtable.o: include/aul/exception.h include/aul/string.h
+hashtable.o: include/aul/exception.h /usr/include/errno.h
+hashtable.o: /usr/include/bits/errno.h /usr/include/linux/errno.h
+hashtable.o: /usr/include/asm/errno.h /usr/include/asm-generic/errno.h
+hashtable.o: /usr/include/asm-generic/errno-base.h include/aul/string.h
 hashtable.o: include/aul/hashtable.h include/aul/list.h
