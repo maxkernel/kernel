@@ -175,6 +175,11 @@ void buffer_init()
 	}
 }
 
+void buffer_destroy()
+{
+	// TODO - destroy the buffers, warn is there are any open ones still
+}
+
 buffer_t buffer_new()
 {
 	return buffer_getnew();
@@ -248,7 +253,7 @@ static void buffer_doread(buffer_t b, char * data, off_t offset, size_t length)
 
 	mutex_lock(&buffers[b]->access_lock);
 	{
-		if (offset > BUFFERSIZE)
+		if (offset >= BUFFERSIZE)
 		{
 			buffer_doread(buffers[b]->next, data, offset - BUFFERSIZE, length);
 			goto done;
@@ -266,7 +271,7 @@ static void buffer_doread(buffer_t b, char * data, off_t offset, size_t length)
 			}
 
 			size_t readlen = MIN(length, PAGESIZE - pageoff);
-			memcpy(data, buffers[b]->pages[pagenum], readlen);
+			memcpy(data, buffers[b]->pages[pagenum] + pageoff, readlen);
 
 			length -= readlen;
 			data += readlen;
@@ -288,6 +293,12 @@ size_t buffer_read(buffer_t b, void * data, off_t offset, size_t length)
 
 	size_t size = buffer_size(b);
 	size_t readsize = offset + length;
+
+	if (offset > size)
+	{
+		// Can't read any data! Offset is larger then entire buffer
+		return 0;
+	}
 
 	if (readsize > size)
 	{

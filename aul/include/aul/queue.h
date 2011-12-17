@@ -58,12 +58,12 @@ static inline void __queue_advance(queue_t * queue, void ** what, size_t length)
 	}
 }
 
-inline bool queue_isempty(queue_t * queue)
+static inline bool queue_isempty(queue_t * queue)
 {
 	return queue->head == NULL;
 }
 
-inline bool queue_isfull(queue_t * queue)
+static inline bool queue_isfull(queue_t * queue)
 {
 	return queue->tail == queue->head;
 }

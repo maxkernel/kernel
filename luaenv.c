@@ -9,6 +9,13 @@
 #define KENTRY_NAMELEN		50
 #define GROUP_MAX			20
 
+#if defined(ALPHA) || defined(BETA)
+  #define LUALOG(level, format, ...) log_write(level, "LUAENV", "[%s in %s at %d]: " format, __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__)
+#else
+  #define LUALOG(level, format, ...) log_write(level, "LUAENV", format, ## __VA_ARGS__)
+#endif
+
+
 typedef struct
 {
 	enum
@@ -122,10 +129,12 @@ static int mt_config_index(lua_State * L)
 static int mt_config_newindex(lua_State * L)
 {
 	kernentry_t * entry = luaL_checkudata(L, 1, "MaxKernel.config");
+	module_t * module = entry->data;
+
 	const char * key = luaL_checkstring(L, 2);
 	const char * value = luaL_checkstring(L, 3);
 
-	cfg_setparam(entry->name, key, value);
+	cfg_setparam(module->path, key, value);
 
 	return 0;
 }
@@ -133,20 +142,19 @@ static int mt_config_newindex(lua_State * L)
 
 static int l_log(lua_State * L)
 {
-	// TODO - make these something other than "module" logs
-	LOG(LOG_INFO, "Lua: %s", lua_tostring(L, 1));
+	LUALOG(LOG_INFO, "Script: %s", lua_tostring(L, 1));
 	return 0;
 }
 
 static int l_warn(lua_State * L)
 {
-	LOG(LOG_WARN, "Lua: %s", lua_tostring(L, 1));
+	LUALOG(LOG_WARN, "Script: %s", lua_tostring(L, 1));
 	return 0;
 }
 
 static int l_debug(lua_State * L)
 {
-	LOG(LOG_DEBUG, "Lua: %s", lua_tostring(L, 1));
+	LUALOG(LOG_DEBUG, "Script: %s", lua_tostring(L, 1));
 	return 0;
 }
 
@@ -191,7 +199,7 @@ static int l_newblock(lua_State * L)
 
 	void ** params = malloc0(sizeof(void *) * strlen(sig));
 
-	//build constructor args
+	// Build constructor args
 	int stack = 1, index = 0;
 	for (; index < strlen(sig); ++index, ++stack)
 	{
@@ -428,11 +436,11 @@ static int l_newrategroup(lua_State * L)
 			string_append(&str, ", %s", insts[i]->block->name);
 			i++;
 		}
-		LOGK(LOG_DEBUG, "%s", str.string);
+		LUALOG(LOG_DEBUG, "%s", str.string);
 	}
 	else
 	{
-		LOGK(LOG_WARN, "Cannot create rategroup %s with no members", name);
+		LUALOG(LOG_WARN, "Cannot create rategroup %s with no members", name);
 		free(insts);
 		return 0;
 	}
@@ -562,7 +570,7 @@ static int l_newsyscall(lua_State * L)
 	}
 	else
 	{
-		LOGK(LOG_WARN, "Cannot create syscall %s with empty group table", name);
+		LUALOG(LOG_WARN, "Cannot create syscall %s with empty group table", name);
 		free(inputs);
 		return 0;
 	}
@@ -605,7 +613,7 @@ bool lua_execfile(const char * path)
 {
 	bool ret = true;
 
-	LOGK(LOG_DEBUG, "Creating lua environment");
+	LUALOG(LOG_DEBUG, "Creating lua environment");
 	lua_State * L = luaL_newstate();
 	luaL_openlibs(L);
 
@@ -636,10 +644,10 @@ bool lua_execfile(const char * path)
 	lua_register(L, "newrategroup", l_newrategroup);
 	lua_register(L, "newsyscall", l_newsyscall);
 
-	LOGK(LOG_INFO, "Executing lua file %s", path);
+	LUALOG(LOG_INFO, "Executing lua file %s", path);
 	if (luaL_loadfile(L, path) || lua_pcall(L, 0,0,0))
 	{
-		LOGK(LOG_ERR, "Lua: %s", lua_tostring(L, -1));
+		LUALOG(LOG_ERR, "Lua: %s", lua_tostring(L, -1));
 		ret = false;
 	}
 

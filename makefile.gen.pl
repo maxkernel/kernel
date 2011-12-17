@@ -23,7 +23,7 @@ DEFINES		+= $defines -DMODULE
 INCLUDES	+= -Iinclude -I.. -I../aul/include \$(foreach dep,\$(DEPENDS),-I../\$(dep)/include)
 LIBS		+= \$(shell pkg-config --libs glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --libs \$(PACKAGES))
 
-CFLAGS		= -pipe -ggdb3 -Wall -fpic \$(shell pkg-config --cflags glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --cflags \$(PACKAGES))
+CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic \$(shell pkg-config --cflags glib-2.0) \$(shell [ -n "\$(PACKAGES)" ] && pkg-config --cflags \$(PACKAGES))
 LFLAGS		= -shared
 
 

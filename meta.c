@@ -225,6 +225,10 @@ meta_t * meta_parse(const char * path)
 			{
 				meta->calupdate = g_match_info_fetch(info, 2);
 			}
+			else if (strcmp(type, M_CALPREVIEW) == 0)
+			{
+				meta->calpreview = g_match_info_fetch(info, 2);
+			}
 			else if (strcmp(type, M_VERSION) == 0)
 			{
 				meta->version = g_match_info_fetch(info, 2);

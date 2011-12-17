@@ -295,26 +295,3 @@ void cal_freeparam(calparam_t * val)
 {
 	g_free(val);
 }
-
-/*
-double cal_map(const double dest_min, const double dest_center, const double dest_max, const double src_min, const double src_center, const double src_max, double value)
-{
-	value = CLAMP(value, src_min, src_max);
-
-	if (value == src_center)
-	{
-		return dest_center;
-	}
-	else if (value > src_center)
-	{
-		return (value - src_center) / (src_max - src_center) * (dest_max - dest_center) + dest_center;
-	}
-	else
-	{
-		return (value - src_center) / (src_min - src_center) * (dest_min - dest_center) + dest_center;
-	}
-
-	return 0;
-}
-*/
-

@@ -25,6 +25,7 @@ extern "C" {
 #else
   #define LOG(level, format, ...) log_write(level, "Module", format, ## __VA_ARGS__)
 #endif
+#define LOG1(level, format, ...)  do { static bool __h = false; if (!__h) { LOG(level, format, ## __VA_ARGS__); __h = true; } } while(0)
 
 #define LOG_FATAL		LEVEL_FATAL
 #define LOG_ERR			LEVEL_ERROR
@@ -51,6 +52,7 @@ extern "C" {
 #define M_CFGPARAM		"CONFIG.PARAM"
 #define M_CALPARAM		"CALIBRATION.PARAM"
 #define M_CALUPDATE		"CALIBRATION.UPDATE"
+#define M_CALPREVIEW	"CALIBRATION.PREVIEW"
 #define M_BLOCK			"BLOCK"
 #define M_ONUPDATE		"BLOCK.ONUPDATE"
 #define M_ONDESTROY		"BLOCK.ONDESTROY"
@@ -85,6 +87,7 @@ extern "C" {
 #define CFG_PARAM(name, sig, ...)					__WRITE_META(M_CFGPARAM, #name, sig, ## __VA_ARGS__)
 #define CAL_PARAM(name, sig, desc)					__WRITE_META(M_CALPARAM, #name, sig, desc)
 #define CAL_UPDATE(func)							__WRITE_META(M_CALUPDATE, #func)
+#define CAL_PREVIEW(func)							__WRITE_META(M_CALPREVIEW, #func)
 
 
 #define PARAMS_MAX				64

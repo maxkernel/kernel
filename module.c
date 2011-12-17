@@ -301,6 +301,24 @@ module_t * module_load(const char * name)
 			}
 		}
 
+		// register calibration preview function
+		{
+			char * preview = meta->calpreview;
+
+			if (preview != NULL)
+			{
+				LOGK(LOG_DEBUG, "Registering calibration preview function %s", preview);
+
+				if (!module_symbol(module->module, preview, (void **)&module->calpreview))
+				{
+					LOGK(LOG_FATAL, "Could not read calibration preview module symbol %s", preview);
+					//will exit program
+				}
+
+				free(preview);
+			}
+		}
+
 		// register blocks
 		list_foreach_safe(pos, q, &meta->blocks)
 		{

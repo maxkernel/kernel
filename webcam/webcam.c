@@ -15,7 +15,7 @@
 
 MOD_VERSION("1.0");
 MOD_AUTHOR("Andrew Klofas <andrew.klofas@senseta.com>");
-MOD_DESCRIPTION("Captures Webcams (video4linux) and outputs YUV format");
+MOD_DESCRIPTION("Captures Webcams (video4linux2) and outputs YUV format");
 
 DEF_BLOCK(device, webcam_new, "ssii");
 BLK_ONUPDATE(device, webcam_update);
@@ -302,20 +302,8 @@ static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 		return -1;
 	}
 
-	/*
-	size_t expect_size = webcam_getbufsize(webcam->format, webcam->width, webcam->height);
-	buffer_t frame = buffer_new(expect_size);
-
-	if (webcam->buffers[buf.index].length < expect_size)
-	{
-		LOG(LOG_WARN, "Webcam: Unexpected buffer size (too small). Expected %d, got %d", expect_size, webcam->buffers[buf.index].length);
-		buffer_free(frame);
-		return NULL;
-	}
-	*/
-
-	size_t expect_size = webcam->buffers[buf.index].length;
-	buffer_write(frame, webcam->buffers[buf.index].start, 0, expect_size);
+	size_t size = webcam->buffers[buf.index].length;
+	buffer_write(frame, webcam->buffers[buf.index].start, 0, size);
 
 	if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{

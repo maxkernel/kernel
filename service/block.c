@@ -4,6 +4,11 @@
 #include <buffer.h>
 #include "service.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 
 DEF_BLOCK(bufferstream, s_bufstream_new, "ssss", "Create a new buffer stream service");
 BLK_INPUT(bufferstream, buffer, S_BUFFER, "Input buffer to stream to service clients");

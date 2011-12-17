@@ -33,7 +33,7 @@ struct __kthread_t;
 typedef void (*blind_f)();
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
-typedef void (*calupdate_f)(const char * name, const char type, void * newvalue, void * target, const int justpreview);
+typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
 typedef bool (*trigger_f)(void * object);
 typedef void * (*blk_constructor_f)();
 typedef void (*blk_onupdate_f)(void * userdata);
@@ -60,7 +60,8 @@ typedef struct
 	list_t cfgentries;			//a list of cfgentry_t config entries
 	list_t dependencies;		//a list of dependency_t dependency objects
 	list_t calentries;			//a list of calentry_t calibration entries (name -> calentry_t)
-	calupdate_f calupdate;		//the function to call when the calibration has been updated
+	calibration_f calupdate;	//the function to call when the calibration has been updated
+	calibration_f calpreview;	//the function to call when a calibration item should be previewed
 	list_t blocks;				//a list of all blocks defined in this module
 	list_t block_inst;			//a list of all block_inst_t block instances created
 	//struct __block_t * block_static;			//the static block_t block, or null if none
@@ -81,6 +82,7 @@ typedef struct
 	list_t cfgentries;
 	list_t calentries;
 	char * calupdate;
+	char * calpreview;
 	list_t blocks;
 } meta_t;
 

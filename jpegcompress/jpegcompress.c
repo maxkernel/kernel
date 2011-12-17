@@ -7,6 +7,11 @@
 #include <jpeglib.h>
 #include <jerror.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <kernel.h>
 #include <buffer.h>
 
@@ -23,32 +28,39 @@ BLK_INPUT(compressor, frame, "x");
 BLK_OUTPUT(compressor, frame, "x");
 
 
-#define BUFFER_STEP			10000
+#define MAX_ROWSIZE			1600
+#define BUFFER_SIZE			(20 * 1024)		// 20 KB
 
 /*-------------------- JPEG STRUCT & MANAGE FUNCS -------------*/
 static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
-static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
-
+static bool js_yuv422(JDIMENSION width, JDIMENSION height, size_t buffersize);
 
 typedef void (*convert_f)(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
+typedef bool (*sizecheck_f)(JDIMENSION width, JDIMENSION height, size_t buffersize);
 
 typedef struct
 {
-	int width, height, quality;
+	int width;
+	int height;
+	int quality;
 
-	struct jpeg_compress_struct * cinfo;
-	struct jpeg_error_mgr * jerr;
-	struct jpeg_destination_mgr * dest;
-	JSAMPLE * row;
+	bool isvalid;							// Bool: Are the following libjpeg structs valid and initialized?
+	struct jpeg_compress_struct cinfo;
+	struct jpeg_error_mgr jerr;
+	struct jpeg_destination_mgr dest;
+
+	JSAMPLE row[MAX_ROWSIZE * 3];
+	JOCTET buffer[BUFFER_SIZE];
+
 	jmp_buf jmp;
-
-	JOCTET * buffer;
-	size_t buffer_length;
-
 	convert_f converter;
+	sizecheck_f sizechecker;
+
+	buffer_t * out;
+	size_t out_size;
 } jpeg_t;
 
-static convert_f jpeg_getconverter(char * fmt)
+static bool jpeg_getfmtinfo(char * fmt, convert_f * converter, sizecheck_f * sizechecker)
 {
 	size_t len = strlen(fmt), i = 0;
 	for (; i<len; i++)
@@ -56,48 +68,51 @@ static convert_f jpeg_getconverter(char * fmt)
 		fmt[i] = (char)tolower(fmt[i]);
 	}
 
-	if (strcmp(fmt, "yuv420") == 0)
+	if (strcmp(fmt, "yuyv") == 0 || strcmp(fmt, "yuv422") == 0)
 	{
-		return jc_yuv420;
-	}
-	else if (strcmp(fmt, "yuyv") == 0 || strcmp(fmt, "yuv422") == 0)
-	{
-		return jc_yuv422;
+		*converter =jc_yuv422;
+		*sizechecker = js_yuv422;
+		return true;
 	}
 
-	return NULL;
+	return false;
 }
 
 void * jpeg_new(char * format, int quality)
 {
-	jpeg_t * jpeg = malloc0(sizeof(jpeg_t));
-	jpeg->quality = quality;
-	jpeg->converter = jpeg_getconverter(format);
+	convert_f converter;
+	sizecheck_f sizechecker;
 
-	if (jpeg->converter == NULL)
+
+	if (!jpeg_getfmtinfo(format, &converter, &sizechecker))
 	{
 		LOG(LOG_ERR, "libJPEG error: Invalid input format: %s", format);
 		return NULL;
 	}
+
+	jpeg_t * jpeg = malloc0(sizeof(jpeg_t));
+	jpeg->isvalid = false;
+	jpeg->quality = quality;
+	jpeg->converter = converter;
+	jpeg->sizechecker = sizechecker;
 
 	return jpeg;
 }
 
 static void jpeg_freecompress(jpeg_t * jpeg)
 {
-	if (jpeg->cinfo != NULL)
+	if (jpeg->isvalid)
 	{
-		jpeg_abort_compress(jpeg->cinfo);
-		jpeg_destroy_compress(jpeg->cinfo);
+		jpeg_abort_compress(&jpeg->cinfo);
+		jpeg_destroy_compress(&jpeg->cinfo);
+		jpeg->isvalid = false;
 	}
 
-	free(jpeg->cinfo);
-	free(jpeg->jerr);
-	free(jpeg->dest);
-
-	jpeg->cinfo = NULL;
-	jpeg->jerr = NULL;
-	jpeg->dest = NULL;
+	if (jpeg->out != NULL)
+	{
+		buffer_free(*jpeg->out);
+		jpeg->out = NULL;
+	}
 }
 
 void jpeg_free(void * data)
@@ -109,7 +124,6 @@ void jpeg_free(void * data)
 
 	jpeg_t * jpeg = data;
 	jpeg_freecompress(jpeg);
-	free(jpeg->buffer);
 	free(jpeg);
 }
 
@@ -131,35 +145,29 @@ void jpeg_destinit(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
 
-	if (jpeg->buffer == NULL)
-	{
-		jpeg->buffer = malloc(BUFFER_STEP);
-		jpeg->buffer_length = BUFFER_STEP;
-	}
-
 	cinfo->dest->next_output_byte = jpeg->buffer;
-	cinfo->dest->free_in_buffer = jpeg->buffer_length;
+	cinfo->dest->free_in_buffer = BUFFER_SIZE;
 }
 
 void jpeg_destterm(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
-	jpeg->buffer_length = cinfo->dest->next_output_byte - jpeg->buffer;
+
+	size_t length = jpeg->dest.next_output_byte - jpeg->buffer;
+	buffer_write(*jpeg->out, jpeg->buffer, jpeg->out_size, length);
+	jpeg->out_size += length;
 }
 
 boolean jpeg_destempty(j_compress_ptr cinfo)
 {
-	//the buffer is empty, malloc more (using BUFFER_STEP) and set the pointers correctly
 	jpeg_t * jpeg = cinfo->client_data;
 
-	size_t oldlen = jpeg->buffer_length;
-	size_t newlen = jpeg->buffer_length + BUFFER_STEP;
+	size_t length = jpeg->dest.next_output_byte - jpeg->buffer;
+	buffer_write(*jpeg->out, jpeg->buffer, jpeg->out_size, length);
+	jpeg->out_size += length;
 
-	jpeg->buffer = realloc(jpeg->buffer, newlen);
-	jpeg->buffer_length = newlen;
-
-	jpeg->dest->next_output_byte = jpeg->buffer+(newlen-oldlen);
-	jpeg->dest->free_in_buffer = newlen-oldlen;
+	jpeg->dest.next_output_byte = jpeg->buffer;
+	jpeg->dest.free_in_buffer = BUFFER_SIZE;
 
 	return true;
 }
@@ -167,56 +175,32 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 /*-------------------------- THE BEEF OF THE MODULE ------------------------*/
 static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
 {
-	size_t rowindex = row * width * 2;
-	size_t toindex = 0;
+	// Algorithm developed to use same memory buffer for converting y1,u,y2,v -> y1,u,v,y2,u,v
+	// It does, however, corrupt the first y2 value, so we must save and restore
 
-	while (toindex < width*3)
+	buffer_read(from, to, row * width * 2, width * 2);
+
+	size_t from_tail = width * 2, to_tail = width * 3;
+	char y2 = to[2];
+	do
 	{
-		unsigned char y1, y2, u, v;
-		buffer_read(from, &y1, rowindex+0, sizeof(unsigned char));
-		buffer_read(from, &u,  rowindex+1, sizeof(unsigned char));
-		buffer_read(from, &y2, rowindex+2, sizeof(unsigned char));
-		buffer_read(from, &v,  rowindex+3, sizeof(unsigned char));
+		from_tail -= 4;
+		to_tail -= 6;
 
-		to[toindex++] = y1;
-		to[toindex++] = u;
-		to[toindex++] = v;
+		to[to_tail + 5] = to[to_tail + 2] = to[from_tail + 3];
+		to[to_tail + 4] = to[to_tail + 1] = to[from_tail + 1];
+		to[to_tail + 3] = to[from_tail + 2];
+		to[to_tail + 0] = to[from_tail + 0];
 
-		to[toindex++] = y2;
-		to[toindex++] = u;
-		to[toindex++] = v;
+	} while (from_tail > 0);
 
-		rowindex += 4;
-	}
+	to[3] = y2;	// Restore y2 value
 }
 
-static void jc_yuv420(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
+static bool js_yuv422(JDIMENSION width, JDIMENSION height, size_t buffersize)
 {
-	size_t yindex = row * width;
-	size_t uindex = (width * height) + (row * width)/4;
-	size_t vindex = uindex + (width * height)/4;
-
-	size_t toindex = 0;
-	while (toindex < width*3)
-	{
-		unsigned char y1, y2, u, v;
-		buffer_read(from, &y1, yindex,   sizeof(unsigned char));
-		buffer_read(from, &y2, yindex+1, sizeof(unsigned char));
-		buffer_read(from, &u,  uindex,   sizeof(unsigned char));
-		buffer_read(from, &v,  vindex,   sizeof(unsigned char));
-
-		to[toindex++] = y1;
-		to[toindex++] = u;
-		to[toindex++] = v;
-
-		to[toindex++] = y2;
-		to[toindex++] = u;
-		to[toindex++] = v;
-
-		yindex += 2;
-		uindex++;
-		vindex++;
-	}
+	size_t expected = width * height * 2;
+	return buffersize == expected;
 }
 
 void jpeg_update(void * object)
@@ -237,33 +221,28 @@ void jpeg_update(void * object)
 		return;
 	}
 
+	if (*width > MAX_ROWSIZE)
+	{
+		// Rowsize too big!
+		LOG1(LOG_ERR, "Could not compress JPEG with width greater than %d", MAX_ROWSIZE);
+		return;
+	}
+
 	jpeg_t * jpeg = object;
-	struct jpeg_compress_struct * cinfo = jpeg->cinfo;
-	struct jpeg_error_mgr * jerr = jpeg->jerr;
-	struct jpeg_destination_mgr * dest = jpeg->dest;
+	struct jpeg_compress_struct * cinfo = &jpeg->cinfo;
+	struct jpeg_error_mgr * jerr = &jpeg->jerr;
+	struct jpeg_destination_mgr * dest = &jpeg->dest;
 
 	if (*width != jpeg->width || *height != jpeg->height)
 	{
 		jpeg_freecompress(jpeg);
 		jpeg->width = *width;
 		jpeg->height = *height;
-
-		free(jpeg->row);
-		jpeg->row = NULL;
 	}
 
-	if (jpeg->row == NULL)
+	if (!jpeg->isvalid)
 	{
-		jpeg->row = malloc(jpeg->width * 3);
-	}
-
-	if (jpeg->cinfo == NULL)
-	{
-		//init the compress struct
-
-		jpeg->cinfo = cinfo = malloc0(sizeof(struct jpeg_compress_struct));
-		jpeg->jerr = jerr = malloc0(sizeof(struct jpeg_error_mgr));
-		jpeg->dest = dest = malloc0(sizeof(struct jpeg_destination_mgr));
+		// Init the compression struct
 		cinfo->client_data = jpeg;
 
 		cinfo->err = jpeg_std_error(jerr);
@@ -288,21 +267,30 @@ void jpeg_update(void * object)
 
 	if (setjmp(jpeg->jmp))
 	{
-		//an error happened!
+		// An error happened!
 		LOG(LOG_WARN, "An exception occurred during JPEG compression, aborting frame");
 
-		//reset all struct variables
+		// Reset all struct variables
 		jpeg_freecompress(jpeg);
+		return;
 	}
 	else
 	{
-		//start the compression
+		if (!jpeg->sizechecker(jpeg->width, jpeg->height, buffer_size(*frame)))
+		{
+			LOG(LOG_WARN, "Invalid frame size given to input of jpeg compressor (width=%d, height=%d): %zu", jpeg->width, jpeg->height, buffer_size(*frame));
+			return;
+		}
+
+		// Start the compression
+		buffer_t out = buffer_new();
+		jpeg->out = &out;
+		jpeg->out_size = 0;
+
 		jpeg_start_compress(cinfo, true);
-
 		JSAMPROW rowdata[1] = {jpeg->row};
-		int rownum = 0;
 
-		for (; rownum < jpeg->height; rownum++)
+		for (int rownum = 0; rownum < jpeg->height; rownum++)
 		{
 			jpeg->converter(rownum, jpeg->width, jpeg->height, *frame, jpeg->row);
 			jpeg_write_scanlines(cinfo, rowdata, 1);
@@ -310,9 +298,10 @@ void jpeg_update(void * object)
 
 		jpeg_finish_compress(cinfo);
 
-		buffer_t out = buffer_new();
-		buffer_write(out, jpeg->buffer, 0, jpeg->buffer_length);
+
+		buffer_write(out, jpeg->buffer, 0, cinfo->dest->next_output_byte - jpeg->buffer);
 		OUTPUT(frame, &out);
 		buffer_free(out);
+		jpeg->out = NULL;
 	}
 }

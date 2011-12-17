@@ -973,83 +973,64 @@ int main(int argc, char * argv[])
 		g_slist_free(allblockinst);
 	}
 	*/
-	//call post functions
+
+	// Call post functions
 	{
 		list_t * pos;
 
-		//sort the calentries list
+		// Sort the calentries list
 		list_sort(&calentries, cal_compare);
 		list_sort(&modules, module_compare);
 
-		//call init function on all modules
+		// Call init function on all modules
 		list_foreach(pos, &modules)
 		{
 			module_t * module = list_entry(pos, module_t, global_list);
 			module_init(module);
 		}
 
-		//check for new kernel tasks every second
+		// Check for new kernel thread tasks every second
 		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);
 
+		// If we are configured to profile, start that now
 #ifdef EN_PROFILE
 		mainloop_addtimer(NULL, "Profiler", (1.0 / PROFILE_UPDATEHZ) * NANOS_PER_SECOND, profile_track, NULL);
 #endif
 
-		//execute all tasks in queue
-		//task_exec();
-/*
-		//start up all kthreads
-		GSList * next = tmp_kthreads;
-		while (next != NULL)
-		{
-			kthread_t * kth = next->data;
-
-			GError * err = NULL;
-			g_thread_create(kthread_dothread, kth, false, &err);
-			if (err != NULL)
-			{
-				LOGK(LOG_FATAL, "Could not create new kernel thread: %s", err->message);
-				//will exit
-			}
-
-			next = next->next;
-		}
-
-		g_slist_free(tmp_kthreads);
-		tmp_kthreads = NULL;
-*/
 	}
 
-	//run max kernel main loop
-	//g_main_loop_run(mainloop);
+	// Run maxkernel mainloop
 	mainloop_run(NULL);
 
-
+	// Returning from the main loop means we've gotten a signal to exit
 	LOGK(LOG_DEBUG, "Destroying the kernel.");
 	mutex_lock(&kobj_mutex);
-
-	//GHashTableIter itr;
-	//kthread_t * kth;
-
-	/*
-	g_hash_table_iter_init(&itr, kthreads);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&kth))
 	{
-		kth->stop = true;
-		pthread_join(kth->thread, NULL);
-	}
-	*/
+		//GHashTableIter itr;
+		//kthread_t * kth;
 
-	list_t * pos, * q;
-	list_foreach_safe(pos, q, &objects)
-	{
-		kobject_t * item = list_entry(pos, kobject_t, kobjdb);
-		kobj_destroy(item);
-	}
+		/*
+		g_hash_table_iter_init(&itr, kthreads);
+		while (g_hash_table_iter_next(&itr, NULL, (void **)&kth))
+		{
+			kth->stop = true;
+			pthread_join(kth->thread, NULL);
+		}
+		*/
 
+		list_t * pos, * q;
+		list_foreach_safe(pos, q, &objects)
+		{
+			kobject_t * item = list_entry(pos, kobject_t, kobjdb);
+			kobj_destroy(item);
+		}
+	}
 	mutex_unlock(&kobj_mutex);
 
-	//destroy the memfs subsystem
+	// Destroy the buffer subsystem
+	buffer_destroy();
+
+	// Destroy the memfs subsystem
 	LOGK(LOG_DEBUG, "Unmounting kernel memfs");
 	{
 		exception_t * err = NULL;
@@ -1062,6 +1043,7 @@ int main(int argc, char * argv[])
 		}
 	}
 
+	// Close the database file
 	if (database != NULL)
 	{
 		LOGK(LOG_DEBUG, "Closing database file");
@@ -1069,8 +1051,11 @@ int main(int argc, char * argv[])
 	}
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");
+
+	// Destroy the log subsystem
 	log_destroy();
 
+	// Goodbye
 	return 0;
 }
 
