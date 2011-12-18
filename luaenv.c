@@ -129,7 +129,7 @@ static int mt_config_index(lua_State * L)
 static int mt_config_newindex(lua_State * L)
 {
 	kernentry_t * entry = luaL_checkudata(L, 1, "MaxKernel.config");
-	module_t * module = entry->data;
+	const module_t * module = entry->data;
 
 	const char * key = luaL_checkstring(L, 2);
 	const char * value = luaL_checkstring(L, 3);

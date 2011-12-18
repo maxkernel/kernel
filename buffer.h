@@ -11,12 +11,13 @@ extern "C" {
 typedef int buffer_t;
 
 void buffer_init();
+void buffer_destroy();
 
 buffer_t buffer_new();
 buffer_t buffer_dup(const buffer_t src);
 
 void buffer_write(buffer_t buffer, const void * data, off_t offset, size_t length);
-size_t buffer_read(buffer_t buffer, void * data, off_t offset, size_t length);
+size_t buffer_read(const buffer_t buffer, void * data, off_t offset, size_t length);
 bool buffer_send(buffer_t buffer, int sock);
 
 size_t buffer_size(const buffer_t buffer);

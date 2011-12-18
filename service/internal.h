@@ -13,6 +13,7 @@
 #include <aul/mainloop.h>
 
 #include <kernel.h>
+#include <buffer.h>
 #include <service.h>
 
 #ifdef __cplusplus
@@ -141,7 +142,7 @@ typedef struct __client_t
 extern mutex_t service_lock;
 
 void send_init();
-void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp, const void * data, size_t length);
+void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp, const buffer_t buffer);
 void send_startthread(void * userdata);
 void send_stopthread(void * userdata);
 

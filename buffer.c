@@ -197,7 +197,7 @@ static void buffer_dowrite(buffer_t b, char * data, off_t offset, size_t length)
 
 	mutex_lock(&buffers[b]->access_lock);
 	{
-		if (offset > BUFFERSIZE)
+		if (offset >= BUFFERSIZE)
 		{
 			buffer_dowrite(buffers[b]->next, data, offset - BUFFERSIZE, length);
 			goto done;
@@ -216,7 +216,7 @@ static void buffer_dowrite(buffer_t b, char * data, off_t offset, size_t length)
 			}
 
 			size_t writelen = MIN(length, PAGESIZE - pageoff);
-			memcpy(buffers[b]->pages[pagenum], data, writelen);
+			memcpy(buffers[b]->pages[pagenum] + pageoff, data, writelen);
 
 			length -= writelen;
 			data += writelen;
@@ -247,7 +247,7 @@ void buffer_write(buffer_t b, const void * data, off_t offset, size_t length)
 	buffer_dowrite(b, (char *)data, offset, length);
 }
 
-static void buffer_doread(buffer_t b, char * data, off_t offset, size_t length)
+static void buffer_doread(const buffer_t b, char * data, off_t offset, size_t length)
 {
 	LABELS(done);
 
@@ -284,7 +284,7 @@ done:
 	mutex_unlock(&buffers[b]->access_lock);
 }
 
-size_t buffer_read(buffer_t b, void * data, off_t offset, size_t length)
+size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
 {
 	if (buffer_invalid(b))
 	{

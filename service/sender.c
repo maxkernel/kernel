@@ -1,5 +1,4 @@
 
-
 #include <aul/common.h>
 #include <aul/list.h>
 #include <aul/mutex.h>
@@ -44,8 +43,9 @@ void send_init()
 	}
 }
 
-void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp_us, const void * data, size_t length)
+void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp_us, buffer_t buffer)
 {
+	size_t length = buffer_size(buffer);
 	size_t numpackets = length / SERVICE_FRAGSIZE;
 	if ((length % SERVICE_FRAGSIZE) > 0)
 	{
@@ -118,7 +118,7 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 			packet->data.header.timestamp = timestamp_us;
 
 			size_t payloadsize = MIN(length - index, SERVICE_FRAGSIZE);
-			memcpy(packet->data.packet.payload, ((char *)data) + index, payloadsize);
+			buffer_read(buffer, packet->data.packet.payload, index, payloadsize);
 			packet->size = payloadsize + HEADER_LENGTH;
 			index += payloadsize;
 

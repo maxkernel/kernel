@@ -31,14 +31,5 @@ void s_bufstream_update(void * userdata)
 		return;
 	}
 
-	char data[buffer_size(*buffer)];
-	size_t read = buffer_read(*buffer, data, 0, sizeof(data));		// TODO - Don't do this!! The buffer might be *huge* and blow the stack!
-
-	if (read != sizeof(data))
-	{
-		LOG(LOG_WARN, "Could not read all buffer data");
-		return;
-	}
-
-	service_writedata(handle, kernel_timestamp(), data, sizeof(data));
+	service_writedata(handle, kernel_timestamp(), *buffer);
 }

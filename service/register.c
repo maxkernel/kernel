@@ -264,7 +264,7 @@ service_h service_register(const char * id, const char * name, const char * form
 	return s->handle;
 }
 
-void service_writedata(service_h service_handle, uint64_t timestamp_us, const void * data, size_t length)
+void service_writedata(service_h service_handle, uint64_t timestamp_us, const buffer_t buffer)
 {
 	service_t * service = NULL;
 
@@ -287,14 +287,14 @@ void service_writedata(service_h service_handle, uint64_t timestamp_us, const vo
 		{
 			if (service->streams[i] != NULL)
 			{
-				send_data(service_handle, service->streams[i]->client->handle, service->streams[i], timestamp_us, data, length);
+				send_data(service_handle, service->streams[i]->client->handle, service->streams[i], timestamp_us, buffer);
 			}
 		}
 	}
 	mutex_unlock(&service->lock);
 }
 
-void service_writeclientdata(service_h service_handle, stream_h stream_handle, uint64_t timestamp_us, const void * data, size_t length)
+void service_writeclientdata(service_h service_handle, stream_h stream_handle, uint64_t timestamp_us, const buffer_t buffer)
 {
 	service_t * service = NULL;
 	stream_t * stream = NULL;
@@ -333,7 +333,7 @@ void service_writeclientdata(service_h service_handle, stream_h stream_handle, u
 
 		if (found)
 		{
-			send_data(service_handle, stream->client->handle, stream, timestamp_us, data, length);
+			send_data(service_handle, stream->client->handle, stream, timestamp_us, buffer);
 		}
 		else
 		{

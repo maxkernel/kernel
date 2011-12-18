@@ -7,11 +7,6 @@
 #include <jpeglib.h>
 #include <jerror.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <kernel.h>
 #include <buffer.h>
 
@@ -56,7 +51,7 @@ typedef struct
 	convert_f converter;
 	sizecheck_f sizechecker;
 
-	buffer_t * out;
+	buffer_t out;
 	size_t out_size;
 } jpeg_t;
 
@@ -95,6 +90,7 @@ void * jpeg_new(char * format, int quality)
 	jpeg->quality = quality;
 	jpeg->converter = converter;
 	jpeg->sizechecker = sizechecker;
+	jpeg->out = -1;
 
 	return jpeg;
 }
@@ -108,10 +104,10 @@ static void jpeg_freecompress(jpeg_t * jpeg)
 		jpeg->isvalid = false;
 	}
 
-	if (jpeg->out != NULL)
+	if (jpeg->out != -1)
 	{
-		buffer_free(*jpeg->out);
-		jpeg->out = NULL;
+		buffer_free(jpeg->out);
+		jpeg->out = -1;
 	}
 }
 
@@ -154,7 +150,7 @@ void jpeg_destterm(j_compress_ptr cinfo)
 	jpeg_t * jpeg = cinfo->client_data;
 
 	size_t length = jpeg->dest.next_output_byte - jpeg->buffer;
-	buffer_write(*jpeg->out, jpeg->buffer, jpeg->out_size, length);
+	buffer_write(jpeg->out, jpeg->buffer, jpeg->out_size, length);
 	jpeg->out_size += length;
 }
 
@@ -162,8 +158,8 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
 
-	size_t length = jpeg->dest.next_output_byte - jpeg->buffer;
-	buffer_write(*jpeg->out, jpeg->buffer, jpeg->out_size, length);
+	size_t length = BUFFER_SIZE;	// Despite what the internal structures say, this is the length! (BAD libjpeg!)
+	buffer_write(jpeg->out, jpeg->buffer, jpeg->out_size, length);
 	jpeg->out_size += length;
 
 	jpeg->dest.next_output_byte = jpeg->buffer;
@@ -283,8 +279,7 @@ void jpeg_update(void * object)
 		}
 
 		// Start the compression
-		buffer_t out = buffer_new();
-		jpeg->out = &out;
+		jpeg->out = buffer_new();
 		jpeg->out_size = 0;
 
 		jpeg_start_compress(cinfo, true);
@@ -298,10 +293,8 @@ void jpeg_update(void * object)
 
 		jpeg_finish_compress(cinfo);
 
-
-		buffer_write(out, jpeg->buffer, 0, cinfo->dest->next_output_byte - jpeg->buffer);
-		OUTPUT(frame, &out);
-		buffer_free(out);
-		jpeg->out = NULL;
+		OUTPUT(frame, &jpeg->out);
+		buffer_free(jpeg->out);
+		jpeg->out = -1;
 	}
 }

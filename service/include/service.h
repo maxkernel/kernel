@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#include <buffer.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,8 +45,8 @@ typedef void (*disconnect_f)(service_h service, stream_h stream);
 typedef void (*clientdata_f)(service_h service, stream_h stream, uint64_t timestamp_us, const void * data, size_t len);
 
 service_h service_register(const char * id, const char * name, const char * format, const char * params, const char * desc, connect_f newconnect, disconnect_f disconnected, clientdata_f clientdata);
-void service_writedata(service_h service, uint64_t timestamp_us, const void * data, size_t length);
-void service_writeclientdata(service_h service, stream_h stream, uint64_t timestamp_us, const void * data, size_t length);
+void service_writedata(service_h service, uint64_t timestamp_us, const buffer_t buffer);
+void service_writeclientdata(service_h service, stream_h stream, uint64_t timestamp_us, const buffer_t buffer);
 
 #ifdef __cplusplus
 }
