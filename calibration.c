@@ -118,8 +118,7 @@ void cal_setparam(const char * module, const char * name, const char * value)
 
 	if (mod->calupdate != NULL)
 	{
-		//mod->calupdate(name, cal->sig[0], pvalue, cal->active, true);
-		// TODO - HERE BITCH
+		mod->calpreview(name, cal->sig[0], pvalue, cal->active);
 	}
 }
 
@@ -180,8 +179,7 @@ void cal_merge(const char * comment)
 
 			if (cal->module->calupdate != NULL)
 			{
-				//cal->module->calupdate(cal->name, cal->sig[0], cal->preview, cal->active, false);
-				// TODO - here bitch!
+				cal->module->calupdate(cal->name, cal->sig[0], cal->preview, cal->active);
 			}
 			FREE(cal->preview);
 			cal->preview = NULL;

@@ -4,7 +4,7 @@
 debug("Setting up the Propeller SSC module")
 
 -- Load the propeller ssc module
-ssc = loadmodule("propeller-ssc")
+--[[ssc = loadmodule("propeller-ssc")
 
 -- Update the motors at 10 Hz
 newrategroup("Actuator update", { ssc }, 10)
@@ -15,4 +15,4 @@ newsyscall("turnfront", { ssc.turnfront })
 newsyscall("turnrear", { ssc.turnrear })
 newsyscall("pan", { ssc.pan })
 newsyscall("tilt", { ssc.tilt })
-
+--]]

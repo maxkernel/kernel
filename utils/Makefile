@@ -15,12 +15,15 @@ KDUMP_TARGET		= max-kdump
 
 CFLAGS		= -pipe -ggdb3 -Wall -I. -I.. -I../libmax -DINSTALL="\"$(INSTALL)\"" $(shell pkg-config --cflags $(SYSCALL_PACKAGES))
 
-all: prereq syscall_all log_all autostart_all client_all kdump_all
+#all: prereq syscall_all log_all autostart_all client_all kdump_all
+all: prereq autostart_all client_all
 	#$(MAKE) -f Makefile.modinfo all
 
-install: syscall_install log_install autostart_install client_install kdump_install
+#install: syscall_install log_install autostart_install client_install kdump_install
+install: autostart_install client_install
 
-clean: syscall_clean log_clean autostart_clean client_clean kdump_clean
+#clean: syscall_clean log_clean autostart_clean client_clean kdump_clean
+clean: autostart_clean client_clean
 	#$(MAKE) -f Makefile.modinfo clean
 
 prereq:

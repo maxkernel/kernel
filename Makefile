@@ -60,6 +60,7 @@ all: prepare prereq $(TARGET)
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
+	$(MAKE) -C utils
 	cat buildlog
 
 $(TARGET): $(OBJS)

@@ -47,6 +47,7 @@ void motoroff();
 
 //calibration values
 CAL_UPDATE(pod_updatecal);
+CAL_PREVIEW(pod_previewcal);
 CAL_PARAM(	motor_min,		"i0:15000",		"Motor Minimum (full reverse)"			);
 CAL_PARAM(	motor_center,	"i0:15000",		"Motor Center (neutral)"				);
 CAL_PARAM(	motor_max,		"i0:15000",		"Motor Maximum (full forward)"			);
@@ -473,7 +474,7 @@ static void * pod_updatecal_motor(void * udata)
 	return NULL;
 }
 
-void pod_updatecal(const char * name, const char type, void * newvalue, void * target, const int justpreview)
+void pod_previewcal(const char * name, const char type, void * newvalue, void * target)
 {
 	if (type != T_INTEGER)
 	{
@@ -483,52 +484,58 @@ void pod_updatecal(const char * name, const char type, void * newvalue, void * t
 
 	LOG(LOG_INFO, "Calibration preview %s", name);
 
-	if (justpreview)
+	if (g_str_has_prefix(name, "motor"))
 	{
-		if (g_str_has_prefix(name, "motor"))
+		/*
+		if (motor_preview_killtime == NULL)
 		{
-			/*
-			if (motor_preview_killtime == NULL)
-			{
-				motor_preview_killtime = g_malloc0(sizeof(GTimeVal));
-			}
-
-			g_get_current_time(motor_preview_killtime);
-			g_time_val_add(motor_preview_killtime, 1500 * 1000); //1.5 sec
-
-			if (motor_preview_thread == NULL)
-			{
-				GError * err = NULL;
-				g_thread_create(pod_updatecal_motor, NULL, false, &err);
-				if (err != NULL)
-				{
-					LOG(LOG_WARN, "Error while creating motor preview thread: %s", err->message);
-					g_error_free(err);
-				}
-
-				usleep(50); //sleep a bit to ensure that motor_preview_thread gets set
-			}
-
-			if (motor_preview_thread != NULL)
-			{
-				pod_write_int(PCMD_PWMBASE + motor_front_channel, *(int *)newvalue);
-				pod_write_int(PCMD_PWMBASE + motor_rear_channel, *(int *)newvalue);
-			}
-			*/
-			pod_write_int(PCMD_PWMBASE + motor_front_channel, *(int *)newvalue);
-			pod_write_int(PCMD_PWMBASE + motor_rear_channel, -*(int *)newvalue);
-			motorpreview_expire = kernel_timestamp() + POD_MOTORPREVIEW_TIME;
+			motor_preview_killtime = g_malloc0(sizeof(GTimeVal));
 		}
-		else if (g_str_has_prefix(name, "front")) { pod_write_int(PCMD_PWMBASE + front_channel, *(int *)newvalue); }
-		else if (g_str_has_prefix(name, "rear")) { pod_write_int(PCMD_PWMBASE + rear_channel, *(int *)newvalue); }
-		else if (g_str_has_prefix(name, "pan")) { pod_write_int(PCMD_PWMBASE + pan_channel, *(int *)newvalue); }
-		else if (g_str_has_prefix(name, "tilt")) { pod_write_int(PCMD_PWMBASE + tilt_channel, *(int *)newvalue); }
+
+		g_get_current_time(motor_preview_killtime);
+		g_time_val_add(motor_preview_killtime, 1500 * 1000); //1.5 sec
+
+		if (motor_preview_thread == NULL)
+		{
+			GError * err = NULL;
+			g_thread_create(pod_updatecal_motor, NULL, false, &err);
+			if (err != NULL)
+			{
+				LOG(LOG_WARN, "Error while creating motor preview thread: %s", err->message);
+				g_error_free(err);
+			}
+
+			usleep(50); //sleep a bit to ensure that motor_preview_thread gets set
+		}
+
+		if (motor_preview_thread != NULL)
+		{
+			pod_write_int(PCMD_PWMBASE + motor_front_channel, *(int *)newvalue);
+			pod_write_int(PCMD_PWMBASE + motor_rear_channel, *(int *)newvalue);
+		}
+		*/
+		pod_write_int(PCMD_PWMBASE + motor_front_channel, *(int *)newvalue);
+		pod_write_int(PCMD_PWMBASE + motor_rear_channel, -*(int *)newvalue);
+		motorpreview_expire = kernel_timestamp() + POD_MOTORPREVIEW_TIME;
 	}
-	else
+	else if (g_str_has_prefix(name, "front")) { pod_write_int(PCMD_PWMBASE + front_channel, *(int *)newvalue); }
+	else if (g_str_has_prefix(name, "rear")) { pod_write_int(PCMD_PWMBASE + rear_channel, *(int *)newvalue); }
+	else if (g_str_has_prefix(name, "pan")) { pod_write_int(PCMD_PWMBASE + pan_channel, *(int *)newvalue); }
+	else if (g_str_has_prefix(name, "tilt")) { pod_write_int(PCMD_PWMBASE + tilt_channel, *(int *)newvalue); }
+}
+
+void pod_updatecal(const char * name, const char type, void * newvalue, void * target)
+{
+	if (type != T_INTEGER)
 	{
-		memcpy(target, newvalue, sizeof(int));
-		setmaps();
+		LOG(LOG_WARN, "Unknown calibration entry: %s", name);
+		return;
 	}
+
+	LOG(LOG_INFO, "Calibration save %s", name);
+
+	memcpy(target, newvalue, sizeof(int));
+	setmaps();
 }
 
 /* ------------- INIT --------------------*/
