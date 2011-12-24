@@ -46,7 +46,7 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 
 		if (doreply)
 		{
-			string_t reply = string_new("name=%s\nid=%s\nstarted=%"PRId64"\nnow=%"PRId64"\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, MODEL, VERSION, PROVIDER, PROVIDER_URL);
+			string_t reply = string_new("name=%s\nid=%s\nstarted=%"PRId64"\nnow=%"PRId64"\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, max_model(), VERSION, PROVIDER, PROVIDER_URL);
 
 			if (syscall_exists("service_getstreamconfig", "s:v"))
 			{

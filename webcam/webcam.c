@@ -75,34 +75,6 @@ static unsigned int webcam_getformat(char * fmt)
 	return 0;
 }
 
-static size_t webcam_getbufsize(int fmt, int width, int height)
-{
-	switch (fmt)
-	{
-		case V4L2_PIX_FMT_YUV420:
-			return width*height+(width*height/2);
-
-		case V4L2_PIX_FMT_YUYV:
-			return width*height*2;
-
-		case V4L2_PIX_FMT_MJPEG:
-			return width*height*2;
-
-		default:
-			return 0;
-	}
-}
-
-static inline int xioctl(int fd, int request, void * arg)
-{
-	int r;
-	do
-	{
-		r = ioctl (fd, request, arg);
-	} while(-1 == r && EINTR == errno);
-	return r;
-}
-
 static int webcam_open(char * path)
 {
 	struct stat st;
@@ -131,7 +103,7 @@ static bool webcam_init(webcam_t * webcam)
 	struct v4l2_capability cap;
 	struct v4l2_format fmt;
 
-	if (xioctl(webcam->fd, VIDIOC_QUERYCAP, &cap) == -1) {
+	if (ioctl(webcam->fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
 			LOG(LOG_ERR, "Webcam: %s is not a V4L2 device", webcam->path);
 			return false;
@@ -159,7 +131,7 @@ static bool webcam_init(webcam_t * webcam)
 	fmt.fmt.pix.pixelformat = webcam->format;
 	fmt.fmt.pix.field       = V4L2_FIELD_ANY;
 
-	if (xioctl(webcam->fd, VIDIOC_S_FMT, &fmt) == -1)
+	if (ioctl(webcam->fd, VIDIOC_S_FMT, &fmt) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not set video parameters (%dx%d, %s) on %s: %s", webcam->width, webcam->height, webcam->format_str, webcam->path, strerror(errno));
 		return false;
@@ -184,7 +156,7 @@ static bool webcam_start(webcam_t * webcam)
 	req.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory              = V4L2_MEMORY_MMAP;
 
-	if (xioctl(webcam->fd, VIDIOC_REQBUFS, &req) == -1) {
+	if (ioctl(webcam->fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
 			LOG(LOG_ERR, "Webcam: %s does not support memory mapping", webcam->path);
 			return false;
@@ -213,7 +185,7 @@ static bool webcam_start(webcam_t * webcam)
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = webcam->n_buffers;
 
-		if (xioctl(webcam->fd, VIDIOC_QUERYBUF, &buf) == -1)
+		if (ioctl(webcam->fd, VIDIOC_QUERYBUF, &buf) == -1)
 		{
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QUERYBUF on %s: %s", webcam->path, strerror(errno));
 			return false;
@@ -240,7 +212,7 @@ static bool webcam_start(webcam_t * webcam)
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = i;
 
-		if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
+		if (ioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 		{
 			LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF on %s: %s", webcam->path, strerror(errno));
 			return false;
@@ -248,7 +220,7 @@ static bool webcam_start(webcam_t * webcam)
 	}
 
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (xioctl(webcam->fd, VIDIOC_STREAMON, &type) == -1)
+	if (ioctl(webcam->fd, VIDIOC_STREAMON, &type) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_STREAMON on %s: %s", webcam->path, strerror(errno));
 		return false;
@@ -260,7 +232,7 @@ static bool webcam_start(webcam_t * webcam)
 static bool webcam_stop(webcam_t * webcam)
 {
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (xioctl(webcam->fd, VIDIOC_STREAMOFF, &type) == -1)
+	if (ioctl(webcam->fd, VIDIOC_STREAMOFF, &type) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_STREAMOFF on %s: %s", webcam->path, strerror(errno));
 		return false;
@@ -291,7 +263,7 @@ static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
 
-	if (xioctl(webcam->fd, VIDIOC_DQBUF, &buf) == -1) {
+	if (ioctl(webcam->fd, VIDIOC_DQBUF, &buf) == -1) {
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_DQBUF (dequeue buffer) on %s: %s", webcam->path, strerror(errno));
 		return -1;
 	}
@@ -305,7 +277,7 @@ static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 	size_t size = webcam->buffers[buf.index].length;
 	buffer_write(frame, webcam->buffers[buf.index].start, 0, size);
 
-	if (xioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
+	if (ioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF (enqueue buffer) on %s: %s", webcam->path, strerror(errno));
 	}

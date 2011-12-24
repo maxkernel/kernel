@@ -7,22 +7,23 @@ CFLAGS		= -pipe -ggdb3 -Wall -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/de
 LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lrt
 LFLAGS		= -shared -L../aul
 
-
 OBJS		= $(SRCS:.c=.o)
 
-.PHONY: test install clean rebuild depend
+.PHONY: all test install clean rebuild
 
-all: $(TARGET) test
+all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 	$(MAKE) -C lua all
 
 test: test.o
-	$(CC) -o test test.o -L. -lmax
+	$(CC) -o test test.o -L. -lmax -L../aul -laul
 
 install:
+	mkdir -p /usr/include/max
 	cp -f libmax.so /usr/lib
+	cp -f include/*.h /usr/include/max
 	ldconfig
 	$(MAKE) -C lua install
 
@@ -33,9 +34,6 @@ clean:
 
 rebuild: clean all
 
-depend: $(SRCS) test.c
-	makedepend $(DEFINES) $(INCLUDES) -I.. -I../console $^ 2>/dev/null
-
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o
 
@@ -45,4 +43,3 @@ depend: $(SRCS) test.c
 %.o: ../console/%.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../console/$*.c -o $*.o
 
-# DO NOT DELETE

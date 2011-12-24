@@ -779,7 +779,6 @@ int main(int argc, char * argv[])
 	property_set("install", INSTALL);
 	property_set("logdir", LOGDIR);
 	property_set("config", INSTALL "/" CONFIG);
-	property_set("model", MODEL);
 
 	//connect to sqlite database
 	LOGK(LOG_DEBUG, "Opening database file");
@@ -840,6 +839,7 @@ int main(int argc, char * argv[])
 		CFG_STR(	"id",			"(none)",				CFGF_NONE	),
 		CFG_STR(	"path",			INSTALL "/modules",		CFGF_NONE	),
 		CFG_STR(	"installed",	"0",					CFGF_NONE	),
+		CFG_STR(	"model",		"(unknown)",			CFGF_NONE	),
 		CFG_FUNC(	"loadmodule",	cfg_loadmodule			),
 		CFG_FUNC(	"config",		cfg_config				),
 		CFG_FUNC(	"execfile",		cfg_execfile			),
@@ -870,6 +870,7 @@ int main(int argc, char * argv[])
 	//register global properties
 	property_set("id", cfg_getstr(cfg, "id"));
 	property_set("installed", cfg_getstr(cfg, "installed"));
+	property_set("model", cfg_getstr(cfg, "model"));
 
 	//now free configuration struct
 	cfg_free(cfg);

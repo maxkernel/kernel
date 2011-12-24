@@ -1,4 +1,3 @@
-MODEL		= Max 5J
 
 #REMOVE PRIOR TO RELEASE
 ifeq ("$(shell whoami)", "dklofas")
@@ -11,12 +10,11 @@ DBNAME		= kern-1.db
 CONFIG		= max.conf
 MEMFS		= memfs
 PROFILE		= yes
-RELEASE		= ALPHA
+RELEASE		= BETA
 
-MODULES		= console netui httpserver ssc-32 map gps discovery network service maxpod webcam jpegcompress
-OLD_MODULES = propeller-ssc test
+MODULES		= console discovery netui httpserver map service drivemodel webcam ssc-32 gps network maxpod jpegcompress
 UTILS		= 
-OLD_UTILS	= syscall client autostart kdump modinfo log
+#OLD_UTILS	= syscall client autostart kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
 
 SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c
@@ -30,19 +28,12 @@ LFLAGS		= -Laul -Wl,--export-dynamic
 
 TARGET		= maxkernel
 
-# IN DEVEL MOD = x264compress nimu pololu-mssc videre miscserver
-#UTILS		= max-kdump max-modinfo max-syscall max-log max-autostart max-client
-
 # TODO ========
-# Replace buffer_t with memfs				(Working)
 # Re-work calibration infrastructure
-# Replace select with epoll in AUL mainloop		(DONE)
-# Write new maxlib with integrated services		(Working)
+# Write new maxlib with integrated services		(need integrated services!)
 #   - Write kernel-side service streamer
-# Modify AUL queue to use circular queue		(DONE)
 # Add profiling support
 # Add menuconfig option to makefile
-# Fix up serialize
 # Modify the map module to use proper regex
 # Modify the meta file to use proper regex
 # Fix utilities
@@ -52,31 +43,35 @@ TARGET		= maxkernel
 export INSTALL
 export RELEASE
 
-.PHONY: prepare prereq install clean rebuild depend unittest
+.PHONY: prepare prereq body all install clean rebuild depend
 
-all: prepare prereq $(TARGET)
+all: prereq body $(TARGET)
 	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
-	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) 2>>buildlog &&) true ) || ( cat buildlog && false )
-	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
-	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) 2>>buildlog &&) true ) || ( cat buildlog && false )
+	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) all 2>>buildlog &&) true ) || ( cat buildlog && false )
+	( echo "In libmax" >>buildlog && $(MAKE) -C libmax all 2>>buildlog ) || ( cat buildlog && false )
+	( echo "In testmax" >> buildlog && $(MAKE) -C testmax all 2>>buildlog ) || ( cat buildlog && false )
+	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
-	$(MAKE) -C utils
 	cat buildlog
+
+body:
+	echo "In kernel" >>buildlog
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
 install:
-	mkdir -p $(INSTALL) $(LOGDIR) $(INSTALL)/modules $(INSTALL)/$(MEMFS) /usr/include/max
+	mkdir -p $(INSTALL) $(LOGDIR) $(INSTALL)/modules $(INSTALL)/stitcher $(INSTALL)/$(MEMFS) /usr/include/maxkernel
 	cp -f $(TARGET) $(INSTALL)
 	( [ -e $(INSTALL)/$(DBNAME) ] || cp -f $(DBNAME) $(INSTALL) )
-	cp -rf debug stitcher $(INSTALL)
-	cp -f $(HEADERS) /usr/include/max
+	cp -f stitcher/*.lua $(INSTALL)/stitcher
+	cp -f $(HEADERS) /usr/include/maxkernel
 	perl config.gen.pl -install '$(INSTALL)' >$(INSTALL)/$(CONFIG)
 	$(foreach module,$(MODULES),$(MAKE) -C $(module) install && ( [ -e $(module)/install.part.bash ] && ( cd $(module) && bash install.part.bash ) || true ) &&) true
 	$(MAKE) -C aul install
 	$(MAKE) -C libmax install
-	$(MAKE) -C utils install
+	$(MAKE) -C testmax install
+	$(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) install &&) true
 	cat maxkernel.initd | sed "s|\(^INSTALL=\)\(.*\)$$|\1$(INSTALL)|" >/etc/init.d/maxkernel && chmod +x /etc/init.d/maxkernel
 	update-rc.d -f maxkernel start 95 2 3 4 5 . stop 95 0 1 6 .
 	$(INSTALL)/max-autostart -c
@@ -86,8 +81,8 @@ clean:
 	( $(foreach module,$(MODULES),$(MAKE) -C $(module) clean; ( cd $(module) && bash clean.part.bash );) ) || true
 	$(MAKE) -C aul clean
 	$(MAKE) -C libmax clean
-	$(MAKE) -C utils clean
-	$(MAKE) -C unittest clean
+	$(MAKE) -C testmax clean
+	$(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) clean &&) true
 	rm -f $(TARGET) $(OBJS) $(foreach module,$(MODULES),$(module)/Makefile)
 
 rebuild: clean all
@@ -95,67 +90,16 @@ rebuild: clean all
 depend: $(SRCS)
 	makedepend $(DEFINES) $(INCLUDES) $^ 2>/dev/null
 	$(MAKE) -C aul depend
-	$(MAKE) -C libmax depend
-	$(MAKE) -C unittest depend
-
-unittest: prereq
-	$(MAKE) -C unittest run
+	$(MAKE) -C testmax depend
 
 prepare:
 	echo "Build Log ==----------------------== [$(shell date)]" >buildlog
 
-prereq:
-	( echo "In aul" >>buildlog && $(MAKE) -C aul 2>>buildlog ) || ( cat buildlog && false )
+prereq: prepare
+	( echo "In aul" >>buildlog && $(MAKE) -C aul all 2>>buildlog ) || ( cat buildlog && false )
 
 .c.o:
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@ 2>>buildlog || ( cat buildlog && false )
-
-#all: prepare prereq $(OBJECTS)
-#	( $(CC) -o $(TARGET) $(OBJECTS) -rdynamic $(LIBS) 2>>buildlog ) || ( cat buildlog && false )
-#	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile &&) true
-#	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) 2>>buildlog &&) true ) || ( cat buildlog && false )
-#	( echo "In libmax" >>buildlog && $(MAKE) -C libmax 2>>buildlog ) || ( cat buildlog && false )
-#	( echo "In utils" >>buildlog && $(MAKE) -C utils 2>>buildlog) || ( cat buildlog && false )
-#	cat database.gen.sql | sqlite $(DBNAME) 2>>buildlog
-#	rm -f $(OBJECTS)
-#	cat buildlog
-
-#clean:
-#	rm -f $(TARGET) $(OBJECTS) $(DBNAME) buildlog
-#	( $(foreach module,$(MODULES),$(MAKE) -C $(module) clean; ( cd $(module) && bash clean.part.bash );) ) || true
-#	$(MAKE) -C aul clean
-#	$(MAKE) -C libmax clean
-#	$(MAKE) -C utils clean
-#	rm -f $(foreach module,$(MODULES),$(module)/Makefile)
-
-#install:
-#	mkdir -p $(INSTALL) $(LOGDIR) $(INSTALL)/modules $(INSTALL)/deploy /usr/include/max
-#	cp -f $(TARGET) stitcher.lua $(INSTALL)
-#	( [ -e $(INSTALL)/$(DBNAME) ] || cp -f $(DBNAME) $(INSTALL) )
-#	cp -rf debug $(INSTALL)
-#	cp -f $(HEADERS) /usr/include/max
-#	perl config.gen.pl -install '$(INSTALL)' >$(INSTALL)/$(CONFIG)
-#	$(foreach module,$(MODULES),$(MAKE) -C $(module) install && ( [ -e $(module)/install.part.bash ] && ( cd $(module) && bash install.part.bash ) || true ) &&) true
-#	$(MAKE) -C aul install
-#	$(MAKE) -C libmax install
-#	cp -f $(foreach util,$(UTILS),utils/$(util)) $(INSTALL)
-#	$(foreach util,$(UTILS),ln -fs $(INSTALL)/$(util) /usr/bin &&) true
-#	cat maxkernel.initd | sed "s|\(^INSTALL=\)\(.*\)$$|\1$(INSTALL)|" >/etc/init.d/maxkernel && chmod +x /etc/init.d/maxkernel
-#	update-rc.d -f maxkernel start 95 2 3 4 5 . stop 95 0 1 6 .
-#	$(INSTALL)/max-autostart -c
-#	/etc/init.d/maxkernel restart
-
-#rebuild: clean all
-
-#prepare:
-#	echo "Build Log ==----------------------== [$(shell date)]" >buildlog
-
-#prereq:
-#	( echo "In aul" >>buildlog && $(MAKE) -C aul 2>>buildlog ) || ( cat buildlog && false )
-#	echo "In kernel" >>buildlog
-
-#%.o: %.c
-#	$(CC) -c $(CFLAGS) $*.c -o $*.o 2>>buildlog || ( cat buildlog && false )
 
 # DO NOT DELETE THIS LINE -- make depend needs it
 
@@ -254,8 +198,8 @@ kernel.o: /usr/include/glib-2.0/glib/gvariant.h aul/include/aul/common.h
 kernel.o: /usr/include/inttypes.h /usr/include/stdint.h
 kernel.o: /usr/include/bits/wchar.h aul/include/aul/list.h
 kernel.o: aul/include/aul/hashtable.h aul/include/aul/mainloop.h
-kernel.o: /usr/include/sys/epoll.h aul/include/aul/mutex.h ./kernel.h
-kernel.o: aul/include/aul/log.h aul/include/aul/exception.h
+kernel.o: /usr/include/sys/epoll.h aul/include/aul/mutex.h ./buffer.h
+kernel.o: ./kernel.h aul/include/aul/log.h aul/include/aul/exception.h
 kernel.o: aul/include/aul/string.h ./kernel-types.h ./kernel-priv.h
 meta.o: /usr/include/string.h /usr/include/features.h
 meta.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
@@ -812,25 +756,33 @@ calibration.o: /usr/include/sched.h /usr/include/bits/sched.h
 calibration.o: aul/include/aul/mainloop.h /usr/include/sys/epoll.h
 calibration.o: aul/include/aul/mutex.h /usr/include/pthread.h
 calibration.o: /usr/include/bits/setjmp.h aul/include/aul/hashtable.h
-buffer.o: /usr/include/unistd.h /usr/include/features.h
+buffer.o: /usr/include/stdlib.h /usr/include/features.h
 buffer.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 buffer.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
-buffer.o: /usr/include/gnu/stubs-64.h /usr/include/bits/posix_opt.h
-buffer.o: /usr/include/bits/environments.h /usr/include/bits/types.h
-buffer.o: /usr/include/bits/typesizes.h /usr/include/bits/confname.h
-buffer.o: /usr/include/getopt.h aul/include/aul/mutex.h
-buffer.o: /usr/include/pthread.h /usr/include/endian.h
+buffer.o: /usr/include/gnu/stubs-64.h /usr/include/bits/waitflags.h
+buffer.o: /usr/include/bits/waitstatus.h /usr/include/endian.h
 buffer.o: /usr/include/bits/endian.h /usr/include/bits/byteswap.h
-buffer.o: /usr/include/sched.h /usr/include/time.h /usr/include/bits/sched.h
-buffer.o: /usr/include/signal.h /usr/include/bits/sigset.h
-buffer.o: /usr/include/bits/pthreadtypes.h /usr/include/bits/setjmp.h
-buffer.o: aul/include/aul/common.h /usr/include/stdlib.h
-buffer.o: /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h
 buffer.o: /usr/include/xlocale.h /usr/include/sys/types.h
-buffer.o: /usr/include/sys/select.h /usr/include/bits/select.h
+buffer.o: /usr/include/bits/types.h /usr/include/bits/typesizes.h
+buffer.o: /usr/include/time.h /usr/include/sys/select.h
+buffer.o: /usr/include/bits/select.h /usr/include/bits/sigset.h
 buffer.o: /usr/include/bits/time.h /usr/include/sys/sysmacros.h
-buffer.o: /usr/include/alloca.h /usr/include/inttypes.h /usr/include/stdint.h
-buffer.o: /usr/include/bits/wchar.h /usr/include/string.h ./buffer.h
+buffer.o: /usr/include/bits/pthreadtypes.h /usr/include/alloca.h
+buffer.o: /usr/include/unistd.h /usr/include/bits/posix_opt.h
+buffer.o: /usr/include/bits/environments.h /usr/include/bits/confname.h
+buffer.o: /usr/include/getopt.h /usr/include/errno.h
+buffer.o: /usr/include/bits/errno.h /usr/include/linux/errno.h
+buffer.o: /usr/include/asm/errno.h /usr/include/asm-generic/errno.h
+buffer.o: /usr/include/asm-generic/errno-base.h aul/include/aul/common.h
+buffer.o: /usr/include/inttypes.h /usr/include/stdint.h
+buffer.o: /usr/include/bits/wchar.h /usr/include/string.h
+buffer.o: aul/include/aul/list.h aul/include/aul/mutex.h
+buffer.o: /usr/include/pthread.h /usr/include/sched.h
+buffer.o: /usr/include/bits/sched.h /usr/include/signal.h
+buffer.o: /usr/include/bits/setjmp.h ./kernel-priv.h aul/include/aul/log.h
+buffer.o: aul/include/aul/exception.h aul/include/aul/string.h
+buffer.o: aul/include/aul/mainloop.h /usr/include/sys/epoll.h
+buffer.o: aul/include/aul/hashtable.h ./kernel.h ./kernel-types.h ./buffer.h
 serialize.o: /usr/include/stdlib.h /usr/include/features.h
 serialize.o: /usr/include/bits/predefs.h /usr/include/sys/cdefs.h
 serialize.o: /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h
