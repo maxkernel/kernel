@@ -13,7 +13,7 @@ MOD_DESCRIPTION("A helper module that allows you to map linear values to a nonli
 
 static GRegex * map_regex = NULL;
 
-static double map_linear(map_t * map, double tomap, size_t ia, size_t ib)
+static double map_linear(map_t * map, const double tomap, size_t ia, size_t ib)
 {
 	double diff_src = map->src_array[ib] - map->src_array[ia];
 	double diff_dest = map->dest_array[ib] - map->dest_array[ia];
@@ -50,7 +50,7 @@ static void map_sort(map_t * map)
 {
 	size_t mpos = map->array_size - 1;
 
-	//quick and simple bubble sort
+	// Quick and simple bubble sort. TODO it better
 	while (mpos > 0)
 	{
 		size_t i = 0;
@@ -58,7 +58,7 @@ static void map_sort(map_t * map)
 		{
 			if (map->src_array[i] > map->src_array[i+1])
 			{
-				//swap the indexes
+				// Swap the indexes
 				double tmp;
 
 				tmp = map->src_array[i];
@@ -175,7 +175,7 @@ map_t * map_reverse(map_t * map)
 	return map_new(map->mapping_function, src, dest, map->array_size);
 }
 
-double map_tovalue(map_t * map, double tomap)
+double map_tovalue(map_t * map, const double tomap)
 {
 	if (map->array_size == 0)
 		return 0.0;

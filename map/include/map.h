@@ -8,7 +8,7 @@ extern "C" {
 #define MAP_LINEAR	'L'
 
 struct __map_t;
-typedef double (*map_f)(struct __map_t * map, double tomap, size_t ia, size_t ib);
+typedef double (*map_f)(struct __map_t * map, const double tomap, size_t ia, size_t ib);
 
 typedef struct __map_t
 {
