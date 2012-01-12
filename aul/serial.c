@@ -7,9 +7,6 @@
 
 int serial_open(const char * port, speed_t speed)
 {
-	struct termios tp;
-	ZERO(tp);
-
 	int fd = open(port, O_RDWR, O_NOCTTY);
 	if (fd == -1)
 	{
@@ -17,29 +14,35 @@ int serial_open(const char * port, speed_t speed)
 		return -1;
 	}
 
-// TODO - fix this!!!!! These parameters are NOT correct!
-	tcgetattr(fd, &tp);
-//	tp.c_cflag = CS8|CLOCAL|CREAD;
-//	tp.c_oflag = 0;
-//	tp.c_iflag = IGNBRK|IGNPAR;
-//	tp.c_lflag = 0;
-	tp.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	tp.c_oflag &= ~OPOST;
-	tp.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	tp.c_cflag &= ~(CSIZE | PARENB);
-	tp.c_cflag |= CS8;
+	tcflush(fd, TCIOFLUSH);
+	serial_setattr(fd, speed);
+
+	return fd;
+}
+
+void serial_flush(int fd)
+{
+	tcflush(fd, TCIOFLUSH);
+}
+
+void serial_setattr(int fd, speed_t speed)
+{
+	struct termios tp;
+	ZERO(tp);
+
+	tp.c_iflag = IGNBRK|IGNPAR;
+	tp.c_oflag = 0;
+	tp.c_cflag = CS8|CREAD|CLOCAL;
+	tp.c_lflag = 0;
 
 	cfsetispeed(&tp, speed);
 	cfsetospeed(&tp, speed);
 
-	tcflush(fd, TCIOFLUSH);
-	if (tcsetattr(fd, TCSANOW, &tp) < 0)
+	if (tcsetattr(fd, TCSAFLUSH, &tp) < 0)
 	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not set serial port attributes for %s", port);
-		return -1;
+		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not set serial port attributes for fd %d", fd);
+		return;
 	}
-
-	return fd;
 }
 
 speed_t serial_getspeed(int baud)

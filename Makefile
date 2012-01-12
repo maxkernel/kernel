@@ -12,9 +12,9 @@ MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= BETA
 
-MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 propeller-ssc gps network maxpod jpegcompress
-UTILS		= 
-#OLD_UTILS	= syscall client autostart kdump modinfo log
+MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress
+UTILS		= syscall
+#OLD_UTILS	= client autostart kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
 
 SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c
@@ -50,7 +50,7 @@ all: prereq body $(TARGET)
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax all 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In testmax" >> buildlog && $(MAKE) -C testmax all 2>>buildlog ) || ( cat buildlog && false )
-	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils Makefile.$(util) all 2>>buildlog &&) true ) || ( cat buildlog && false )
+	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils -f Makefile.$(util) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
 	cat buildlog
 

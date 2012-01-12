@@ -36,23 +36,30 @@ CFG_PARAM(serial_port,		"s");
 CFG_PARAM(servo_ramp,		"i");
 
 
+#define NUM_CHANNELS	16
 #define BUFFER_LENGTH	50
 #define PCMD_LENGTH		8
 
 #define PCMD_VERSION	"!SCVER?\r"
+#define PCMD_SETBAUD	"!SCSBR\x01\r"
 #define PCMD_SETPOS		"!SCxxxx\r"
+#define PCMD_ENABLE		"!SCPSEx\r"
+#define PCMD_DISABLE	"!SCPSDx\r"
 
 #define PLEN_VERSION	3
+#define PLEN_SETBAUD	3
 
 typedef enum
 {
 	PS_NONE		= 'N',
+	PS_SETBAUD	= 'B',
 	PS_VERSION	= 'V',
 } rxstate_t;
 
 
 static int psc_fd = -1;
 static rxstate_t state = PS_NONE;
+static bool channel_enabled[NUM_CHANNELS];
 char * serial_port = "/dev/ttyUSB0";
 int servo_ramp = 7;
 
@@ -67,7 +74,7 @@ static void psc_write(rxstate_t newstate, char * cmd)
 	ssize_t bytes = write(psc_fd, cmd, PCMD_LENGTH);
 	if (bytes != PCMD_LENGTH)
 	{
-		LOG(LOG_WARN, "Could not write all bytes to Propeller SSC %s", serial_port);
+		LOG1(LOG_ERR, "Could not write all bytes to Propeller SSC %s", serial_port);
 		return;
 	}
 	
@@ -82,16 +89,58 @@ static void psc_write(rxstate_t newstate, char * cmd)
 	state = newstate;
 }
 
+static void psc_enableio(int channel)
+{
+	if (channel_enabled[channel])
+	{
+		return;
+	}
+
+	char cmd[PCMD_LENGTH];
+	memcpy(cmd, PCMD_ENABLE, PCMD_LENGTH);
+	cmd[6] = (char)channel;
+	psc_write(PS_NONE, cmd);
+
+	channel_enabled[channel] = true;
+}
+
+static void psc_disableio(int channel)
+{
+	if (!channel_enabled[channel])
+	{
+		return;
+	}
+
+	char cmd[PCMD_LENGTH];
+	memcpy(cmd, PCMD_DISABLE, PCMD_LENGTH);
+	cmd[6] = (char)channel;
+	psc_write(PS_NONE, cmd);
+
+	channel_enabled[channel] = false;
+}
+
+static void psc_disableall()
+{
+	for (int i=0; i<NUM_CHANNELS; i++)
+	{
+		channel_enabled[i] = true;
+		psc_disableio(i);
+	}
+}
+
 static void psc_writeio(int channel, const int value)
 {
+	if (!channel_enabled[channel])
+	{
+		psc_enableio(channel);
+	}
+
 	char cmd[PCMD_LENGTH];
 	memcpy(cmd, PCMD_SETPOS, PCMD_LENGTH);
-	
 	cmd[3] = (char)channel;
 	cmd[4] = (char)servo_ramp;
 	cmd[5] = (char)(value & 0xFF);
 	cmd[6] = (char)((value & 0xFF00) >> 8);
-	
 	psc_write(PS_NONE, cmd);
 }
 
@@ -112,6 +161,22 @@ static bool psc_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 	
 	switch (state)
 	{
+		case PS_SETBAUD:
+		{
+			if (index < PLEN_SETBAUD)
+			{
+				break;
+			}
+
+			char newbaud[PLEN_SETBAUD + 1] = {0};
+			memcpy(newbaud, buffer, PLEN_SETBAUD);
+			LOG(LOG_INFO, "Successful baud rate selection to mode %d on Parallax SSC", newbaud[2]);
+
+			memmove(buffer, buffer + PLEN_SETBAUD, index -= PLEN_SETBAUD);
+			state = PS_NONE;
+			break;
+		}
+
 		case PS_VERSION:
 		{
 			if (index < PLEN_VERSION)
@@ -121,16 +186,17 @@ static bool psc_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 			
 			char version[PLEN_VERSION + 1] = {0};
 			memcpy(version, buffer, PLEN_VERSION);
-			LOG(LOG_INFO, "Connected to Propeller SSC version %s", version);
+			LOG(LOG_INFO, "Connected to Parallax SSC version %s", version);
 			
 			memmove(buffer, buffer + PLEN_VERSION, index -= PLEN_VERSION);
 			state = PS_NONE;
+
 			break;
 		}
 		
 		case PS_NONE:
 		{
-			LOG(LOG_WARN, "Unexpected data received from Propeller SSC %s", serial_port);
+			LOG(LOG_WARN, "Unexpected data received from Parallax SSC %s", serial_port);
 			index = 0;
 		}
 	}
@@ -166,33 +232,43 @@ void psc_update(void * object)
 	
 
 	// Now write it to the servos
-	if (pwm0 != NULL)	psc_writeio(0, *pwm0);
-	if (pwm1 != NULL)	psc_writeio(1, *pwm1);
-	if (pwm2 != NULL)	psc_writeio(2, *pwm2);
-	if (pwm3 != NULL)	psc_writeio(3, *pwm3);
-	if (pwm4 != NULL)	psc_writeio(4, *pwm4);
-	if (pwm5 != NULL)	psc_writeio(5, *pwm5);
-	if (pwm6 != NULL)	psc_writeio(6, *pwm6);
-	if (pwm7 != NULL)	psc_writeio(7, *pwm7);
-	if (pwm8 != NULL)	psc_writeio(8, *pwm8);
-	if (pwm9 != NULL)	psc_writeio(9, *pwm9);
-	if (pwm10 != NULL)	psc_writeio(10, *pwm10);
-	if (pwm11 != NULL)	psc_writeio(11, *pwm11);
-	if (pwm12 != NULL)	psc_writeio(12, *pwm12);
-	if (pwm13 != NULL)	psc_writeio(13, *pwm13);
-	if (pwm14 != NULL)	psc_writeio(14, *pwm14);
-	if (pwm15 != NULL)	psc_writeio(15, *pwm15);
+	if (pwm0 != NULL)	psc_writeio(0, *pwm0);		else	psc_disableio(0);
+	if (pwm1 != NULL)	psc_writeio(1, *pwm1);		else	psc_disableio(1);
+	if (pwm2 != NULL)	psc_writeio(2, *pwm2);		else	psc_disableio(2);
+	if (pwm3 != NULL)	psc_writeio(3, *pwm3);		else	psc_disableio(3);
+	if (pwm4 != NULL)	psc_writeio(4, *pwm4);		else	psc_disableio(4);
+	if (pwm5 != NULL)	psc_writeio(5, *pwm5);		else	psc_disableio(5);
+	if (pwm6 != NULL)	psc_writeio(6, *pwm6);		else	psc_disableio(6);
+	if (pwm7 != NULL)	psc_writeio(7, *pwm7);		else	psc_disableio(7);
+	if (pwm8 != NULL)	psc_writeio(8, *pwm8);		else	psc_disableio(8);
+	if (pwm9 != NULL)	psc_writeio(9, *pwm9);		else	psc_disableio(9);
+	if (pwm10 != NULL)	psc_writeio(10, *pwm10);	else	psc_disableio(10);
+	if (pwm11 != NULL)	psc_writeio(11, *pwm11);	else	psc_disableio(11);
+	if (pwm12 != NULL)	psc_writeio(12, *pwm12);	else	psc_disableio(12);
+	if (pwm13 != NULL)	psc_writeio(13, *pwm13);	else	psc_disableio(13);
+	if (pwm14 != NULL)	psc_writeio(14, *pwm14);	else	psc_disableio(14);
+	if (pwm15 != NULL)	psc_writeio(15, *pwm15);	else	psc_disableio(15);
 }
 
-void psc_init() {
+void psc_init()
+{
 	psc_fd = serial_open(serial_port, B2400);
 	if (psc_fd < 0)
 	{
-		LOG(LOG_ERR, "Could not open Propeller SSC serial port %s", serial_port);
+		LOG(LOG_ERR, "Could not open Parallax SSC serial port %s", serial_port);
 		return;
 	}
-	
+
+	// Write the set-baud command and wait for a bit
+	write(psc_fd, PCMD_SETBAUD, PCMD_LENGTH);
+	usleep(50000);
+
+	// Change the serial port speed
+	serial_setattr(psc_fd, B38400);
+
+	// Register the FD and send a version request
 	mainloop_addwatch(NULL, psc_fd, FD_READ, psc_newdata, NULL);
+	psc_disableall();
 	psc_write(PS_VERSION, PCMD_VERSION);
 }
 
@@ -200,6 +276,9 @@ void psc_destroy()
 {
 	if (psc_fd != -1)
 	{
+		psc_disableall();
+		serial_flush(psc_fd);
+
 		close(psc_fd);
 	}
 }

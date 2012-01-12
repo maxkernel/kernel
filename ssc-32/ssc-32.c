@@ -63,7 +63,11 @@ static void ssc32_writeio(int port, int pwm)
 		return;
 	}
 	
-	write(ssc_fd, buf, len);
+	ssize_t bytes = write(ssc_fd, buf, len);
+	if (bytes != len)
+	{
+		LOG1(LOG_ERR, "Could not write all bytes to SSC-32 %s", serial_port);
+	}
 }
 
 void ssc32_update(void * obj)

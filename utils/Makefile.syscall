@@ -1,0 +1,22 @@
+SRCS 		= syscall.c
+PACKAGES	= 
+
+TARGET		= max-syscall
+LIBS		= $(shell pkg-config --libs $(PACKAGES)) -lmax -L../libmax -laul -L../aul
+DEFINES     = -D_GNU_SOURCE -DUTILS
+CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -I. -I.. -I../libmax/include -I../aul/include $(shell pkg-config --cflags $(PACKAGES))
+
+OBJS		= $(SRCS:.c=.o)
+
+.PHONY: all install clean rebuild depend
+
+all: $(OBJS)
+	$(CC) -o $(TARGET) $(OBJS) $(DEFINES) $(LIBS)
+	rm -f $(OBJECTS)
+
+clean:
+	rm -f $(TARGET)
+
+%.o: %.c
+	$(CC) -c $(CFLAGS) $(DEFINES) $*.c -o $*.o
+

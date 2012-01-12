@@ -1,209 +1,187 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-#include <glib.h>
 
-#include "max.h"
-#include "serialize.h"
-
-static GHashTable * parsesyscalls(gchar * str)
-{
-	GHashTable * syscalls = g_hash_table_new(g_str_hash, g_str_equal);
-
-	GError * err = NULL;
-	GRegex * regex = g_regex_new("^([[:alpha:]_]+)\\(([:vildcsbILD]+)\\)$", G_REGEX_OPTIMIZE, 0, &err);
-	if (regex == NULL)
-	{
-		g_error("Regex failed to compile: %s", err->message);
-		return NULL;
-	}
-
-	gchar ** list = g_strsplit(str, "\n", 0);
-	gint i=0;
-	while (list[i] != NULL)
-	{
-		if (strlen(list[i]) == 0)
-		{
-			i++;
-			continue;
-		}
-
-		GMatchInfo * info;
-		g_regex_match(regex, list[i], 0, &info);
-
-		if (g_match_info_matches(info))
-		{
-			gchar * name = g_match_info_fetch(info, 1);
-			gchar * sig = g_match_info_fetch(info, 2);
-			g_hash_table_insert(syscalls, name, sig);
-		}
-		else
-		{
-			g_warning("Syscall does not match regex: %s", list[i]);
-		}
-
-		i++;
-	}
-	
-	return syscalls;
-}
+#include <max.h>
+#include <serialize.h>
 
 int main(int argc, char ** argv)
 {
 	if (argc < 2)
 	{
-		g_print("Nothing to do.\n");
+		fprintf(stderr, "Nothing to do.\n");
+		return EXIT_FAILURE;
+	}
+
+	exception_t * e = NULL;
+	bool success = false;
+
+	maxhandle_t hand;
+	return_t ret;
+	max_initialize(&hand);
+
+	success = max_connectlocal(&hand, &e);
+	if (!success)
+	{
+		fprintf(stderr, "<error> Error during init connection: %s\n", e->message);
+		return EXIT_FAILURE;
+	}
+	
+	const char * syscall_name = argv[1];
+
+	success = max_syscall(&hand, &e, &ret, "syscall_signature", "s:s", syscall_name);
+	if (!success)
+	{
+		fprintf(stderr, "<error> Error during syscall lookup: %s\n", e->message);
 		return 0;
 	}
 
-	maxhandle_t * hand = max_local();
-	
-	char * syscalls_str;
-	if (max_syscall(hand, "syscall_list", "s:v", &syscalls_str) != 0)
+	if (ret.type != T_RETURN || ret.sig != T_STRING)
 	{
-		g_error("Could not call kernel max_syscalls function");
-		return 1;
-	}
-	
-	GHashTable * syscalls = parsesyscalls(syscalls_str);
-	GPtrArray * args = g_ptr_array_new();
-
-	char * sig = g_hash_table_lookup(syscalls, argv[1]);
-	if (sig == NULL)
-	{
-		g_error("Syscall %s does not exist in kernel", argv[1]);
-		return 1;
-	}
-	
-	const char * s = method_params(sig);
-	if (argc-2 < strlen(s))
-	{
-		g_error("Invalid argument length for syscall %s with signature %s", argv[1], s);
+		fprintf(stderr, "<error> Invalid reply during syscall lookup\n");
+		return EXIT_FAILURE;
 	}
 
-	int index = 0;
-	for (; index < strlen(s); index++)
+	if (strlen(ret.data.t_string) == 0)
 	{
-		switch (s[index])
+		fprintf(stderr, "<error> Syscall %s doesn't exist\n", syscall_name);
+		return EXIT_FAILURE;
+	}
+
+	const char * syscall_sig = strdup(ret.data.t_string);
+	const char * syscall_params = method_params(syscall_sig);
+	const char syscall_return = method_returntype(syscall_sig);
+
+	if (strlen(syscall_params) != (argc - 2))
+	{
+		fprintf(stderr, "<error> Parameter mismatch. Expected %zu got %d\n", strlen(syscall_params), argc - 2);
+		return EXIT_FAILURE;
+	}
+
+	void * syscall_args[strlen(syscall_params)];
+	for (int index=0; index<strlen(syscall_params); index++)
+	{
+		switch (syscall_params[index])
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
-				bool * v = g_malloc(sizeof(bool));
+				bool * v = malloc(sizeof(bool));
 				*v = atoi(argv[index + 2]);
-				g_ptr_array_add(args, v);
+				syscall_args[index] = v;
 				break;
 			}
 
 			case T_INTEGER:
 			{
-				int * v = g_malloc(sizeof(int));
+				int * v = malloc(sizeof(int));
 				*v = atoi(argv[index + 2]);
-				g_ptr_array_add(args, v);
+				syscall_args[index] = v;
 				break;
 			}
 
 			case T_DOUBLE:
 			{
-				double * v = g_malloc(sizeof(double));
-				*v = g_strtod(argv[index + 2], NULL);
-				g_ptr_array_add(args, v);
+				double * v = malloc(sizeof(double));
+				*v = strtod(argv[index + 2], NULL);
+				syscall_args[index] = v;
 				break;
 			}
 
 			case T_CHAR:
 			{
-				char * v = g_malloc(sizeof(char));
+				char * v = malloc(sizeof(char));
 				*v = argv[index + 2][0];
-				g_ptr_array_add(args, v);
+				syscall_args[index] = v;
 				break;
 			}
 
 			case T_STRING:
 			{
-				char ** v = g_malloc(sizeof(char **));
+				char ** v = malloc(sizeof(char *));
 				*v = argv[index + 2];
-				g_ptr_array_add(args, v);
+				syscall_args[index] = v;
 				break;
 			}
 
+			case T_BUFFER:
 			case T_ARRAY_BOOLEAN:
 			case T_ARRAY_INTEGER:
 			case T_ARRAY_DOUBLE:
 			{
-				g_error("Cannot handle arrays");
-				return 1;
+				fprintf(stderr, "<error> Unsupported buffer or array type for #%d\n", index);
+				return EXIT_FAILURE;
 			}
 
-			case T_BUFFER:
+			default:
 			{
-				g_error("Cannot handle buffers");
-				return 1;
+				fprintf(stderr, "<error> Unknown parameter type '%c' for #%d\n", syscall_params[index], index);
+				return EXIT_FAILURE;
 			}
 		}
 	}
-	
-	void * ret = NULL;
-	switch (sig[0])
+
+	success = max_asyscall(&hand, &e, &ret, syscall_name, syscall_sig, syscall_args);
+	if (!success)
 	{
-		#define __ret_type(t1, t2) \
-			case t1: \
-				ret = g_malloc(sizeof(t2)); \
-				break;
-
-		__ret_type(T_BOOLEAN, bool)
-		__ret_type(T_INTEGER, int)
-		__ret_type(T_DOUBLE, double)
-		__ret_type(T_CHAR, char)
-		__ret_type(T_STRING, char *)
-
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-			g_error("Cannot handle arrays");
-			return 1;
-
-		case T_BUFFER:
-			g_error("Cannot handle buffers");
-			return 1;
+		fprintf(stderr, "<error> Could not complete syscall: %s\n", e->message);
+		return EXIT_FAILURE;
 	}
 
-	if (max_asyscall(hand, argv[1], sig, ret, args->pdata) != 0)
+	if (ret.type != T_RETURN || ret.sig != syscall_return)
 	{
-		g_error("Error: %s", max_error(hand));
-		return 1;
+		fprintf(stderr, "<error> Bad return from syscall\n");
+		return EXIT_FAILURE;
 	}
 
-
-	switch (method_returntype(sig))
+	switch (syscall_return)
 	{
+		case T_VOID:
+		{
+			fprintf(stdout, "<void>\n");
+			break;
+		}
+
 		case T_BOOLEAN:
 		{
-			if (*(bool *)ret)
-				g_print("true\n");
-			else
-				g_print("false\n");
+			fprintf(stdout, "<bool> %s\n", ret.data.t_boolean? "true" : "false");
 			break;
 		}
 
 		case T_INTEGER:
-			g_print("%d\n", *(int *)ret);
+		{
+			fprintf(stdout, "<int> %d\n", ret.data.t_integer);
 			break;
+		}
 
 		case T_DOUBLE:
-			g_print("%f\n", *(double *)ret);
+		{
+			fprintf(stdout, "<double> %f\n", ret.data.t_double);
 			break;
+		}
 
 		case T_CHAR:
-			g_print("%c\n", *(char *)ret);
+		{
+			fprintf(stdout, "<char> '%c'\n", ret.data.t_char);
 			break;
+		}
 
 		case T_STRING:
-			g_print("%s\n", *(char **)ret);
+		{
+			fprintf(stdout, "<string> \"%s\"\n", ret.data.t_string);
 			break;
+		}
 
 		default:
-			g_print("Done\n");
-			break;
+		{
+			fprintf(stderr, "<error> Unknown return type '%c'\n", ret.sig);
+			return EXIT_FAILURE;
+		}
 	}
 
-	return 0;
+	return EXIT_SUCCESS;
 }
