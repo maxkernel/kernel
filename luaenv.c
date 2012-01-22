@@ -312,8 +312,48 @@ static int l_route(lua_State * L)
 {
 	kernentry_t * out = luaL_checkudata(L, 1, "MaxKernel.kernentry");
 	kernentry_t * in = luaL_checkudata(L, 2, "MaxKernel.kernentry");
-	const block_inst_t * out_inst = out->data;
-	const block_inst_t * in_inst = in->data;
+
+	const block_inst_t * get_blockinst(kernentry_t * entry)
+	{
+		switch (entry->type)
+		{
+			case K_MODULE:
+			{
+				const module_t * module = entry->data;
+
+				list_t * pos;
+				list_foreach(pos, &module->block_inst)
+				{
+					block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
+					if (strcmp(inst->block->name, STATIC_STR) == 0)
+					{
+						return inst;
+					}
+				}
+
+				return NULL;
+			}
+
+			case K_BLOCKINST:
+			{
+				return entry->data;
+			}
+
+			default:
+			{
+				return NULL;
+			}
+		}
+	}
+
+	const block_inst_t * out_inst = get_blockinst(out);
+	const block_inst_t * in_inst = get_blockinst(in);
+
+	// Make sure in_inst and out_inst are valid
+	if (out_inst == NULL || in_inst == NULL)
+	{
+		return luaL_error(L, "Could not route %s to %s, Invalid block instance", out->name, in->name);
+	}
 
 	// Find the input_inst and output_inst
 	list_t * pos;

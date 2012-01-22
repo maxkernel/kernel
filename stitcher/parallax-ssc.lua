@@ -3,16 +3,42 @@
 
 debug("Setting up the Propeller SSC module")
 
--- Load the propeller ssc module
---[[ssc = loadmodule("propeller-ssc")
+-- Load the parallax ssc module
+--ssc = loadmodule("parallax-ssc")
+ssc = loadmodule("ssc-32")
+
+dm = loadmodule("drivemodel")
+
+route(dm.front_pwm, ssc.pwm2)
+route(dm.rear_pwm, ssc.pwm3)
 
 -- Update the motors at 10 Hz
-newrategroup("Actuator update", { ssc }, 10)
+newrategroup("Actuator update", { dm, ssc }, 10)
 
 -- Define syscalls
-newsyscall("motor", { ssc.motor })
-newsyscall("turnfront", { ssc.turnfront })
-newsyscall("turnrear", { ssc.turnrear })
-newsyscall("pan", { ssc.pan })
-newsyscall("tilt", { ssc.tilt })
+newsyscall("turnfront", { dm.front })
+newsyscall("turnrear", { dm.rear })
+
+--[[
+newsyscall("pwm0", { ssc.pwm0 })
+newsyscall("pwm1", { ssc.pwm1 })
+newsyscall("pwm2", { ssc.pwm2 })
+newsyscall("pwm3", { ssc.pwm3 })
+newsyscall("pwm4", { ssc.pwm4 })
+newsyscall("pwm5", { ssc.pwm5 })
+newsyscall("pwm6", { ssc.pwm6 })
+newsyscall("pwm7", { ssc.pwm7 })
+newsyscall("pwm8", { ssc.pwm8 })
+newsyscall("pwm9", { ssc.pwm9 })
+newsyscall("pwm10", { ssc.pwm10 })
+newsyscall("pwm11", { ssc.pwm11 })
+newsyscall("pwm12", { ssc.pwm12 })
+newsyscall("pwm13", { ssc.pwm13 })
+newsyscall("pwm14", { ssc.pwm14 })
+newsyscall("pwm15", { ssc.pwm15 })
 --]]
+--newsyscall("turnfront", { ssc.turnfront })
+--newsyscall("turnrear", { ssc.turnrear })
+--newsyscall("pan", { ssc.pan })
+--newsyscall("tilt", { ssc.tilt })
+
