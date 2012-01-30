@@ -14,7 +14,7 @@
 #include <buffer.h>
 
 MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas <andrew.klofas@senseta.com>");
+MOD_AUTHOR("Andrew Klofas <andrew@maxkernel.com>");
 MOD_DESCRIPTION("Captures Webcams (video4linux2) and outputs YUV format");
 
 DEF_BLOCK(device, webcam_new, "ssii");

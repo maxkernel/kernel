@@ -12,7 +12,7 @@ MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= BETA
 
-MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress
+MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress template
 UTILS		= syscall
 #OLD_UTILS	= client autostart kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 

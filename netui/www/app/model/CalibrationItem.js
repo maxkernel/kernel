@@ -2,6 +2,7 @@ Ext.define('Max.model.CalibrationItem', {
     extend: 'Ext.data.Model',
     
     fields: [
+        {name: 'module', type: 'string'},
         {name: 'group', type: 'string'},
         {name: 'name',  type: 'string'},
         {name: 'type', type: 'string'},

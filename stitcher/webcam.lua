@@ -26,9 +26,10 @@ route(jpegcompress.frame, camerasink.buffer)
 
 
 -- Create the execution thread
-pipeline = newrategroup("Camera pipeline", { camera, jpegcompress, camerasink }, 10)
+pipeline = newrategroup("Camera pipeline", { camera, jpegcompress, camerasink }, 30)
 
 
 -- Allow us to muck with the width/height and framerate through a syscall
 newsyscall("videoparams", {camera.width, camera.height, pipeline.rate})
+
 

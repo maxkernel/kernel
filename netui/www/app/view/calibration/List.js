@@ -5,38 +5,12 @@ Ext.define('Max.view.calibration.List', {
     requires: ['Ext.toolbar.Toolbar'],
     store: 'CalibrationItems',
 
-	//autoScroll: true,
-	
 	initComponent: function() {
 	    var grouping = Ext.create('Ext.grid.feature.Grouping', {
             groupHeaderTpl: '{name}'
         });
-    
+        
 		Ext.apply(this, {
-			/*tpl: new Ext.XTemplate(
-			    '<div class="post-data">',
-			        '<span class="post-date">{pubDate:this.formatDate}</span>',
-			        '<h3 class="post-title">{title}</h3>',
-			        '<h4 class="post-author">by {author:this.defaultValue}</h4>',
-			    '</div>',
-			    '<div class="post-body">{content:this.getBody}</div>', {
-
-				getBody: function(value, all) {
-					return Ext.util.Format.stripScripts(value);
-				},
-
-				defaultValue: function(v) {
-					return v ? v : 'Unknown';
-				},
-
-				formatDate: function(value) {
-					if (!value) {
-						return '';
-					}
-					return Ext.Date.format(value, 'M j, Y, g:i a');
-				}
-			}),*/
-			
 			features: [grouping],
 			
 			cellCls: 'valign-middle',
@@ -80,19 +54,36 @@ Ext.define('Max.view.calibration.List', {
 	},
 	
 	formatValue: function(value, metaData, record) {
+        var self = this;
 	    var id = Ext.id();
 	    
-	    console.log(record);
-	    
 	    Ext.Function.defer(function() {
-	        Ext.create('Ext.form.NumberField', {
+	        var c = Ext.create('Ext.form.NumberField', {
 	            renderTo: id,
 	            height: 17,
-	            value: value
+	            value: value,
+	            defaultValue: value,
+	            action: 'preview',
+	            
+	            listeners: {
+	                change: function(evt) { self.fireChange(evt, record); }
+	            }
 	        });
-	    }, 25);
+	        
+	        self.addListener("revert", function() {
+	            c.setValue(c.defaultValue);
+	        });
+	        self.addListener("commit", function() {
+	            c.defaultValue = c.getValue();
+	        });
+	    }, 50);
 	    
 	    return Ext.String.format('<div id="{0}"></div>', id);
+	},
+	
+	fireChange: function(evt, record) {
+	    evt['record'] = record;
+	    this.fireEvent("preview", evt);
 	}
 });
 

@@ -14,7 +14,7 @@ static void calget__itri(void * udata, char * module, char * name, char type, ch
 		group = module;
 	}
 
-	http_printf(conn, "{'group':'%s','name':'%s','type':'%c','value':'%d','min':'%d','max':'%d','desc':'%s'},", group, name, T_INTEGER, value, min, max, desc);
+	http_printf(conn, "{'module':'%s','group':'%s','name':'%s','type':'%c','value':'%d','min':'%d','max':'%d','desc':'%s'},", module, group, name, T_INTEGER, value, min, max, desc);
 }
 
 static void calget__itrd(void * udata, char * module, char * name, char type, char * desc, double value, double min, double max)
@@ -27,7 +27,7 @@ static void calget__itrd(void * udata, char * module, char * name, char type, ch
 		group = module;
 	}
 
-	http_printf(conn, "{'group':'%s','name':'%s','type':'%c','value':'%f','min':'%f','max':'%f','desc':'%s'},", group, name, T_DOUBLE, value, min, max, desc);
+	http_printf(conn, "{'module':'%s','group':'%s','name':'%s','type':'%c','value':'%f','min':'%f','max':'%f','desc':'%s'},", module, group, name, T_DOUBLE, value, min, max, desc);
 }
 
 static void get_calibration(http_connection * conn, http_context * ctx)

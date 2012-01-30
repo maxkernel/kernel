@@ -22,9 +22,13 @@ Ext.define('Max.view.Viewer', {
             return;
         }
         
+        tabConfig['closable'] = true;
+        
         this.tabs[tabConfig.title] = this.add(tabConfig);
         this.tabs[tabConfig.title].on('beforeclose', this.closeTab, this, { title: tabConfig.title });
     },
     
-    
+    getTab: function(title) {
+        return this.tabs[title];
+    }
 });

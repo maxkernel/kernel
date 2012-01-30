@@ -8,16 +8,23 @@ debug("Setting up the Propeller SSC module")
 ssc = loadmodule("ssc-32")
 
 dm = loadmodule("drivemodel")
+lm = loadmodule("lookmodel")
 
 route(dm.front_pwm, ssc.pwm2)
 route(dm.rear_pwm, ssc.pwm3)
 
+route(lm.pan_pwm, ssc.pwm4)
+route(lm.tilt_pwm, ssc.pwm5)
+
 -- Update the motors at 10 Hz
-newrategroup("Actuator update", { dm, ssc }, 10)
+newrategroup("Actuator update", { dm, lm, ssc }, 10)
 
 -- Define syscalls
 newsyscall("turnfront", { dm.front })
 newsyscall("turnrear", { dm.rear })
+
+newsyscall("pan", { lm.pan })
+newsyscall("tilt", { lm.tilt })
 
 --[[
 newsyscall("pwm0", { ssc.pwm0 })
