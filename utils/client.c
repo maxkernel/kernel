@@ -80,16 +80,8 @@ static void daemonize()
 	freopen( "/dev/null", "w", stderr);
 }
 
-static void dosyscalls()
-{
-	//execute some syscalls to keep rover safe and undamaged
-	system("max-syscall motoroff");
-	system("max-syscall alloff");
-}
-
 static void postexec()
 {
-	dosyscalls();
 	unlink(FIFO);
 	unlink(CMDFILE);
 }

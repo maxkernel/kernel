@@ -1,0 +1,20 @@
+TEMPLATE    = max-autostart.tmpl
+TARGET		= max-autostart
+
+
+.PHONY: prereq all install clean
+
+prereq:
+	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" 1>&2 && false )
+
+all: prereq
+	cat $(TEMPLATE) | sed "s|\(^INSTALL=\)\(.*\)$$|\1$(INSTALL)|" >$(TARGET)
+	chmod +x $(TARGET)
+
+install: prereq
+	cp -f $(TARGET) $(INSTALL)
+	ln -fs $(INSTALL)/$(TARGET) /usr/bin
+
+clean:
+	rm -f $(TARGET)
+

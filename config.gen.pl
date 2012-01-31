@@ -13,7 +13,7 @@ print STDOUT "# parsed by libconfuse\n\n";
 print STDOUT "id = " . md5_hex( time() . rand() ) . "\n";
 print STDOUT "path = " . $install . ":" . $install . "/modules\n";
 print STDOUT "installed = " . time() . "\n";
-print STDOUT "model = " . "Max 5J" . "\n\n";
+print STDOUT "model = " . "\"Max 5J\"" . "\n\n";
 
 print STDOUT <<END;
 

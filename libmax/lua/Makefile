@@ -18,6 +18,7 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
 install:
+	mkdir -p /usr/lib/lua/5.1
 	cp -f $(TARGET) /usr/lib/lua/5.1/
 
 clean:
