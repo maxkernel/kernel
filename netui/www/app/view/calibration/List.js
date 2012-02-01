@@ -62,6 +62,9 @@ Ext.define('Max.view.calibration.List', {
 	            renderTo: id,
 	            height: 17,
 	            value: value,
+	            minValue: record.data.min,
+	            maxValue: record.data.max,
+	            step: self.getStep(Math.abs(record.data.max - record.data.min)),
 	            defaultValue: value,
 	            action: 'preview',
 	            
@@ -84,6 +87,14 @@ Ext.define('Max.view.calibration.List', {
 	fireChange: function(evt, record) {
 	    evt['record'] = record;
 	    this.fireEvent("preview", evt);
+	},
+	
+	getStep: function(stride) {
+	    if (stride <= 10.0)             return 0.1;
+	    else if (stride <= 100.0)		return 1.0;
+	    else if (stride <= 1000.0)		return 10.0;
+	    else if (stride <= 10000.0)		return 100.0;
+	    else							return 1000.0;
 	}
 });
 

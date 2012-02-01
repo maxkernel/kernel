@@ -821,7 +821,6 @@ int main(int argc, char * argv[])
 	KERN_DEFSYSCALL(	max_model,			"s:v",		"Returns the model name of the robot");
 	KERN_DEFSYSCALL(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
 	KERN_DEFSYSCALL(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");
-	KERN_DEFSYSCALL(	math_eval,			"d:s",		"Evaluates the given expression and returns the result. Expression can contain constants and function. ex: cos(2 * pi)");
 	KERN_DEFSYSCALL(	property_get,		"s:s",		"Returns the string representation of the defined property");
 	KERN_DEFSYSCALL(	property_set,		"v:ss",		"Sets the property name (param 1) to the specified value (param 2)");
 	KERN_DEFSYSCALL(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");

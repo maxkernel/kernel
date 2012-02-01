@@ -81,60 +81,6 @@ static const char * reply_mimetype(const char * path)
 	return NULL;
 }
 
-#if 0
-static inline double handle_calget__step(double stride)
-{
-	if (stride <= 100.0)			return 1.0;
-	else if (stride <= 1000.0)		return 10.0;
-	else if (stride <= 20000.0)		return 100.0;
-	else							return 1000.0;
-}
-
-static void handle_calget__itri(void * udata, char * module, char * name, char type, char * desc, int value, int min, int max)
-{
-	http_connection * conn = udata;
-	double stride = handle_calget__step(max-min);
-	http_printf(conn, T_CALGET_ITEM, module, name, type, desc, (double)value, (double)min, (double)max, stride);
-}
-
-static void handle_calget__itrd(void * udata, char * module, char * name, char type, char * desc, double value, double min, double max)
-{
-	http_connection * conn = udata;
-	double stride = handle_calget__step(max-min);
-	http_printf(conn, T_CALGET_ITEM, module, name, type, desc, value, min, max, stride);
-}
-
-static void handle_calget(http_connection * conn, http_context * ctx, const char * uri)
-{
-	const char * revert = http_getparam(ctx, "revert");
-	if (revert != NULL && strcmp(revert, "1") == 0)
-	{
-		cal_revert();
-	}
-
-	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
-	http_printf(conn, T_CALGET_HEAD);
-
-	cal_iterate(handle_calget__itri, handle_calget__itrd, conn);
-
-	http_printf(conn, T_CALGET_TAIL);
-}
-
-static void handle_calset(http_connection * conn, http_context * ctx, const char * uri)
-{
-	cal_setparam(http_getparam(ctx, "module"), http_getparam(ctx, "name"), http_getparam(ctx, "value"));
-	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
-	http_printf(conn, T_CALSET);
-}
-
-static void handle_calsave(http_connection * conn, http_context * ctx, const char * uri)
-{
-	cal_merge(http_getparam(ctx, "comment"));
-	http_printf(conn, "HTTP/1.1 200 OK\r\n\r\n");
-	http_printf(conn, T_CALSAVE);
-}
-#endif
-
 static void handle_root(http_connection * conn, http_context * ctx, const char * uri)
 {
 	if (strcmp(uri, "/") == 0)

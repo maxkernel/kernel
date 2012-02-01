@@ -17,9 +17,9 @@ UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
 
-SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c math.c
+SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c
 OBJS		= $(SRCS:.c=.o)
-PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1 libmatheval
+PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
 INCLUDES	= -I. -Iaul/include $(shell pkg-config --cflags-only-I $(PACKAGES))
 DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\"" -DMODEL="\"$(MODEL)\""
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
