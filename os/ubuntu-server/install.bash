@@ -23,9 +23,10 @@ fi
 DEP="
 build-essential
 xutils-dev
-gdb
-pkg-config
 binutils-dev
+pkg-config
+git-core
+gdb
 libglib2.0-dev
 libconfuse-dev
 libjpeg-dev
