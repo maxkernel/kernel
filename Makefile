@@ -12,6 +12,8 @@ MEMFS		= memfs
 PROFILE		= yes
 RELEASE		= BETA
 
+MODEL       = Max 5J
+
 MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress template
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
@@ -37,7 +39,6 @@ TARGET		= maxkernel
 # Modify the map module to use proper regex
 # Modify the meta file to use proper regex
 # Fix utilities
-# Update netui to add set buttons in calibration pane
 
 
 export INSTALL
@@ -46,7 +47,7 @@ export RELEASE
 .PHONY: prepare prereq body all install clean rebuild depend
 
 all: prereq body $(TARGET)
-	$(foreach module,$(MODULES),perl makefile.gen.pl -module $(module) -defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
+	$(foreach module,$(MODULES),python makefile.gen.py --module $(module) --defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax all 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In testmax" >> buildlog && $(MAKE) -C testmax all 2>>buildlog ) || ( cat buildlog && false )
@@ -66,7 +67,7 @@ install:
 	( [ -e $(INSTALL)/$(DBNAME) ] || cp -f $(DBNAME) $(INSTALL) )
 	cp -f stitcher/*.lua $(INSTALL)/stitcher
 	cp -f $(HEADERS) /usr/include/maxkernel
-	perl config.gen.pl -install '$(INSTALL)' >$(INSTALL)/$(CONFIG)
+	python maxconf.gen.py --install '$(INSTALL)' --model '$(MODEL)' >$(INSTALL)/$(CONFIG)
 	$(MAKE) -C aul install
 	$(MAKE) -C libmax install
 	$(MAKE) -C testmax install
