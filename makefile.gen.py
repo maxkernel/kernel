@@ -42,7 +42,7 @@ $(TARGET): $(OBJS)
 
 install:
 	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" 1>&2 && false )
-	cp -f $module.mo "$(INSTALL)/modules"
+	cp -f $(TARGET) $(INSTALL)/modules
 	( cp -f include/* /usr/include/max 2>/dev/null ) || true
 	[ ! -f install.part.bash ] || bash install.part.bash $(INSTALL)
 

@@ -76,8 +76,8 @@ static bool compress_archive(const char * prefix, int arnum)
 
 	//perform compression
 	{
-		FILE * src = fopen(oldpath.string, "rb");
-		gzFile dest = gzopen(newpath.string, "wb");
+		FILE * src = fopen(oldpath.string, "r");
+		gzFile dest = gzopen(newpath.string, "w");
 
 		if (src == NULL || dest == NULL)
 		{

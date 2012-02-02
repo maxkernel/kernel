@@ -9,6 +9,9 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <argp.h>
+#include <ftw.h>
+#include <zlib.h>
+#include <libtar.h>
 
 #define FIFO		"/tmp/maxclient.fifo"
 #define CMDFILE		"/tmp/maxclient.cmd"
@@ -16,20 +19,25 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-static volatile pid_t CHILD = 0;
+static volatile pid_t child = 0;
+static char * tempdir = NULL;
 
 static struct {
 	int autostart;
 	int command;
 	int daemon;
 	int kill;
+	char * archive;
+	char * directory;
 } args = { 0 };
 
 static struct argp_option arg_opts[] = {
-	{ 0, 'a', 0, 0, "execute autostart program", 0 },
-	{ 0, 'c', 0, 0, "if another max-client program is executing, print the last command used", 0 },
-	{ 0, 'd', 0, 0, "start program as daemon", 0 },
-	{ 0, 'k', 0, 0, "kill the currently running program if exists", 0 },
+	{ "autostart",  'a',    0,          0, "execute autostart program", 0 },
+	{ "command",    'c',    0,          0, "if another max-client program is executing, print the last command used", 0 },
+	{ "daemon",     'd',    0,          0, "start program as daemon", 0 },
+	{ "kill",       'k',    0,          0, "kill the currently running program if exists", 0 },
+	{ "archive",    'x',    "file",     0, "extract given file into a temporary directory and execute within that directory", 0 },
+	{ "directory",  'C',    "dir",      0, "change to the given directory prior to executing command", 0 },
 	{ 0 }
 };
 
@@ -40,10 +48,12 @@ static error_t parse_args(int key, char * arg, struct argp_state * state)
 {
 	switch (key)
 	{
-		case 'a':	args.autostart = 1;		break;
-		case 'c':	args.command = 1;		break;
-		case 'd':	args.daemon = 1;		break;
-		case 'k':	args.kill = 1;			break;
+		case 'a':	args.autostart = 1;		        break;
+		case 'c':	args.command = 1;		        break;
+		case 'd':	args.daemon = 1;		        break;
+		case 'k':	args.kill = 1;			        break;
+		case 'x':   args.archive = strdup(arg);     break;
+		case 'C':   args.directory = strdup(arg);   break;
 
 		default:
 			return ARGP_ERR_UNKNOWN;
@@ -56,28 +66,91 @@ static void daemonize()
 {
 	pid_t pid, sid;
 	
-    	/* Fork off the parent process */
+    // Fork off the parent process
 	pid = fork();
-	if (pid < 0) {
+	if (pid < 0)
+	{
 		exit(EXIT_FAILURE);
 	}
-	/* If we got a good PID, then we can exit the parent process. */
-	if (pid > 0) {
+	
+	// If we got a good PID, then we can exit the parent process.
+	if (pid > 0)
+	{
 		exit(EXIT_SUCCESS);
 	}
 
-	/* At this point we are executing as the child process */
+	// At this point we are executing as the child process
 
-	/* Create a new SID for the child process */
+	// Create a new SID for the child process
 	sid = setsid();
-	if (sid < 0) {
+	if (sid < 0)
+	{
 		exit(EXIT_FAILURE);
 	}
 
-	/* Redirect standard files to /dev/null */
+	// Redirect standard files to /dev/null
 	freopen( "/dev/null", "r", stdin);
 	freopen( "/dev/null", "w", stdout);
 	freopen( "/dev/null", "w", stderr);
+}
+
+static int extract(char * path, char * dir)
+{
+	gzFile file;
+
+	int gz_open(const char * path, int oflag, ...)
+	{
+		file = gzopen(path, "r");
+		return file == Z_NULL ? -1 : 0;
+	}
+	int gz_close(int fd)
+	{
+		gzclose(file);
+		return 0;
+	}
+	ssize_t gz_read(int fd, void * buf, size_t len)
+	{
+		return gzread(file, buf, len);
+	}
+	ssize_t gz_write(int fd, const void * buf, size_t len)
+	{
+		printf("Write\n");
+		// Do nothing. We don't support writing!
+		return 0;
+	}
+	
+	TAR * t;
+	tartype_t type = {
+		.openfunc = gz_open,
+		.closefunc = gz_close,
+		.readfunc = gz_read,
+		.writefunc = gz_write,
+	};
+
+	if (tar_open(&t, path, &type, O_RDONLY, 0, TAR_GNU) != 0)
+	{
+		return -1;
+	}
+
+	while (th_read(t) == 0)
+	{
+		char buf[512];
+		char * name = th_get_pathname(t);
+
+		snprintf(buf, sizeof(buf), "%s/%s", dir, name);
+
+		if (tar_extract_file(t, buf) != 0)
+		{
+			return -1;
+		}
+	}
+
+	if (tar_close(t) != 0)
+	{
+		return -1;
+	}
+	
+	return 0;
 }
 
 static void postexec()
@@ -88,7 +161,7 @@ static void postexec()
 
 static void startchild(char ** args)
 {
-	//write command to CMDFILE
+	// Write command to CMDFILE
 	int cfp = open(CMDFILE, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	int i=0;
 	while (args[i] != NULL)
@@ -101,19 +174,19 @@ static void startchild(char ** args)
 	chmod(CMDFILE, 0644);
 
 
-	CHILD = fork();
-	if (CHILD == 0)
+	child = fork();
+	if (child == 0)
 	{
-		//child
+		// Child
 		
-		//sleep for a bit so parent can catch up
+		// Sleep for a bit so parent can catch up
 		usleep(500);
 		
 		execvp(args[0], args);
 		fprintf(stderr, "* Fall through! Could not execute %s\n", args[0]);
 		exit(EXIT_FAILURE);
 	}
-	else if (CHILD < 0)
+	else if (child < 0)
 	{
 		fprintf(stderr, "* Could not fork\n");
 		exit(EXIT_FAILURE);
@@ -132,7 +205,31 @@ static void killall()
 		killpg(getpgrp(), SIGTERM);
 		usleep(100000);
 	}
-	while (CHILD != 0);
+	while (child != 0);
+	
+	if (tempdir != NULL)
+	{
+		int rmfiles(const char * path, const struct stat * ptr, int flag)
+		{
+			if (flag != FTW_D) remove(path);
+			return 0;
+		}
+		
+		int rmdirs(const char * path, const struct stat * ptr, int flag)
+		{
+			if (flag == FTW_D) remove(path);
+			return 0;
+		}
+		
+		// Remove all the files in tempdir
+		ftw(tempdir, rmfiles, 25);
+		
+		// Remove all the dirs in tempdir
+		ftw(tempdir, rmdirs, 25);
+		
+		// Now remove tempdir
+		remove(tempdir);
+	}
 	
 	exit(EXIT_SUCCESS);
 }
@@ -140,9 +237,9 @@ static void killall()
 static void sigchld(int sig)
 {
 	pid_t chld = waitpid(0, NULL, WNOHANG);
-	if (chld == CHILD)
+	if (chld == child)
 	{
-		CHILD = 0;
+		child = 0;
 		killall();
 	}
 }
@@ -175,6 +272,33 @@ int main(int argc, char ** argv)
 {
 	int argi;
 	argp_parse(&argp, argc, argv, ARGP_IN_ORDER, &argi, 0);
+	
+	if (args.directory != NULL)
+	{
+		if (chdir(args.directory) != 0)
+		{
+			fprintf(stderr, "* could not set working directory to %s\n", args.directory);
+			exit(EXIT_FAILURE);
+		}
+	}
+	
+	if (args.archive != NULL)
+	{
+		char t[] = "/tmp/max-client.XXXXXX";
+		tempdir = mkdtemp(t);
+		
+		if (extract(args.archive, tempdir) != 0)
+		{
+		    fprintf(stderr, "* could not extract archive %s\n", args.archive);
+			exit(EXIT_FAILURE);
+		}
+		
+		if (chdir(tempdir) != 0)
+		{
+			fprintf(stderr, "* could not set working directory to %s\n", tempdir);
+			exit(EXIT_FAILURE);
+		}
+	}
 	
 	int fifo_fp = open(FIFO, O_WRONLY | O_NONBLOCK);
 	if (fifo_fp > 0)
@@ -231,7 +355,7 @@ int main(int argc, char ** argv)
 
 	if (args.autostart)
 	{
-		//check existence
+		// Check existence of autostart file
 		if (access(INSTALL "/autostart", F_OK) == -1)
 		{
 			fprintf(stderr, "* autostart file does not exist\n");
@@ -252,12 +376,12 @@ int main(int argc, char ** argv)
 	//
 	atexit(postexec);
 
-	//reg signals
+	// Register signals
 	signal(SIGINT, sigint);
 	signal(SIGCHLD, sigchld);
 	signal(SIGHUP, SIG_IGN);
 
-	//execute client
+	// Execute client
 	if (args.autostart)
 	{
 		int afp = open(INSTALL "/autostart", O_RDONLY);
@@ -267,7 +391,7 @@ int main(int argc, char ** argv)
 			exit(EXIT_FAILURE);
 		}
 
-		//read in autostart
+		// Read in autostart
 		char buf[250];
 		int r = read(afp, buf, 249);
 		buf[r] = '\0';
@@ -286,7 +410,7 @@ int main(int argc, char ** argv)
 			args[i] = strtok(NULL, " \t\n");
 		} while (args[i++] != NULL);
 
-		//call start child on the parsed args
+		// Call start child on the parsed args
 		startchild(args);
 		free(args);
 	}
@@ -295,7 +419,7 @@ int main(int argc, char ** argv)
 		startchild(argv + argi);
 	}
 
-	//make the fifo
+	// Make the fifo
 	mknod(FIFO, S_IFIFO | 0622, 0);
 	chmod(FIFO, 0622);
 
