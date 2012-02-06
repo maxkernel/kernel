@@ -1,4 +1,4 @@
-SRCS 		= client.c
+SRCS 		= client.c archive.c
 PACKAGES	= 
 
 TARGET		= max-client

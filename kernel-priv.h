@@ -293,6 +293,7 @@ typedef struct
 } kthread_task_t;
 
 #define LOGFILE					"maxkernel.log"
+#define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 #define CACHESTR_SIZE			(1024)				/* 1 KB */
 

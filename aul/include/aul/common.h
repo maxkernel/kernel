@@ -44,6 +44,9 @@ extern "C" {
 #undef  LABELS
 #define LABELS(...)						__label__ __VA_ARGS__
 
+#undef  nelems
+#define nelems(a)						(sizeof(a) / sizeof(a[0]))
+
 
 #define ZERO(x)			memset(&(x), 0, sizeof(x))
 #define PZERO(x, size)	memset(x, 0, size)

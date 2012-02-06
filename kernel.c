@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <time.h>
 #include <argp.h>
@@ -51,8 +52,45 @@ static char cache_syscalls[CACHESTR_SIZE] = {0};
 static char cache_modules[CACHESTR_SIZE] = {0};
 
 static struct {
-	// TODO
-} args = { };
+	bool forkdaemon;
+} args = { false };
+
+
+
+static void daemonize()
+{
+	pid_t pid, sid;
+
+    // Fork off the parent process
+	pid = fork();
+	if (pid < 0)
+	{
+		exit(1);
+	}
+
+	// If we got a good PID, then we can exit the parent process.
+	if (pid > 0)
+	{
+		exit(0);
+	}
+
+	// At this point we are executing as the child process
+
+	// Create a new SID for the child process
+	sid = setsid();
+	if (sid < 0)
+	{
+		exit(1);
+	}
+
+	// Redirect standard files to /dev/null
+	close(0);
+	open("/dev/null", O_RDONLY);
+	close(1);
+	open("/dev/null", O_WRONLY);
+	close(2);
+	open("/dev/null", O_WRONLY);
+}
 
 /*------------ SIGNALS -------------*/
 static void signal_int(int signo)
@@ -115,15 +153,16 @@ static error_t parse_args(int key, char * arg, struct argp_state * state)
 {
 	switch (key)
 	{
-		// TODO
-		
+		case 'd': args.forkdaemon = true;		break;
+		default:
+			return ARGP_ERR_UNKNOWN;
 	}
 	
 	return 0;
 }
 
 static struct argp_option arg_opts[] = {
-	//TODO - add more args
+	{ "daemon",     'd',    0,          0, "start program as daemon", 0 },
 	{ 0 }
 };
 
@@ -723,12 +762,17 @@ int main(int argc, char * argv[])
 		LOGK(LOG_FATAL, "Must be root!");
 	}
 
-	// Do not prevent any unmounting
-	chdir("/");		// TODO - probably should make this the root install dir
+	chdir(INSTALL);
 	
 	// Set up signals
 	signal_init();
 
+	argp_parse(&argp, argc, argv, ARGP_SILENT, 0, 0);
+	if (args.forkdaemon)
+	{
+		// Fork this process as a daemon
+		daemonize();
+	}
 
 	// Init logging
 	log_openfile(LOGDIR "/" LOGFILE, NULL);
@@ -750,6 +794,24 @@ int main(int argc, char * argv[])
 		LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
 	}
 	mallopt(M_TRIM_THRESHOLD, -1);
+
+	// Make pid file
+	{
+		int pfd = open(PIDFILE, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
+		if (pfd == -1)
+		{
+			LOGK(LOG_WARN, "Could not create pid file %s: %s", PIDFILE, strerror(errno));
+		}
+		else
+		{
+			string_t data = string_new("%u\n", getpid());
+			if (write(pfd, data.string, data.length) != data.length)
+			{
+				LOGK(LOG_WARN, "Could not write all data to pid file %s", PIDFILE);
+			}
+			close(pfd);
+		}
+	}
 
 	// Set up buffers
 	buffer_init();
@@ -808,10 +870,10 @@ int main(int argc, char * argv[])
 	profile_init();
 #endif
 
-	//initialize kernel vars and subsystems
+	// Initialize kernel vars and subsystems
 	module_kernelinit();	//a generic module that points to kernel space
 	
-	//register syscalls
+	// Register syscalls
 	KERN_DEFSYSCALL(	module_list,		"s:v",		"Returns a string concatenation of paths of all loaded modules");
 	KERN_DEFSYSCALL(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
 	KERN_DEFSYSCALL(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
@@ -826,14 +888,7 @@ int main(int argc, char * argv[])
 	KERN_DEFSYSCALL(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");
 	KERN_DEFSYSCALL(	property_isset,		"b:s",		"Returns true if the property name (param 1) has been set");
 
-	//parse args
-	LOGK(LOG_DEBUG, "Parsing prog arguments");
-	if (argc > 0)
-	{
-		argp_parse(&argp, argc, argv, ARGP_SILENT, 0, 0);
-	}
-	
-	//parse configuration file
+	// Parse configuration file
 	cfg_opt_t opts[] = {
 		CFG_STR(	"id",			"(none)",				CFGF_NONE	),
 		CFG_STR(	"path",			INSTALL "/modules",		CFGF_NONE	),
@@ -1049,6 +1104,9 @@ int main(int argc, char * argv[])
 		LOGK(LOG_DEBUG, "Closing database file");
 		sqlite3_close(database);
 	}
+
+	// Remove pid file
+	unlink(PIDFILE);
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");
 

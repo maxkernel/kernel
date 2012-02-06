@@ -23,37 +23,37 @@ fi
 case "$1" in
 	start)
 		log_daemon_msg "Starting maxkernel"
-		if start-stop-daemon --start --background --pidfile /var/local/maxkernel.pid --make-pidfile --startas $INSTALL/maxkernel; then
+		if start-stop-daemon --start --name maxkernel --pidfile /var/run/maxkernel.pid --startas $INSTALL/maxkernel -- --daemon; then
 			log_end_msg 0
 		else
 			log_end_msg 1
 		fi
 		
-		sleep 1
-		
 		log_daemon_msg "Starting maxkernel autostart client"
-		if max-client -ad; then
+		if start-stop-daemon --start --background --make-pidfile --name max-autostart --pidfile /var/run/max-autostart.pid --startas $INSTALL/max-autostart -- -x; then
 			log_end_msg 0
 		else
 			log_end_msg 1
 		fi
 		;;
 	stop)
-		log_daemon_msg "Stopping maxkernel"
-		if start-stop-daemon --stop --pidfile /var/local/maxkernel.pid --oknodo; then
+		log_daemon_msg "Stopping maxkernel autostart client"
+		$INSTALL/max-client -k
+		if start-stop-daemon --stop --oknodo --name max-autostart --pidfile /var/run/max-autostart.pid --retry=INT/15/TERM/5/KILL/5; then
 			log_end_msg 0
 		else
 			log_end_msg 1
 		fi
-		rm -f /var/local/maxkernel.pid
 		
-		log_daemon_msg "Stopping maxkernel autostart client"
-		max-client -k
-		log_end_msg 0
+		log_daemon_msg "Stopping maxkernel"
+		if start-stop-daemon --stop --oknodo --name maxkernel --pidfile /var/run/maxkernel.pid --retry=INT/15/TERM/5/KILL/5; then
+			log_end_msg 0
+		else
+			log_end_msg 1
+		fi
 		;;
 	restart)
 		$0 stop
-		sleep 1
 		$0 start
 		;;
 	*)

@@ -14,7 +14,7 @@ RELEASE		= BETA
 
 MODEL       = Max 5J
 
-MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress template
+MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
@@ -23,7 +23,7 @@ SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c
 OBJS		= $(SRCS:.c=.o)
 PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
 INCLUDES	= -I. -Iaul/include $(shell pkg-config --cflags-only-I $(PACKAGES))
-DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\"" -DMODEL="\"$(MODEL)\""
+DEFINES		= -D_GNU_SOURCE -DKERNEL $(shell [ "$(PROFILE)" = 'yes' ] && echo "-DEN_PROFILE" ) -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\""
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
 LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul  -lbfd -ldl -lrt
 LFLAGS		= -Laul -Wl,--export-dynamic
@@ -53,7 +53,7 @@ all: prereq body $(TARGET)
 	( echo "In testmax" >> buildlog && $(MAKE) -C testmax all 2>>buildlog ) || ( cat buildlog && false )
 	( echo "In utils" >>buildlog && $(foreach util,$(UTILS), $(MAKE) -C utils -f Makefile.$(util) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In gendb" >>buildlog && cat database.gen.sql | sqlite3 $(DBNAME) >>buildlog ) || ( cat buildlog && false )
-	cat buildlog
+	( echo "Done (success)" >>buildlog && cat buildlog )
 
 body:
 	echo "In kernel" >>buildlog

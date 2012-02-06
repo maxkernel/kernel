@@ -4,48 +4,66 @@ INSTALL=
 FILE=$INSTALL/autostart
 
 CLEAR=0
-while getopts "c" optname
+EXECUTE=0
+
+# Parse the options
+while getopts "cx" optname
 do
 	case "$optname" in
-		"?")	echo "Usage: $0 [-c] [command +args]" 1>&2
-			echo "    -c  clear the autostart command and quit" 1>&2
-			echo "    *   if no command +args, print the autostart command" 1>&2
-			exit 1
-			;;
+		"?")	echo "Usage: $0 [-cx] [command +args]" 1>&2
+				echo "    -c  clear the autostart command and quit" 1>&2
+				echo "    -x  execute autostart script" 1>&2
+				echo "    *   if no command +args, print the autostart command" 1>&2
+				exit 1
+				;;
 		
 		"c")	CLEAR=1
-			;;
+				;;
+		"x")	EXECUTE=1
+				;;
 	esac
+	shift
 done
 
-# create the file if not exists and is root
+# Shift past the '--' if present
+if [ "$1" = "--" ]; then
+	shift
+fi
+
+# Create the file if not exists and is root
 if [ ! -e $FILE -o $CLEAR -eq 1 ]; then
+	rm -f $FILE
 	( echo "" 1>$FILE ) 2>/dev/null
 	( chmod a+rw $FILE ) 2>/dev/null
 fi
 
-# test file again, quit if still doesn't exist
+# Test file again, quit if still doesn't exist
 if [ ! -e $FILE ]; then
 	echo "Error: Could not create autostart file. Must re-run as root" 1>&2
 	exit 1
 fi
 
-# make sure we can modify the file
+# Make sure we can modify the file
 if !( touch $FILE 2>/dev/null ); then
 	echo "Error: permission denied. Must re-run as root with -c flag" 1>&2
 	exit 1
 fi
 
-# quit if clear flag (work is done)
+# Quit if clear flag (work is done)
 if [ $CLEAR -eq 1 ]; then
 	exit 0
 fi
 
-
+# Write to the autostart file
 if [ $# -gt 0 ]; then
 	echo $@ >$FILE
-else
+elif [ $EXECUTE -ne 1 ]; then
 	cat $FILE
 fi
 
+# Execute the autostart file if execute flag
+if [ $EXECUTE -eq 1 ]; then
+	sh $FILE
+	exit 0
+fi
 
