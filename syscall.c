@@ -2,10 +2,10 @@
 #include <ffi.h>
 #include <glib.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
-#include "array.h"
-#include "serialize.h"
+#include <array.h>
+#include <serialize.h>
+#include <kernel.h>
+#include <kernel-priv.h>
 
 extern GHashTable * syscalls;
 
@@ -24,6 +24,7 @@ void syscall_destroy(void * syscall)
 {
 	syscall_t * sys = syscall;
 	FREE(sys->cif);
+	FREE(sys->ptypes);
 	FREES(sys->sig);
 	FREES(sys->desc);
 }
@@ -37,6 +38,136 @@ void syscall_reg(syscall_t * syscall)
 
 	g_hash_table_insert(syscalls, (void *)syscall->name, syscall);
 	kobj_register((kobject_t *)syscall);
+	
+
+	// Prep the ffi cif
+	{
+		syscall->cif = malloc0(sizeof(ffi_cif));
+
+		size_t params = method_numparams(method_params(syscall->sig));
+		if (syscall->dynamic_data != NULL)
+		{
+			params += 1;
+		}
+		
+
+		switch (method_returntype(syscall->sig))
+		{
+			case T_BOOLEAN:
+			{
+				// BOOL is 1 byte
+				syscall->rtype = &ffi_type_uint8;
+				break;
+			}
+
+			case T_INTEGER:
+			{
+				syscall->rtype = &ffi_type_sint32;
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				syscall->rtype = &ffi_type_double;
+				break;
+			}
+
+			case T_CHAR:
+			{
+				syscall->rtype = &ffi_type_schar;
+				break;
+			}
+
+			case T_STRING:
+			{
+				syscall->rtype = &ffi_type_pointer;
+				break;
+			}
+
+			case T_ARRAY_BOOLEAN:
+			case T_ARRAY_INTEGER:
+			case T_ARRAY_DOUBLE:
+			case T_BUFFER:
+			{
+				syscall->rtype = &ffi_type_pointer;
+				break;
+			}
+
+			case T_VOID:
+			default:
+			{
+				syscall->rtype = &ffi_type_void;
+				break;
+			}
+		}
+
+
+		syscall->ptypes = malloc0(sizeof(ffi_type *) * (params + 1));	// Sentinel at end
+		int index = 0;
+		const char * param;
+
+		if (syscall->dynamic_data != NULL)
+		{
+			syscall->ptypes[index++] = &ffi_type_pointer;
+		}
+		
+		foreach_methodparam(method_params(syscall->sig), param)
+		{
+			switch (*param)
+			{
+				case T_BOOLEAN:
+				{
+					// BOOL is 1 byte
+					syscall->ptypes[index++] = &ffi_type_uint8;
+					break;
+				}
+
+				case T_INTEGER:
+				{
+					syscall->ptypes[index++] = &ffi_type_sint32;
+					break;
+				}
+
+				case T_DOUBLE:
+				{
+					syscall->ptypes[index++] = &ffi_type_double;
+					break;
+				}
+
+				case T_CHAR:
+				{
+					syscall->ptypes[index++] = &ffi_type_schar;
+					break;
+				}
+
+				case T_STRING:
+				{
+					syscall->ptypes[index++] = &ffi_type_pointer;
+					break;
+				}
+
+				case T_ARRAY_BOOLEAN:
+				case T_ARRAY_INTEGER:
+				case T_ARRAY_DOUBLE:
+				case T_BUFFER:
+				{
+					syscall->ptypes[index++] = &ffi_type_pointer;
+					break;
+				}
+
+				case T_VOID:
+				default:
+				{
+					syscall->ptypes[index++] = &ffi_type_void;
+					break;
+				}
+			}
+		}
+		
+		
+		// Do the preping
+		ffi_prep_cif(syscall->cif, FFI_DEFAULT_ABI, index, syscall->rtype, syscall->ptypes);
+	}
 }
 
 void * asyscall_exec(const char * name, void ** args)
@@ -48,127 +179,69 @@ void * asyscall_exec(const char * name, void ** args)
 		return NULL;
 	}
 	
-	if (syscall->cif == NULL)
-	{
-		//cif has not been built yet, do it now
-		syscall->cif = g_malloc0(sizeof(ffi_cif));
-		
-		size_t param_len = strlen(method_params(syscall->sig));
-		if (syscall->dynamic_data != NULL)
-		{
-			param_len += 1;
-		}
-
-		ffi_type * rtype; //return type
-		ffi_type ** atype = g_malloc0(sizeof(ffi_type *) * param_len); //arg types
-		
-		switch (method_returntype(syscall->sig))
-		{
-			case T_BOOLEAN:
-				// BOOL is 1 byte
-				rtype = &ffi_type_uint8;	break;
-			case T_INTEGER:
-				rtype = &ffi_type_sint32;	break;
-			case T_DOUBLE:
-				rtype = &ffi_type_double;	break;
-			case T_CHAR:
-				rtype = &ffi_type_schar;	break;
-			case T_STRING:
-				rtype = &ffi_type_pointer;	break;
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-			case T_BUFFER:
-				rtype = &ffi_type_pointer;	break;
-			default:
-				rtype = &ffi_type_void;		break;
-		}
-		
-		const char * sig = method_params(syscall->sig);
-		int sigi = 0;
-
-		if (syscall->dynamic_data != NULL)
-		{
-			atype[sigi++] = &ffi_type_pointer;
-		}
-		
-		if (*sig != T_VOID)
-		{
-			while (*sig != '\0')
-			{
-				switch (*sig)
-				{
-					case T_BOOLEAN:
-						// BOOL is 1 byte
-						atype[sigi] = &ffi_type_uint8;		break;
-					case T_INTEGER:
-						atype[sigi] = &ffi_type_sint32;		break;
-					case T_DOUBLE:
-						atype[sigi] = &ffi_type_double;		break;
-					case T_CHAR:
-						atype[sigi] = &ffi_type_schar;		break;
-					case T_STRING:
-						atype[sigi] = &ffi_type_pointer;	break;
-					case T_ARRAY_BOOLEAN:
-					case T_ARRAY_INTEGER:
-					case T_ARRAY_DOUBLE:
-					case T_BUFFER:
-						atype[sigi] = &ffi_type_pointer;	break;
-					default:
-						atype[sigi] = &ffi_type_void;		break;
-				}
-			
-				sig++;
-				sigi++;
-			}
-		}
-		
-		
-		//do the preping
-		ffi_prep_cif(syscall->cif, FFI_DEFAULT_ABI, sigi, rtype, atype);
-	}
-	
-	//LOGK(LOG_DEBUG, "Calling syscall %s", name);
-	
 	void * rvalue = NULL;
 	size_t rsize = 0;
 	
-	//get return type size
-	switch (syscall->sig[0])
+	// Get return type size
+	switch (method_returntype(syscall->sig))
 	{
 		case T_BOOLEAN:
-			rsize = sizeof(bool);		break;
+		{
+			rsize = sizeof(bool);
+			break;
+		}
+
 		case T_INTEGER:
-			rsize = sizeof(int);		break;
+		{
+			rsize = sizeof(int);
+			break;
+		}
+
 		case T_DOUBLE:
-			rsize = sizeof(double);		break;
+		{
+			rsize = sizeof(double);
+			break;
+		}
+
 		case T_CHAR:
-			rsize = sizeof(char);		break;
+		{
+			rsize = sizeof(char);
+			break;
+		}
+
 		case T_STRING:
-			rsize = sizeof(char *);		break;
+		{
+			rsize = sizeof(char *);
+			break;
+		}
+
 		case T_ARRAY_BOOLEAN:
 		case T_ARRAY_INTEGER:
 		case T_ARRAY_DOUBLE:
 		case T_BUFFER:
-			rsize = sizeof(buffer_t);	break;
+		{
+			rsize = sizeof(buffer_t);
+			break;
+		}
+
+		case T_VOID:
 		default:
-			rsize = 0;			break;
+		{
+			rsize = 0;
+			break;
+		}
 	}
 	
-	rvalue = (rsize > 0)? g_malloc0(rsize) : NULL;
+	rvalue = (rsize > 0)? malloc0(rsize) : NULL;
 	
 	if (syscall->dynamic_data != NULL)
 	{
-		//adjust the parameter list to include dynamic_data as first param
-		size_t plen = sizeof(void *) * (strlen(method_params(syscall->sig)));
-
-		void ** nargs = g_malloc0(plen + sizeof(void *));
+		// Adjust the parameter list to include dynamic_data as first param
+		void * nargs[method_numparams(method_params(syscall->sig)) + 1];
 		nargs[0] = &syscall->dynamic_data;
-		memcpy(nargs + 1, args, plen);
+		memcpy(&nargs[1], args, sizeof(void *) * method_numparams(method_params(syscall->sig)));
 
 		ffi_call(syscall->cif, (void *)syscall->func, rvalue, nargs);
-
-		g_free(nargs);
 	}
 	else
 	{
@@ -187,52 +260,6 @@ void * vsyscall_exec(const char * name, va_list args)
 		return NULL;
 	}
 	
-	//const char * sig = method_params(syscall->sig);
-
-	/*
-	GPtrArray * pargs = g_ptr_array_new();
-	
-	while (*sig != '\0')
-	{
-		switch (*sig)
-		{
-			#define __vsyscall_exec_element(t1, t2) \
-				case t1: { \
-					t2 * el = g_malloc(sizeof(t2)); \
-					*el = (t2) va_arg(args, t2); \
-					g_ptr_array_add(pargs, (void *) el); \
-					break; }
-
-			__vsyscall_exec_element(T_BOOLEAN, int)
-			__vsyscall_exec_element(T_INTEGER, int)
-			__vsyscall_exec_element(T_DOUBLE, double)
-			__vsyscall_exec_element(T_CHAR, int)
-			__vsyscall_exec_element(T_STRING, char *)
-			__vsyscall_exec_element(T_ARRAY_BOOLEAN, array_t)
-			__vsyscall_exec_element(T_ARRAY_INTEGER, array_t)
-			__vsyscall_exec_element(T_ARRAY_DOUBLE, array_t)
-			__vsyscall_exec_element(T_BUFFER, buffer_t)
-			
-			default:
-				g_ptr_array_add(pargs, (void *) NULL);
-				break;
-		}
-		
-		sig++;
-	}
-	
-	void * ret = asyscall_exec(name, pargs->pdata);
-	
-	size_t i=0;
-	for (; i<pargs->len; i++)
-		g_free(pargs->pdata[i]);
-	g_ptr_array_free(pargs, true);
-	*/
-	
-	//void ** params = vparam_pack(method_params(syscall->sig), args);
-	//void * ret = asyscall_exec(name, params);
-	//param_free(params);
-
 	char array[SYSCALL_BUFFERMAX];
 	ssize_t result = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, method_params(syscall->sig), args);
 	if (result == -1)
@@ -257,10 +284,10 @@ void * syscall_exec(const char * name, ...)
 
 void syscall_free(void * p)
 {
-	g_free(p);
+	free(p);
 }
 
-bool syscall_exists(const gchar * name, const gchar * sig)
+bool syscall_exists(const char * name, const char * sig)
 {
 	const syscall_t * syscall = syscall_get(name);
 	

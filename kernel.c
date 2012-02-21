@@ -48,9 +48,6 @@ static mutex_t kthread_tasks_mutex;
 static char logbuf[LOGBUF_SIZE] = {0};
 static size_t loglen = 0;
 
-static char cache_syscalls[CACHESTR_SIZE] = {0};
-static char cache_modules[CACHESTR_SIZE] = {0};
-
 static struct {
 	bool forkdaemon;
 } args = { false };
@@ -643,7 +640,7 @@ const int kernel_installed()
 	return installed != NULL? atoi(installed) : 0;
 }
 
-//microseconds since epoch
+// Microseconds since epoch
 const int64_t kernel_timestamp()
 {
 	static struct timeval now;
@@ -655,7 +652,7 @@ const int64_t kernel_timestamp()
 	return ts;
 }
 
-//microseconds since kernel startup
+// Microseconds since kernel startup
 const int64_t kernel_elapsed()
 {
 	return kernel_timestamp() - starttime;
@@ -675,46 +672,8 @@ const char * kernel_datatype(char type)
 		case T_ARRAY_BOOLEAN:	return "boolean array";
 		case T_ARRAY_INTEGER:	return "integer array";
 		case T_ARRAY_DOUBLE:	return "double array";
-
 		default:				return "unknown";
 	}
-}
-
-const char * syscall_list()
-{
-	size_t i = 0;
-
-	GHashTableIter itr;
-	syscall_t * syscall;
-
-	g_hash_table_iter_init(&itr, syscalls);
-	while (g_hash_table_iter_next(&itr, NULL, (void **)&syscall))
-	{
-		if (!strprefix(syscall->name, "__"))
-		{
-			// a prefix of __ means a hidden syscall
-			i += snprintf(cache_syscalls + i, CACHESTR_SIZE - i, "%s(%s)\n", syscall->name, syscall->sig);
-		}
-	}
-
-	return cache_syscalls;
-}
-
-const char * module_list()
-{
-	size_t i = 0;
-
-	list_t * pos;
-	list_foreach(pos, &modules)
-	{
-		module_t * mod = list_entry(pos, module_t, global_list);
-		if (mod != NULL && !strprefix(mod->kobject.obj_name, "__"))
-		{
-			i += snprintf(cache_modules + i, CACHESTR_SIZE - i, "%s\n", mod->path);
-		}
-	}
-
-	return cache_modules;
 }
 
 const char * syscall_info(char * syscall_name)
@@ -874,10 +833,8 @@ int main(int argc, char * argv[])
 	module_kernelinit();	//a generic module that points to kernel space
 	
 	// Register syscalls
-	KERN_DEFSYSCALL(	module_list,		"s:v",		"Returns a string concatenation of paths of all loaded modules");
 	KERN_DEFSYSCALL(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
 	KERN_DEFSYSCALL(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
-	KERN_DEFSYSCALL(	syscall_list,		"s:v",		"Returns a string concatenation of all registered syscalls");
 	KERN_DEFSYSCALL(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
 	KERN_DEFSYSCALL(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
 	KERN_DEFSYSCALL(	max_model,			"s:v",		"Returns the model name of the robot");

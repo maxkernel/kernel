@@ -9,8 +9,6 @@
 #include "kernel-priv.h"
 
 
-#define MODULE_KERNEL_NAME			"__kernel"
-
 extern list_t modules;
 extern list_t calentries;
 extern GHashTable * syscalls;
@@ -79,6 +77,36 @@ module_t * module_get(const char * name)
 
 	FREES(path);
 	return module;
+}
+
+const block_t * module_getblock(const module_t * module, const char * blockname)
+{
+	list_t * pos;
+	list_foreach(pos, &module->blocks)
+	{
+		block_t * block = list_entry(pos, block_t, module_list);
+		if (strcmp(blockname, block->name) == 0)
+		{
+			return block;
+		}
+	}
+
+	return NULL;
+}
+
+const block_inst_t * module_getstaticblockinst(const module_t * module)
+{
+	list_t * pos;
+	list_foreach(pos, &module->block_inst)
+	{
+		block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
+		if (strcmp(STATIC_STR, inst->block->name) == 0)
+		{
+			return inst;
+		}
+	}
+
+	return NULL;
 }
 
 bool module_exists(const char * name)
@@ -424,8 +452,8 @@ end:
 
 void module_kernelinit()
 {
-	module_t * module = kobj_new("Module", strdup(MODULE_KERNEL_NAME), module_info, module_destroy, sizeof(module_t));
-	module->path = strdup(MODULE_KERNEL_NAME);
+	module_t * module = kobj_new("Module", strdup(MOD_KERNEL), module_info, module_destroy, sizeof(module_t));
+	module->path = strdup(MOD_KERNEL);
 	module->version = strdup("0");
 	module->author = strdup("");
 	module->description = strdup("");

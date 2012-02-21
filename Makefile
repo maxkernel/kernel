@@ -17,7 +17,7 @@ MODEL       = Max 5J
 MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
-HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h 
+HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 
 SRCS		= kernel.c meta.c module.c profile.c memfs.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c
 OBJS		= $(SRCS:.c=.o)
@@ -29,16 +29,6 @@ LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul  -lbfd -ldl -lrt
 LFLAGS		= -Laul -Wl,--export-dynamic
 
 TARGET		= maxkernel
-
-# TODO ========
-# Re-work calibration infrastructure
-# Write new maxlib with integrated services		(need integrated services!)
-#   - Write kernel-side service streamer
-# Add profiling support
-# Add menuconfig option to makefile
-# Modify the map module to use proper regex
-# Modify the meta file to use proper regex
-# Fix utilities
 
 
 export INSTALL

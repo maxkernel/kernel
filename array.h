@@ -5,6 +5,7 @@
 #include <sys/types.h>
 
 #include <buffer.h>
+#include <kernel-types.h>
 
 #ifdef __cplusplus
 extern "C" {

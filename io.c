@@ -5,10 +5,11 @@
 
 #include <aul/mutex.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
-#include "buffer.h"
-#include "array.h"
+#include <buffer.h>
+#include <array.h>
+#include <kernel.h>
+#include <kernel-priv.h>
+
 
 #define IO_BLOCK_NAME		"block instance"
 
@@ -479,6 +480,37 @@ void io_output(const char * name, const void * value)
 	}
 
 	io_dooutput(blk, name, value);
+}
+
+
+binput_inst_t * io_getbinput(const block_inst_t * block_inst, const char * name)
+{
+	list_t * pos;
+	list_foreach(pos, &block_inst->inputs_inst)
+	{
+		binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
+		if (strcmp(name, in_inst->input->name) == 0)
+		{
+			return in_inst;
+		}
+	}
+
+	return NULL;
+}
+
+boutput_inst_t * io_getboutput(const block_inst_t * block_inst, const char * name)
+{
+	list_t * pos;
+	list_foreach(pos, &block_inst->outputs_inst)
+	{
+		boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
+		if (strcmp(name, out_inst->output->name) == 0)
+		{
+			return out_inst;
+		}
+	}
+
+	return NULL;
 }
 
 

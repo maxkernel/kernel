@@ -3,8 +3,9 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <method.h>
+#include <kernel.h>
+#include <kernel-priv.h>
 
 #define KENTRY_NAMELEN		50
 #define GROUP_MAX			20
@@ -197,15 +198,21 @@ static int l_newblock(lua_State * L)
 	block_t * blk = lua_touserdata(L, lua_upvalueindex(1));
 	const char * sig = blk->new_sig;
 
-	void ** params = malloc0(sizeof(void *) * strlen(sig));
+	void * params[method_numparams(sig)];
 
 	// Build constructor args
+	const char * param;
 	int stack = 1, index = 0;
-	for (; index < strlen(sig); ++index, ++stack)
+	foreach_methodparam(sig, param)
 	{
 		void * value = NULL;
-		switch (sig[index])
+		switch (*param)
 		{
+			case T_VOID:
+			{
+				break;
+			}
+
 			case T_BOOLEAN:
 			{
 				value = malloc0(sizeof(bool));
@@ -236,9 +243,15 @@ static int l_newblock(lua_State * L)
 				*(char *)value = luaL_checkstring(L, stack)[0];
 				break;
 			}
+
+			default:
+			{
+				return luaL_error(L, "Could not call new block constructor. Unknown parameter type: %c", *param);
+			}
 		}
 
-		params[index] = value;
+		params[index++] = value;
+		stack += 1;
 	}
 
 	block_inst_t * blk_inst = io_newblock(blk, params);
@@ -247,11 +260,10 @@ static int l_newblock(lua_State * L)
 		return luaL_error(L, "Could not create block instance of block %s in module %s", blk->name, blk->module->path);
 	}
 
-	for (index=0; index<strlen(sig); index++)
+	while (--index >= 0)
 	{
 		free(params[index]);
 	}
-	free(params);
 
 	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));
 	entry->type = K_BLOCKINST;
@@ -509,116 +521,122 @@ static int l_newrategroup(lua_State * L)
 static int l_newsyscall(lua_State * L)
 {
 	const char * name = luaL_checkstring(L, 1);
-	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be a table");
-	const char * initial_desc = lua_tostring(L, 3);
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE || lua_isnil(L, 2), 2, "must be nil or a table");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TUSERDATA || lua_isnil(L, 3), 3, "must be nil or an output");
+	const char * initial_desc = lua_tostring(L, 4);
 
 	// Get the syscall parameters
 	size_t index = 0;
-	binput_inst_t ** inputs = malloc0(sizeof(block_inst_t *) * (GROUP_MAX+1));
+	binput_inst_t * inputs[GROUP_MAX];
 
-	luaL_getmetatable(L, "MaxKernel.kernentry");
-	lua_pushnil(L);
-	while (lua_next(L, 2) != 0)
+	if (!lua_isnil(L, 2))
 	{
-		if (index == GROUP_MAX)
+		lua_pushnil(L);
+		while (lua_next(L, 2) != 0)
 		{
-			return luaL_error(L, "Too many syscall member items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+			if (index == GROUP_MAX)
+			{
+				return luaL_error(L, "Too many syscall member items (max = %d). Consider increasing value GROUP_MAX in luaenv.c", GROUP_MAX);
+			}
+
+			kernentry_t * entry = luaL_checkudata(L, -1, "MaxKernel.kernentry");
+			if (entry == NULL)
+			{
+				return luaL_error(L, "Encountered unknown value for item %s in syscall table (%s)", lua_tostring(L, -2), lua_typename(L, lua_type(L, -1)));
+			}
+
+			const block_inst_t * in_inst = NULL;
+			switch (entry->type)
+			{
+				case K_BLOCKINST:
+				{
+					in_inst = entry->data;
+					break;
+				}
+
+				case K_MODULE:
+				{
+					const module_t * module = entry->data;
+
+					in_inst = module_getstaticblockinst(module);
+					if (in_inst == NULL)
+					{
+						return luaL_error(L, "Invalid module for item %s in syscall member table. Module does not have a static block.", lua_tostring(L, -2));
+					}
+
+					break;
+				}
+
+				default:
+				{
+					return luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
+				}
+			}
+
+			binput_inst_t * bin = io_getbinput(in_inst, entry->name);
+			if (bin == NULL)
+			{
+				return luaL_error(L, "Invalid syscall input %s.%s for syscall %s", in_inst->block->name, entry->name, name);
+			}
+
+			inputs[index++] = bin;
+			lua_pop(L, 1);
+		}
+	}
+
+	string_t desc = string_new("%s ::", (initial_desc != NULL)? initial_desc : "[no description]");
+	for (size_t i = 0; i < index; i++)
+	{
+		const char * idesc = inputs[i]->input->desc;
+		string_append(&desc, " P%zu (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), (idesc != NULL)? idesc : "(no desc)");
+	}
+
+	boutput_inst_t * bout = NULL;
+	if (!lua_isnil(L, 3))
+	{
+		kernentry_t * entry = luaL_checkudata(L, -1, "MaxKernel.kernentry");
+		if (entry == NULL)
+		{
+			return luaL_error(L, "Encountered unknown value for return value %s in syscall", lua_tostring(L, 3));
 		}
 
-		if (!lua_isuserdata(L, -1) || !lua_getmetatable(L, -1) || !lua_rawequal(L, -1, -4))
-		{
-			return luaL_error(L, "Encountered unknown value for item %s in syscall table (%s)", lua_tostring(L, -3), lua_typename(L, lua_type(L, -2)));
-		}
-		lua_pop(L, 1);
-
-		kernentry_t * entry = lua_touserdata(L, -1);
-		if (strlen(entry->name) == 0)
-		{
-			return luaL_error(L, "Invalid type for item %s in syscall member table", lua_tostring(L, -2));
-		}
-
-		const block_inst_t * in_inst = NULL;
+		const block_inst_t * out_inst = NULL;
 		switch (entry->type)
 		{
 			case K_BLOCKINST:
 			{
-				in_inst = entry->data;
+				out_inst = entry->data;
 				break;
 			}
 
 			case K_MODULE:
 			{
-				const module_t * modobject = entry->data;
+				const module_t * module = entry->data;
 
-				bool found = false;
-				list_t * pos;
-				list_foreach(pos, &modobject->block_inst)
+				out_inst = module_getstaticblockinst(module);
+				if (out_inst == NULL)
 				{
-					block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
-					if (strcmp(STATIC_STR, inst->block->name) == 0)
-					{
-						in_inst = inst;
-						found = true;
-						break;
-					}
-				}
-
-				if (!found)
-				{
-					return luaL_error(L, "Invalid module for item %s in syscall member table. Module does not have a static block.", lua_tostring(L, -2));
+					return luaL_error(L, "Invalid module for return item %s in syscall. Module does not have a static block.", lua_tostring(L, 3));
 				}
 
 				break;
 			}
-		}
 
-		list_t * pos;
-		binput_inst_t * bin = NULL;
-		list_foreach(pos, &in_inst->inputs_inst)
-		{
-			binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
-			if (strcmp(entry->name, test->input->name) == 0)
+			default:
 			{
-				bin = test;
-				break;
+				return luaL_error(L, "Invalid type for return item %s in syscall", lua_tostring(L, 3));
 			}
 		}
 
-		if (bin == NULL)
+		bout = io_getboutput(out_inst, entry->name);
+		if (bout == NULL)
 		{
-			return luaL_error(L, "Invalid syscall input %s.%s for syscall %s", in_inst->block->name, entry->name, name);
-		}
-
-		inputs[index++] = bin;
-
-		lua_pop(L, 1);
-	}
-
-	//binput_inst_t ** inputs = getinput(L, 2);
-
-	string_t desc = string_blank();
-	if (inputs[0] != NULL)
-	{
-		string_append(&desc, "%s ::", (initial_desc != NULL)? initial_desc : "[no description]");
-		size_t i = 0;
-		while (inputs[i] != NULL)
-		{
-			const char * idesc = inputs[i]->input->desc;
-			string_append(&desc, " P%zu (%s): %s.", i+1, kernel_datatype(inputs[i]->input->sig), (idesc != NULL)? idesc : "(no desc)");
-			i++;
+			return luaL_error(L, "Invalid syscall output %s.%s for syscall %s", out_inst->block->name, entry->name, name);
 		}
 	}
-	else
-	{
-		LUALOG(LOG_WARN, "Cannot create syscall %s with empty group table", name);
-		free(inputs);
-		return 0;
-	}
 
-	syscallblock_t * sb = syscallblock_new(name, inputs, desc.string);
+	syscallblock_t * sb = syscallblock_new(name, bout, inputs, index, desc.string);
 	// TODO - error check: syscallblock_new may return NULL
-
-	free(inputs);
 
 	// Return the syscall block_inst
 	kernentry_t * entry = lua_newuserdata(L, sizeof(kernentry_t));

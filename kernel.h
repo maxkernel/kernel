@@ -59,6 +59,7 @@ extern "C" {
 #define M_INPUT			"BLOCK.INPUT"
 #define M_OUTPUT		"BLOCK.OUTPUT"
 
+#define MOD_KERNEL									"__kernel"
 #define MOD_INIT(func)								__WRITE_META(M_INIT, #func)
 #define MOD_PREACT(func)							__WRITE_META(M_PREACT, #func)
 #define MOD_POSTACT(func)							__WRITE_META(M_POSTACT, #func)

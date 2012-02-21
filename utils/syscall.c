@@ -51,17 +51,21 @@ int main(int argc, char ** argv)
 	const char * syscall_sig = strdup(ret.data.t_string);
 	const char * syscall_params = method_params(syscall_sig);
 	const char syscall_return = method_returntype(syscall_sig);
+	size_t numparams = method_numparams(syscall_params);
 
-	if (strlen(syscall_params) != (argc - 2))
+	if (numparams != (argc - 2))
 	{
-		fprintf(stderr, "<error> Parameter mismatch. Expected %zu got %d\n", strlen(syscall_params), argc - 2);
+		fprintf(stderr, "<error> Parameter mismatch. Expected %zu got %d\n", numparams, argc - 2);
 		return EXIT_FAILURE;
 	}
 
-	void * syscall_args[strlen(syscall_params)];
-	for (int index=0; index<strlen(syscall_params); index++)
+	void * syscall_args[numparams];
+	const char * param;
+	size_t index = 0;
+	
+	foreach_methodparam(syscall_params, param)
 	{
-		switch (syscall_params[index])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -113,16 +117,18 @@ int main(int argc, char ** argv)
 			case T_ARRAY_INTEGER:
 			case T_ARRAY_DOUBLE:
 			{
-				fprintf(stderr, "<error> Unsupported buffer or array type for #%d\n", index);
+				fprintf(stderr, "<error> Unsupported buffer or array type for #%zu\n", index);
 				return EXIT_FAILURE;
 			}
 
 			default:
 			{
-				fprintf(stderr, "<error> Unknown parameter type '%c' for #%d\n", syscall_params[index], index);
+				fprintf(stderr, "<error> Unknown parameter type '%c' for #%zu\n", syscall_params[index], index);
 				return EXIT_FAILURE;
 			}
 		}
+		
+		index += 1;
 	}
 
 	success = max_asyscall(&hand, &e, &ret, syscall_name, syscall_sig, syscall_args);

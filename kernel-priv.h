@@ -102,9 +102,12 @@ typedef struct
 	module_t * module;
 	const char * desc;
 	const char * sig;
-	void * dynamic_data;		//if this is a dynamic syscall (inernal to the kernel), put any info here
+	void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
 	syscall_f func;
+
 	ffi_cif * cif;
+	ffi_type ** ptypes;			// Parameter types
+	ffi_type * rtype;			// Return type
 } syscall_t;
 
 typedef struct
@@ -295,7 +298,7 @@ typedef struct
 #define LOGFILE					"maxkernel.log"
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
-#define CACHESTR_SIZE			(1024)				/* 1 KB */
+//#define CACHESTR_SIZE			(1024)				/* 1 KB */
 
 #define PATH_MAX_SIZE			2048
 #define PATH_FILE				(1 << 0)
@@ -306,6 +309,8 @@ const char * getpath();
 const char * resolvepath(const char * name, int etype);
 meta_t * meta_parse(const char * path);
 module_t * module_get(const char * name);
+const block_t * module_getblock(const module_t * module, const char * blockname);
+const block_inst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
 int module_compare(list_t * a, list_t * b);
@@ -330,7 +335,7 @@ void syscall_reg(syscall_t * syscall);
 syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
-syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, const char * desc);
+syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc);
 block_inst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #ifdef EN_PROFILE
@@ -367,6 +372,8 @@ void io_beforeblock(block_inst_t * block);
 void io_afterblock(block_inst_t * block);
 const void * io_doinput(block_inst_t * blk, const char * name);
 void io_dooutput(block_inst_t * blk, const char * name, const void * value);
+binput_inst_t * io_getbinput(const block_inst_t * block_inst, const char * name);
+boutput_inst_t * io_getboutput(const block_inst_t * block_inst, const char * name);
 
 void io_newcomplete(block_inst_t * inst);
 bool io_route(boutput_inst_t * out, binput_inst_t * in);

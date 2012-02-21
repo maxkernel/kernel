@@ -9,23 +9,15 @@
 extern module_t * kernel_module;
 
 
-static void syscallblock_dosyscall(void * object, ...)
+static void syscallblock_dosyscall(syscallblock_t * sb, va_list args)
 {
-	syscallblock_t * sb = object;
+	const char * param;
+	size_t i = 1;
 
-	va_list args;
-	va_start(args, object);
-
-	string_t pname;
-	const char * sig = method_params(sb->syscall->sig);
-	unsigned int i = 0;
-
-	while (*sig != '\0')
+	foreach_methodparam(method_params(sb->syscall->sig), param)
 	{
-		string_clear(&pname);
-		string_append(&pname, "p%u", i+1);
-
-		switch (*sig)
+		string_t pname = string_new("p%zu", i);
+		switch (*param)
 		{
 			case T_BOOLEAN:
 			{
@@ -63,13 +55,125 @@ static void syscallblock_dosyscall(void * object, ...)
 			}
 		}
 
-		sig++;
-		i++;
+		i += 1;
 	}
+}
 
-	va_end(args);
-
+static void syscallblock_dovoid(syscallblock_t * sb, ...)
+{
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+	}
 	io_afterblock(sb->block_inst);
+}
+
+static bool syscallblock_dobool(syscallblock_t * sb, ...)
+{
+	const bool * r = NULL;
+
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+
+		r = io_doinput(sb->block_inst, "r");
+	}
+	io_afterblock(sb->block_inst);
+
+	return r == NULL? false : *r;
+}
+
+static int syscallblock_doint(syscallblock_t * sb, ...)
+{
+	const int * r = NULL;
+
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+
+		r = io_doinput(sb->block_inst, "r");
+	}
+	io_afterblock(sb->block_inst);
+
+	return r == NULL? 0 : *r;
+}
+
+static double syscallblock_dodouble(syscallblock_t * sb, ...)
+{
+	const double * r = NULL;
+
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+
+		r = io_doinput(sb->block_inst, "r");
+	}
+	io_afterblock(sb->block_inst);
+
+	return r == NULL? 0.0 : *r;
+}
+
+static char syscallblock_dochar(syscallblock_t * sb, ...)
+{
+	const char * r = NULL;
+
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+
+		r = io_doinput(sb->block_inst, "r");
+	}
+	io_afterblock(sb->block_inst);
+
+	return r == NULL? 0 : *r;
+}
+
+static const char * syscallblock_dostring(syscallblock_t * sb, ...)
+{
+	const char ** r = NULL;
+
+	io_beforeblock(sb->block_inst);
+	{
+		va_list args;
+		va_start(args, sb);
+		syscallblock_dosyscall(sb, args);
+		va_end(args);
+
+		r = (const char **)io_doinput(sb->block_inst, "r");
+	}
+	io_afterblock(sb->block_inst);
+
+	return r == NULL? "" : *r;
+}
+
+
+static void * syscallblock_getfunction(const char return_type)
+{
+	switch (return_type)
+	{
+		case T_BOOLEAN:			return syscallblock_dobool;
+		case T_INTEGER:			return syscallblock_doint;
+		case T_DOUBLE:			return syscallblock_dodouble;
+		case T_CHAR:			return syscallblock_dochar;
+		case T_STRING:			return syscallblock_dostring;
+		case T_VOID:
+		default:				return syscallblock_dovoid;
+	}
 }
 
 char * syscallblock_info(void * object)
@@ -88,7 +192,7 @@ block_inst_t * syscallblock_getblockinst(syscallblock_t * sb)
 	return sb->block_inst;
 }
 
-syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, const char * desc)
+syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc)
 {
 	// Sanity check
 	{
@@ -98,8 +202,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 			return NULL;
 		}
 
-		int i=0;
-		for (; params[i] != NULL; i++)
+		for (size_t i=0; i<numparams; i++)
 		{
 			switch (params[i]->input->sig)
 			{
@@ -111,7 +214,7 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 					continue;
 
 				default:
-					LOGK(LOG_ERR, "Could not create syscall block %s: invalid type for parameter %d: %s", name, i, kernel_datatype(params[i]->input->sig));
+					LOGK(LOG_ERR, "Could not create syscall block %s: invalid type for parameter %zu: %s", name, i, kernel_datatype(params[i]->input->sig));
 					return NULL;
 			}
 		}
@@ -123,13 +226,13 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 	{
 		syscall_t * syscall = malloc0(sizeof(syscall_t));
 		syscall->dynamic_data = sb;
-		syscall->func = (void *)syscallblock_dosyscall;
+		syscall->func = syscallblock_getfunction(ret == NULL? T_VOID : ret->output->sig);
 		syscall->name = strdup(name);
 		syscall->desc = STRDUP(desc);
 
-		string_t sig = string_new("v:");
+		string_t sig = string_new("%c:", ret == NULL? 'v' : ret->output->sig);
 		int i=0;
-		for (; params[i] != NULL; i++)
+		for (; i<numparams; i++)
 		{
 			string_append(&sig, "%c", params[i]->input->sig);
 		}
@@ -154,12 +257,9 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 		LIST_INIT(&blk->inputs);
 		LIST_INIT(&blk->outputs);
 
-		string_t pname;
-		size_t i=0;
-		for(; params[i] != NULL; i++)
+		for(size_t i=0; i<numparams; i++)
 		{
-			string_clear(&pname);
-			string_append(&pname, "p%zu", i+1);
+			string_t pname = string_new("p%zu", i+1);
 
 			bio_t * out = malloc0(sizeof(bio_t));
 			out->block = blk;
@@ -168,6 +268,17 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 			out->sig = params[i]->input->sig;
 
 			list_add(&blk->outputs, &out->block_list);
+		}
+
+		if (ret != NULL)
+		{
+			bio_t * in = malloc0(sizeof(bio_t));
+			in->block = blk;
+			in->name = strdup("r");
+			in->desc = STRDUP(ret->output->desc);
+			in->sig = ret->output->sig;
+
+			list_add(&blk->inputs, &in->block_list);
 		}
 
 		list_add(&kernel_module->blocks, &blk->module_list);
@@ -179,25 +290,10 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 
 	// Route the data
 	{
-		string_t pname;
-		size_t i=0;
-		for (; params[i] != NULL; i++)
+		for (size_t i = 0; i < numparams; i++)
 		{
-			string_clear(&pname);
-			string_append(&pname, "p%zu", i+1);
-
-			list_t * pos;
-			boutput_inst_t * out = NULL;
-			list_foreach(pos, &sb->block_inst->outputs_inst)
-			{
-				boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
-				if (strcmp(pname.string, test->output->name) == 0)
-				{
-					out = test;
-					break;
-				}
-			}
-
+			string_t pname = string_new("p%zu", i+1);
+			boutput_inst_t * out = io_getboutput(sb->block_inst, pname.string);
 			if (out != NULL)
 			{
 				io_route(out, params[i]);
@@ -208,8 +304,22 @@ syscallblock_t * syscallblock_new(const char * name, binput_inst_t ** params, co
 				// Will exit
 			}
 		}
-	}
 
+		if (ret != NULL)
+		{
+			string_t rname = string_new("r");
+			binput_inst_t * in = io_getbinput(sb->block_inst, rname.string);
+			if (in != NULL)
+			{
+				io_route(ret, in);
+			}
+			else
+			{
+				LOGK(LOG_FATAL, "Could not route %s -> %s in syscall block! This error should be impossible to trigger!", ret->output->name, rname.string);
+				// Will exit
+			}
+		}
+	}
 	return sb;
 }
 
