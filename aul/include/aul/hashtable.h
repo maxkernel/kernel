@@ -34,17 +34,8 @@ typedef struct
 	(ptr)->hasher = (hashfunc); (ptr)->equals = (equalsfunc); \
 	(ptr)->numbuckets = AUL_HASHTABLE_BUCKETS; \
 	LIST_INIT(&(ptr)->iterator); \
-	int i=0; \
-	for (; i<AUL_HASHTABLE_BUCKETS; ++i) { LIST_INIT(&(ptr)->buckets[i]); } \
+	for (int i=0; i<AUL_HASHTABLE_BUCKETS; ++i) { LIST_INIT(&(ptr)->buckets[i]); } \
 } while (0)
-
-#if 0
-#define HASHENTRY_INIT(ptr, pkey) do { \
-	(ptr)->key = (pkey); \
-	memset(&(ptr)->itr, 0, sizeof(list_t)); \
-	memset(&(ptr)->bucket, 0, sizeof(list_t)); \
-} while (0)
-#endif
 
 
 static inline void hashtable_remove(hashentry_t * entry)
@@ -102,9 +93,16 @@ static inline size_t hashtable_size(hashtable_t * table)
 	return list_size(&table->iterator);
 }
 
+static inline list_t * hashtable_itr(hashtable_t * table)
+{
+	return &table->iterator;
+}
 
 #define hashtable_entry(ptr, type, member) \
-	list_entry(ptr, type, member)
+	list_entry((ptr), type, member)
+
+#define hashtable_itrentry(ptr, type, member) \
+	list_entry(list_entry((ptr), hashentry_t, itr), type, member)
 
 /**
  * hashtable_foreach	-	iterate over a hashtable in the order elements were added

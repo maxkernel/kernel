@@ -31,7 +31,7 @@ const char * string_copy(const string_t * str);
 void string_clear(string_t * str);
 
 
-//string utils
+// String utils
 #define strprefix(string, prefix)	(strlen(string) >= strlen(prefix) && strncmp(string, prefix, strlen(prefix)) == 0)
 #define strsuffix(string, suffix)	(strlen(string) >= strlen(suffix) && strcmp(string + (strlen(string) - strlen(suffix)), suffix) == 0)
 

@@ -1,7 +1,6 @@
 #include <fcntl.h>
 
 #include <aul/common.h>
-#include <aul/log.h>
 #include <aul/serial.h>
 
 
@@ -10,7 +9,7 @@ int serial_open(const char * port, speed_t speed)
 	int fd = open(port, O_RDWR, O_NOCTTY);
 	if (fd == -1)
 	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not open serial port %s", port);
+		// Could not open serial port!
 		return -1;
 	}
 
@@ -25,7 +24,7 @@ void serial_flush(int fd)
 	tcflush(fd, TCIOFLUSH);
 }
 
-void serial_setattr(int fd, speed_t speed)
+bool serial_setattr(int fd, speed_t speed)
 {
 	struct termios tp;
 	ZERO(tp);
@@ -40,9 +39,11 @@ void serial_setattr(int fd, speed_t speed)
 
 	if (tcsetattr(fd, TCSAFLUSH, &tp) < 0)
 	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not set serial port attributes for fd %d", fd);
-		return;
+		// Could not set serial port attributes!
+		return false;
 	}
+
+	return true;
 }
 
 speed_t serial_getspeed(int baud)

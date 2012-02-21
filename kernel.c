@@ -21,6 +21,7 @@
 #include <aul/list.h>
 #include <aul/hashtable.h>
 #include <aul/mainloop.h>
+#include <aul/iterator.h>
 #include <aul/mutex.h>
 
 #include <buffer.h>
@@ -31,9 +32,9 @@
 list_t modules;
 list_t calentries;
 hashtable_t properties;
+hashtable_t syscalls;
 module_t * kernel_module = NULL;
 GHashTable * kthreads = NULL;
-GHashTable * syscalls = NULL;
 
 mutex_t io_lock;
 sqlite3 * database = NULL;
@@ -676,7 +677,41 @@ const char * kernel_datatype(char type)
 	}
 }
 
-const char * syscall_info(char * syscall_name)
+static int modules_itr()
+{
+	const void * mods_next(void ** data)
+	{
+		list_t * list = *data = ((list_t *)*data)->next;
+		return (list == &modules)? NULL : list_entry(list, module_t, global_list)->path;
+	}
+
+	return iterator_new(mods_next, NULL, &modules);
+}
+
+static const char * modules_next(int itr)
+{
+	const char * r = iterator_next(itr);
+	return (r == NULL)? "" : r;
+}
+
+static int syscalls_itr()
+{
+	const void * scs_next(void ** data)
+	{
+		list_t * list = *data = ((list_t *)*data)->next;
+		return (list == hashtable_itr(&syscalls))? NULL : hashtable_itrentry(list, syscall_t, global_entry)->name;
+	}
+
+	return iterator_new(scs_next, NULL, hashtable_itr(&syscalls));
+}
+
+static const char * syscalls_next(int itr)
+{
+	const char * r = iterator_next(itr);
+	return (r == NULL)? "" : r;
+}
+
+static const char * syscall_info(char * syscall_name)
 {
 	syscall_t * sys = syscall_get(syscall_name);
 	if (sys == NULL)
@@ -687,7 +722,7 @@ const char * syscall_info(char * syscall_name)
 	return sys->desc;
 }
 
-const char * syscall_signature(char * syscall_name)
+static const char * syscall_signature(char * syscall_name)
 {
 	syscall_t * sys = syscall_get(syscall_name);
 	if (sys == NULL)
@@ -696,6 +731,28 @@ const char * syscall_signature(char * syscall_name)
 	}
 
 	return sys->sig;
+}
+
+static int properties_itr()
+{
+	const void * ps_next(void ** data)
+	{
+		list_t * list = *data = ((list_t *)*data)->next;
+		return (list == hashtable_itr(&properties))? NULL : hashtable_itrentry(list, property_t, entry)->name;
+	}
+
+	return iterator_new(ps_next, NULL, hashtable_itr(&properties));
+}
+
+static const char * properties_next(int itr)
+{
+	const char * r = iterator_next(itr);
+	return (r == NULL)? "" : r;
+}
+
+static void itr_free(int itr)
+{
+	iterator_free(itr);
 }
 
 
@@ -784,10 +841,10 @@ int main(int argc, char * argv[])
 	LIST_INIT(&objects);
 	LIST_INIT(&kthread_tasks);
 	HASHTABLE_INIT(&properties, hash_str, hash_streq);
+	HASHTABLE_INIT(&syscalls, hash_str, hash_streq);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
 	mutex_init(&kthread_tasks_mutex, M_RECURSIVE);
 	kthreads = g_hash_table_new(g_int_hash, g_int_equal);
-	syscalls = g_hash_table_new(g_str_hash, g_str_equal);
 	mutex_init(&io_lock, M_RECURSIVE);
 
 	// Set start time
@@ -821,8 +878,9 @@ int main(int argc, char * argv[])
 		}
 	}
 
-	//init mainloop
+	// Init AUL components
 	mainloop_init();
+	iterator_init();
 
 	//initialize profiler
 #ifdef EN_PROFILE
@@ -833,17 +891,24 @@ int main(int argc, char * argv[])
 	module_kernelinit();	//a generic module that points to kernel space
 	
 	// Register syscalls
+	KERN_DEFSYSCALL(	modules_itr,		"i:v",		"Returns an iterator that loops over all loaded modules. Use in conjunction with 'modules_next' and 'itr_free'");
+	KERN_DEFSYSCALL(	modules_next,		"s:i",		"Returns the next name of module in iterator. Use in conjunction with 'modules_itr' and 'itr_free'");
 	KERN_DEFSYSCALL(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
+	KERN_DEFSYSCALL(	syscalls_itr,		"i:v",		"Returns an iterator that loop over all registered syscalls. Use in conjunction with 'syscalls_next' and 'itr_free'");
+	KERN_DEFSYSCALL(	syscalls_next,		"s:i",		"Returns the next name of the syscall in the iterator. Use in conjunction with 'syscalls_itr' and 'itr_free'");
 	KERN_DEFSYSCALL(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
 	KERN_DEFSYSCALL(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
 	KERN_DEFSYSCALL(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
 	KERN_DEFSYSCALL(	max_model,			"s:v",		"Returns the model name of the robot");
 	KERN_DEFSYSCALL(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
 	KERN_DEFSYSCALL(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");
+	KERN_DEFSYSCALL(	properties_itr,		"i:v",		"Returns an iterator that loops over all the property names defined. Use in conjunction with 'properties_next' and 'itr_free'");
+	KERN_DEFSYSCALL(	properties_next,	"s:i",		"Returns the next property name in the iterator. Use in conjunction with 'properties_itr' and 'itr_free'");
 	KERN_DEFSYSCALL(	property_get,		"s:s",		"Returns the string representation of the defined property");
 	KERN_DEFSYSCALL(	property_set,		"v:ss",		"Sets the property name (param 1) to the specified value (param 2)");
 	KERN_DEFSYSCALL(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");
 	KERN_DEFSYSCALL(	property_isset,		"b:s",		"Returns true if the property name (param 1) has been set");
+	KERN_DEFSYSCALL(    itr_free,			"v:i",		"Frees the given iterator. It can no longer be used after it's free'd");
 
 	// Parse configuration file
 	cfg_opt_t opts[] = {

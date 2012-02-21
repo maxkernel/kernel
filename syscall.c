@@ -1,13 +1,12 @@
 #include <string.h>
 #include <ffi.h>
-#include <glib.h>
 
 #include <array.h>
 #include <serialize.h>
 #include <kernel.h>
 #include <kernel-priv.h>
 
-extern GHashTable * syscalls;
+extern hashtable_t syscalls;
 
 static char * syscall_info(void * object)
 {
@@ -17,12 +16,15 @@ static char * syscall_info(void * object)
 
 syscall_t * syscall_get(const char * name)
 {
-	return g_hash_table_lookup(syscalls, name);
+	hashentry_t * entry = hashtable_get(&syscalls, name);
+	return (entry == NULL)? NULL : hashtable_entry(entry, syscall_t, global_entry);
 }
 
 void syscall_destroy(void * syscall)
 {
 	syscall_t * sys = syscall;
+	hashtable_remove(&sys->global_entry);
+
 	FREE(sys->cif);
 	FREE(sys->ptypes);
 	FREES(sys->sig);
@@ -35,10 +37,10 @@ void syscall_reg(syscall_t * syscall)
 	syscall->kobject.obj_name = syscall->name;
 	syscall->kobject.info = syscall_info;
 	syscall->kobject.destructor = syscall_destroy;
+	kobj_register(&syscall->kobject);
 
-	g_hash_table_insert(syscalls, (void *)syscall->name, syscall);
-	kobj_register((kobject_t *)syscall);
-	
+	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
+
 
 	// Prep the ffi cif
 	{

@@ -3,7 +3,7 @@ TARGET		= libmax.so
 PACKAGES	= 
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../console -I../console/include
 DEFINES		= -DLIBMAX -D_GNU_SOURCE
-CFLAGS		= -pipe -ggdb3 -Wall -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
+CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
 LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lrt
 LFLAGS		= -shared -L../aul
 

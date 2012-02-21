@@ -44,6 +44,13 @@ typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
 
 typedef struct
 {
+	char * name;
+	char * value;
+	hashentry_t entry;
+} property_t;
+
+typedef struct
+{
 	kobject_t kobject;
 	list_t global_list;
 
@@ -97,6 +104,7 @@ typedef struct
 {
 	kobject_t kobject;
 	list_t module_list;
+	hashentry_t global_entry;
 
 	const char * name;			//a copy of pointer obj_name
 	module_t * module;

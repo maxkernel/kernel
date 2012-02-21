@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <aul/common.h>
 
+#include <aul/common.h>
 #include <aul/string.h>
 
 string_t string_blank()

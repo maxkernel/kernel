@@ -9,6 +9,7 @@
 #include <zlib.h>
 
 #include <aul/string.h>
+#include <aul/mutex.h>
 #include <aul/log.h>
 
 
@@ -185,7 +186,8 @@ static void log_fileclose(void * userdata)
 
 
 
-struct
+// TODO - put a mutex around accessing this struct
+static struct
 {
 	log_f function;
 	logclose_f closer;

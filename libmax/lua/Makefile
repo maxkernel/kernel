@@ -3,7 +3,7 @@ TARGET		= max.so
 PACKAGES	= lua5.1
 INCLUDES	= -I. -I../.. -I../include -I../../aul/include
 DEFINES		= -DLIBMAX -DLUA_LIB -D_GNU_SOURCE
-CFLAGS		= -pipe -ggdb3 -Wall -fpic -shared $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
+CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic -shared $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
 LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -lmax
 LFLAGS		= -L..
 
