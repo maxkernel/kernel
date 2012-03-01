@@ -40,6 +40,12 @@ typedef struct
 
 static inline void hashtable_remove(hashentry_t * entry)
 {
+	// Sanity check
+	if (entry == NULL)
+	{
+		return;
+	}
+
 	list_remove(&entry->itr);
 	list_remove(&entry->bucket);
 	entry->key = NULL;

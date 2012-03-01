@@ -1,8 +1,8 @@
 #include <glib.h>
 #include <string.h>
-#include <kernel.h>
 
-#include "map.h"
+#include <kernel.h>
+#include <map.h>
 
 MOD_VERSION("0.9");
 MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
@@ -40,8 +40,8 @@ static map_f map_getmode(char mode)
 {
 	switch (mode)
 	{
-		case MAP_LINEAR:
-		default:
+		case MAP_LINEAR:		// Only support linear mapping for now
+		default:				// TODO - add more interpolation types
 			return map_linear;
 	}
 }
@@ -50,7 +50,8 @@ static void map_sort(map_t * map)
 {
 	size_t mpos = map->array_size - 1;
 
-	// Quick and simple bubble sort. TODO it better
+	// Quick and simple bubble sort.
+	// TODO - make it better!
 	while (mpos > 0)
 	{
 		size_t i = 0;
@@ -77,13 +78,12 @@ static void map_sort(map_t * map)
 
 static map_t * map_new(map_f mapping_function, double * from, double * to, size_t length)
 {
-	size_t sz = sizeof(double) * length;
-	double * src = g_slice_alloc0(sz);
-	double * dest = g_slice_alloc0(sz);
-	memcpy(src, from, sz);
-	memcpy(dest, to, sz);
+	double * src = calloc(length, sizeof(double));
+	double * dest = calloc(length, sizeof(double));
+	memcpy(src, from, length * sizeof(double));
+	memcpy(dest, to, length * sizeof(double));
 
-	map_t * map = g_slice_alloc0(sizeof(map_t));
+	map_t * map = malloc0(sizeof(map_t));
 	map->src_array = src;
 	map->dest_array = dest;
 	map->array_size = length;
@@ -96,10 +96,9 @@ static map_t * map_new(map_f mapping_function, double * from, double * to, size_
 
 void map_destroy(map_t * map)
 {
-	size_t sz = sizeof(double) * map->array_size;
-	g_slice_free1(sz, map->src_array);
-	g_slice_free1(sz, map->dest_array);
-	g_slice_free1(sizeof(map_t), map);
+	free(map->src_array);
+	free(map->dest_array);
+	free(map);
 }
 
 map_t * map_newfromstring(char mode, const char * string)
@@ -127,8 +126,8 @@ map_t * map_newfromstring(char mode, const char * string)
 	}
 
 	size_t num = 1;
-	double * a = g_malloc0(sizeof(double) * MAX_MATCHES);
-	double * b = g_malloc0(sizeof(double) * MAX_MATCHES);
+	double a[MAX_MATCHES];
+	double b[MAX_MATCHES];
 
 	a[0] = strtod(g_match_info_fetch(info, 1), NULL);
 	b[0] = strtod(g_match_info_fetch(info, 2), NULL);
@@ -148,9 +147,6 @@ map_t * map_newfromstring(char mode, const char * string)
 
 	map_t * map = map_newfromarray(mode, a, b, num);
 
-	g_free(a);
-	g_free(b);
-
 	return map;
 }
 
@@ -161,18 +157,13 @@ map_t * map_newfromarray(char mode, double * from, double * to, size_t length)
 
 map_t * map_reverse(map_t * map)
 {
-	size_t sz = sizeof(double) * map->array_size;
-	double * src = g_malloc(sz);
-	double * dest = g_malloc(sz);
-
-	int i=0;
-	for (; i<map->array_size; i++)
+	double dest[map->array_size];
+	for (size_t i = 0; i < map->array_size; i++)
 	{
-		src[i] = map->src_array[map->array_size - i - 1];
+		dest[i] = map->dest_array[map->array_size - i - 1];
 	}
-	memcpy(dest, map->dest_array, sz);
 
-	return map_new(map->mapping_function, src, dest, map->array_size);
+	return map_new(map->mapping_function, map->src_array, dest, map->array_size);
 }
 
 double map_tovalue(map_t * map, const double tomap)
@@ -183,8 +174,7 @@ double map_tovalue(map_t * map, const double tomap)
 	if (tomap <= map->src_array[0])
 		return map->dest_array[0];
 
-	size_t index = 1;
-	for (; index<=map->array_size; index++)
+	for (size_t index = 1; index <= map->array_size; index++)
 	{
 		if (tomap >= map->src_array[index-1] && tomap <= map->src_array[index])
 		{

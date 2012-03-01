@@ -35,6 +35,8 @@ extern "C" {
 #undef	ABS
 #define ABS(a)	   (((a) < 0) ? -(a) : (a))
 
+// TODO - add abs_int, see mir bit twidling hacks!
+
 #undef	CLAMP
 #define CLAMP(x, low, high)  			(((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 

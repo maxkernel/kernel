@@ -8,7 +8,7 @@
 #include <service.h>
 #include "internal.h"
 
-CFG_PARAM(tcp_port, S_INTEGER, "TCP port to listen for service requests and send service data on");
+CFG_PARAM(tcp_port, "i", "TCP port to listen for service requests and send service data on");
 
 
 extern mainloop_t * serviceloop;

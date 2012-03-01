@@ -15,6 +15,12 @@
 #define T_ARRAY_DOUBLE	'D'
 #define T_BUFFER		'x'
 
+#ifdef KERNEL
+// Internal to kernel usage. Do not use!
+#define T_POINTER		'p'
+#endif
+
+#if 0
 #define S_VOID			"v"
 #define S_BOOLEAN		"b"
 #define S_INTEGER		"i"
@@ -25,6 +31,6 @@
 #define S_ARRAY_INTEGER	"I"
 #define S_ARRAY_DOUBLE	"D"
 #define S_BUFFER		"x"
-
+#endif
 
 #endif

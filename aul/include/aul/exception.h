@@ -39,7 +39,7 @@ static inline void exception_set(exception_t ** err, int code, const char * fmt,
 
 static inline bool exception_check(exception_t ** err)
 {
-	return (err != NULL && *err != NULL && (*err)->code != 0);
+	return ((err) != NULL && *(err) != NULL && (*(err))->code != 0);
 }
 
 static inline void exception_free(exception_t * err)

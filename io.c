@@ -1,6 +1,5 @@
 #include <string.h>
 #include <ctype.h>
-#include <ffi.h>
 #include <glib.h>
 
 #include <aul/mutex.h>
@@ -149,50 +148,18 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 
 	LOGK(LOG_DEBUG, "Calling constructor %s on block %s with sig '%s'", blk->new_name, blk->name, blk->new_sig);
 
-	ffi_cif cif;
-	ffi_type * atypes[PARAMS_MAX];
+	string_t fsig = string_new("%c:%s", T_POINTER, blk->new_sig);
 
-	const char * sig = (const char *)blk->new_sig;
-	unsigned int i = 0;
-
-	while (*sig != '\0')
+	exception_t * err = NULL;
+	ffi_t * ffi = function_build(blk->new, fsig.string, &err);
+	if (ffi == NULL)
 	{
-		switch (*sig)
-		{
-			case T_BOOLEAN:
-				atypes[i++] = &ffi_type_uint8;	// bool is 1 byte
-				break;
-
-			case T_INTEGER:
-				atypes[i++] = &ffi_type_sint;
-				break;
-
-			case T_DOUBLE:
-				atypes[i++] = &ffi_type_double;
-				break;
-
-			case T_CHAR:
-				atypes[i++] = &ffi_type_uchar;
-				break;
-
-			case T_STRING:
-				atypes[i++] = &ffi_type_pointer;
-				break;
-
-			case T_VOID:
-				atypes[i++] = &ffi_type_void;
-				break;
-
-			default:
-				LOGK(LOG_FATAL, "Unknown/invalid constructor signature type '%c'", *sig);
-				//will exit
-		}
-
-		sig++;
+		LOGK(LOG_FATAL, "Could not call constructor on block %s.%s: Code %d %s", blk->module->path, blk->name, err->code, err->message);
+		// Will exit
 	}
 
-	ffi_prep_cif(&cif, FFI_DEFAULT_ABI, i, &ffi_type_pointer, atypes);
-	ffi_call(&cif, (void *)blk->new, data, args);
+	function_call(ffi, data, args);
+	function_free(ffi);
 }
 
 static block_inst_t * io_currentblockinst()

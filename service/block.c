@@ -11,7 +11,7 @@
 
 
 DEF_BLOCK(bufferstream, s_bufstream_new, "ssss", "Create a new buffer stream service");
-BLK_INPUT(bufferstream, buffer, S_BUFFER, "Input buffer to stream to service clients");
+BLK_INPUT(bufferstream, buffer, "x", "Input buffer to stream to service clients");
 BLK_ONUPDATE(bufferstream, s_bufstream_update);
 
 void * s_bufstream_new(const char * id, const char * name, const char * format, const char * desc)

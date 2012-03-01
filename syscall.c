@@ -1,5 +1,4 @@
 #include <string.h>
-#include <ffi.h>
 
 #include <array.h>
 #include <serialize.h>
@@ -25,8 +24,7 @@ void syscall_destroy(void * syscall)
 	syscall_t * sys = syscall;
 	hashtable_remove(&sys->global_entry);
 
-	FREE(sys->cif);
-	FREE(sys->ptypes);
+	function_free(sys->ffi);
 	FREES(sys->sig);
 	FREES(sys->desc);
 }
@@ -39,137 +37,21 @@ void syscall_reg(syscall_t * syscall)
 	syscall->kobject.destructor = syscall_destroy;
 	kobj_register(&syscall->kobject);
 
-	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
-
-
-	// Prep the ffi cif
+	string_t real_sig = string_new("%s", syscall->sig);
+	if (syscall->dynamic_data != NULL)
 	{
-		syscall->cif = malloc0(sizeof(ffi_cif));
-
-		size_t params = method_numparams(method_params(syscall->sig));
-		if (syscall->dynamic_data != NULL)
-		{
-			params += 1;
-		}
-		
-
-		switch (method_returntype(syscall->sig))
-		{
-			case T_BOOLEAN:
-			{
-				// BOOL is 1 byte
-				syscall->rtype = &ffi_type_uint8;
-				break;
-			}
-
-			case T_INTEGER:
-			{
-				syscall->rtype = &ffi_type_sint32;
-				break;
-			}
-
-			case T_DOUBLE:
-			{
-				syscall->rtype = &ffi_type_double;
-				break;
-			}
-
-			case T_CHAR:
-			{
-				syscall->rtype = &ffi_type_schar;
-				break;
-			}
-
-			case T_STRING:
-			{
-				syscall->rtype = &ffi_type_pointer;
-				break;
-			}
-
-			case T_ARRAY_BOOLEAN:
-			case T_ARRAY_INTEGER:
-			case T_ARRAY_DOUBLE:
-			case T_BUFFER:
-			{
-				syscall->rtype = &ffi_type_pointer;
-				break;
-			}
-
-			case T_VOID:
-			default:
-			{
-				syscall->rtype = &ffi_type_void;
-				break;
-			}
-		}
-
-
-		syscall->ptypes = malloc0(sizeof(ffi_type *) * (params + 1));	// Sentinel at end
-		int index = 0;
-		const char * param;
-
-		if (syscall->dynamic_data != NULL)
-		{
-			syscall->ptypes[index++] = &ffi_type_pointer;
-		}
-		
-		foreach_methodparam(method_params(syscall->sig), param)
-		{
-			switch (*param)
-			{
-				case T_BOOLEAN:
-				{
-					// BOOL is 1 byte
-					syscall->ptypes[index++] = &ffi_type_uint8;
-					break;
-				}
-
-				case T_INTEGER:
-				{
-					syscall->ptypes[index++] = &ffi_type_sint32;
-					break;
-				}
-
-				case T_DOUBLE:
-				{
-					syscall->ptypes[index++] = &ffi_type_double;
-					break;
-				}
-
-				case T_CHAR:
-				{
-					syscall->ptypes[index++] = &ffi_type_schar;
-					break;
-				}
-
-				case T_STRING:
-				{
-					syscall->ptypes[index++] = &ffi_type_pointer;
-					break;
-				}
-
-				case T_ARRAY_BOOLEAN:
-				case T_ARRAY_INTEGER:
-				case T_ARRAY_DOUBLE:
-				case T_BUFFER:
-				{
-					syscall->ptypes[index++] = &ffi_type_pointer;
-					break;
-				}
-
-				case T_VOID:
-				default:
-				{
-					syscall->ptypes[index++] = &ffi_type_void;
-					break;
-				}
-			}
-		}
-		
-		
-		// Do the preping
-		ffi_prep_cif(syscall->cif, FFI_DEFAULT_ABI, index, syscall->rtype, syscall->ptypes);
+		string_set(&real_sig, "%c:%c%s", method_returntype(syscall->sig), T_POINTER, method_params(syscall->sig));
 	}
+
+	exception_t * err = NULL;
+	syscall->ffi = function_build(syscall->func, real_sig.string, &err);
+	if (exception_check(&err))
+	{
+		LOGK(LOG_FATAL, "Could not create syscall %s: Code %d %s", syscall->name, err->code, err->message);
+		// Will exit
+	}
+
+	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
 }
 
 void * asyscall_exec(const char * name, void ** args)
@@ -189,7 +71,7 @@ void * asyscall_exec(const char * name, void ** args)
 	{
 		case T_BOOLEAN:
 		{
-			rsize = sizeof(bool);
+			rsize = sizeof(int);
 			break;
 		}
 
@@ -243,11 +125,11 @@ void * asyscall_exec(const char * name, void ** args)
 		nargs[0] = &syscall->dynamic_data;
 		memcpy(&nargs[1], args, sizeof(void *) * method_numparams(method_params(syscall->sig)));
 
-		ffi_call(syscall->cif, (void *)syscall->func, rvalue, nargs);
+		function_call(syscall->ffi, rvalue, nargs);
 	}
 	else
 	{
-		ffi_call(syscall->cif, (void *)syscall->func, rvalue, args);
+		function_call(syscall->ffi, rvalue, args);
 	}
 
 	return rvalue;

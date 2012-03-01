@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #include <aul/common.h>
+#include <aul/exception.h>
 #include <aul/log.h>
 #include <aul/list.h>
 
@@ -155,6 +156,10 @@ void cal_setparam(const char * module, const char * name, const char * value);
 void cal_merge(const char * comment);
 void cal_revert();
 double math_eval(char * expr);
+
+int parse_int(const char * s, exception_t ** err);
+double parse_double(const char * s, exception_t ** err);
+bool parse_bool(const char * s, exception_t ** err);
 
 #ifdef __cplusplus
 }

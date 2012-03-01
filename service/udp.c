@@ -7,7 +7,7 @@
 #include <service.h>
 #include "internal.h"
 
-CFG_PARAM(udp_port, S_INTEGER, "UDP port to listen for service requests and send service data on");
+CFG_PARAM(udp_port, "i", "UDP port to listen for service requests and send service data on");
 
 
 extern mainloop_t * serviceloop;

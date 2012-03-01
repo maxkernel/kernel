@@ -5,7 +5,6 @@
 #include <inttypes.h>
 #include <time.h>
 #include <sched.h>
-#include <ffi.h>
 
 #include <aul/common.h>
 #include <aul/log.h>
@@ -51,6 +50,14 @@ typedef struct
 
 typedef struct
 {
+	void * function;
+	void * cif;
+	void ** atypes;
+	void * rtype;
+} ffi_t;
+
+typedef struct
+{
 	kobject_t kobject;
 	list_t global_list;
 
@@ -71,8 +78,6 @@ typedef struct
 	calibration_f calpreview;	//the function to call when a calibration item should be previewed
 	list_t blocks;				//a list of all blocks defined in this module
 	list_t block_inst;			//a list of all block_inst_t block instances created
-	//struct __block_t * block_static;			//the static block_t block, or null if none
-	//struct __block_inst_t * block_static_inst;	//the static block inst, or null if no static block
 } module_t;
 
 typedef struct
@@ -113,9 +118,10 @@ typedef struct
 	void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
 	syscall_f func;
 
-	ffi_cif * cif;
-	ffi_type ** ptypes;			// Parameter types
-	ffi_type * rtype;			// Return type
+	ffi_t * ffi;
+	//ffi_cif * cif;
+	//ffi_type ** ptypes;			// Parameter types
+	//ffi_type * rtype;			// Return type
 } syscall_t;
 
 typedef struct
@@ -372,6 +378,10 @@ void * exec_new(const char * name, info_f info, destructor_f destructor, handler
 runnable_t * exec_newrungroup(const char * name, runnable_t ** runnables);
 runnable_t * exec_newfunction(const char * name, handler_f runfunc, handler_f stopfunc, void * userdata);
 runnable_t * exec_getcurrent();
+
+ffi_t * function_build(void * function, const char * sig, exception_t ** err);
+void function_free(ffi_t * ffi);
+void function_call(ffi_t * ffi, void * ret, void ** args);
 
 char * io_blockinfo(void * obj);
 void io_blockfree(void * obj);

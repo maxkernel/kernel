@@ -220,10 +220,7 @@ bool log_openfile(const char * path, exception_t ** err)
 	int fd = FILEOPEN(path);
 	if (fd == -1)
 	{
-		if (err != NULL)
-		{
-			*err = exception_new(errno, "Count not open log file: %s", strerror(errno));
-		}
+		exception_set(err, errno, "Count not open log file: %s", strerror(errno));
 		return false;
 	}
 	FILEOPENHEADER(fd);
