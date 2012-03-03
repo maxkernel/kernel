@@ -37,14 +37,8 @@ void syscall_reg(syscall_t * syscall)
 	syscall->kobject.destructor = syscall_destroy;
 	kobj_register(&syscall->kobject);
 
-	string_t real_sig = string_new("%s", syscall->sig);
-	if (syscall->dynamic_data != NULL)
-	{
-		string_set(&real_sig, "%c:%c%s", method_returntype(syscall->sig), T_POINTER, method_params(syscall->sig));
-	}
-
 	exception_t * err = NULL;
-	syscall->ffi = function_build(syscall->func, real_sig.string, &err);
+	syscall->ffi = function_build(syscall->func, syscall->sig, &err);
 	if (exception_check(&err))
 	{
 		LOGK(LOG_FATAL, "Could not create syscall %s: Code %d %s", syscall->name, err->code, err->message);
@@ -118,19 +112,7 @@ void * asyscall_exec(const char * name, void ** args)
 	
 	rvalue = (rsize > 0)? malloc0(rsize) : NULL;
 	
-	if (syscall->dynamic_data != NULL)
-	{
-		// Adjust the parameter list to include dynamic_data as first param
-		void * nargs[method_numparams(method_params(syscall->sig)) + 1];
-		nargs[0] = &syscall->dynamic_data;
-		memcpy(&nargs[1], args, sizeof(void *) * method_numparams(method_params(syscall->sig)));
-
-		function_call(syscall->ffi, rvalue, nargs);
-	}
-	else
-	{
-		function_call(syscall->ffi, rvalue, args);
-	}
+	function_call(syscall->ffi, rvalue, args);
 
 	return rvalue;
 }

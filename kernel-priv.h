@@ -126,9 +126,9 @@ typedef struct
 	module_t * module;
 	const char * desc;
 	const char * sig;
-	void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
-	syscall_f func;
+	//void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
 
+	syscall_f func;
 	ffi_function_t * ffi;
 } syscall_t;
 
@@ -137,6 +137,7 @@ typedef struct
 	kobject_t kobject;
 
 	syscall_t * syscall;
+	ffi_closure_t * closure;
 	struct __block_t * block;
 	struct __block_inst_t * block_inst;
 } syscallblock_t;

@@ -8,172 +8,52 @@
 
 extern module_t * kernel_module;
 
-
-static void syscallblock_dosyscall(syscallblock_t * sb, va_list args)
+static void syscallblock_dosyscall(void * ret, const void * args[], void * userdata)
 {
-	const char * param;
-	size_t i = 1;
+	syscallblock_t * sb = userdata;
 
-	foreach_methodparam(method_params(sb->syscall->sig), param)
+	io_beforeblock(sb->block_inst);
 	{
-		string_t pname = string_new("p%zu", i);
-		switch (*param)
+		const char * param;
+		size_t index = 1;
+
+		foreach_methodparam(method_params(sb->syscall->sig), param)
 		{
-			case T_BOOLEAN:
+			if (*param != T_VOID)
 			{
-				bool v = (bool)va_arg(args, int);
-				io_dooutput(sb->block_inst, pname.string, &v);
-				break;
-			}
-
-			case T_INTEGER:
-			{
-				int v = va_arg(args, int);
-				io_dooutput(sb->block_inst, pname.string, &v);
-				break;
-			}
-
-			case T_DOUBLE:
-			{
-				double v = va_arg(args, double);
-				io_dooutput(sb->block_inst, pname.string, &v);
-				break;
-			}
-
-			case T_CHAR:
-			{
-				char v = (char)va_arg(args, int);
-				io_dooutput(sb->block_inst, pname.string, &v);
-				break;
-			}
-
-			case T_STRING:
-			{
-				char * v = va_arg(args, char *);
-				io_dooutput(sb->block_inst, pname.string, &v);
-				break;
+				string_t pname = string_new("p%zu", index);
+				io_dooutput(sb->block_inst, pname.string, args[index++]);
 			}
 		}
 
-		i += 1;
-	}
-}
-
-static void syscallblock_dovoid(syscallblock_t * sb, ...)
-{
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-	}
-	io_afterblock(sb->block_inst);
-}
-
-static bool syscallblock_dobool(syscallblock_t * sb, ...)
-{
-	const bool * r = NULL;
-
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-
-		r = io_doinput(sb->block_inst, "r");
+		if (method_returntype(sb->syscall->sig) != T_VOID)
+		{
+			const void * r = io_doinput(sb->block_inst, "r");
+			if (r != NULL)
+			{
+				switch (method_returntype(sb->syscall->sig))
+				{
+					case T_BOOLEAN:		memcpy(ret, r, sizeof(bool));	break;
+					case T_INTEGER:		memcpy(ret, r, sizeof(int));	break;
+					case T_DOUBLE:		memcpy(ret, r, sizeof(double));	break;
+					case T_CHAR:		memcpy(ret, r, sizeof(char));	break;
+					case T_STRING:		memcpy(ret, r, sizeof(char *));	break;
+				}
+			}
+			else
+			{
+				switch (method_returntype(sb->syscall->sig))
+				{
+					case T_BOOLEAN:		*(bool *)ret = false;		break;
+					case T_INTEGER:		*(int *)ret = 0;			break;
+					case T_DOUBLE:		*(double *)ret = 0.0;		break;
+					case T_CHAR:		*(char *)ret = '\0';		break;
+					case T_STRING:		*(char **)ret = "";			break;
+				}
+			}
+		}
 	}
 	io_afterblock(sb->block_inst);
-
-	return r == NULL? false : *r;
-}
-
-static int syscallblock_doint(syscallblock_t * sb, ...)
-{
-	const int * r = NULL;
-
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-
-		r = io_doinput(sb->block_inst, "r");
-	}
-	io_afterblock(sb->block_inst);
-
-	return r == NULL? 0 : *r;
-}
-
-static double syscallblock_dodouble(syscallblock_t * sb, ...)
-{
-	const double * r = NULL;
-
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-
-		r = io_doinput(sb->block_inst, "r");
-	}
-	io_afterblock(sb->block_inst);
-
-	return r == NULL? 0.0 : *r;
-}
-
-static char syscallblock_dochar(syscallblock_t * sb, ...)
-{
-	const char * r = NULL;
-
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-
-		r = io_doinput(sb->block_inst, "r");
-	}
-	io_afterblock(sb->block_inst);
-
-	return r == NULL? 0 : *r;
-}
-
-static const char * syscallblock_dostring(syscallblock_t * sb, ...)
-{
-	const char ** r = NULL;
-
-	io_beforeblock(sb->block_inst);
-	{
-		va_list args;
-		va_start(args, sb);
-		syscallblock_dosyscall(sb, args);
-		va_end(args);
-
-		r = (const char **)io_doinput(sb->block_inst, "r");
-	}
-	io_afterblock(sb->block_inst);
-
-	return r == NULL? "" : *r;
-}
-
-
-static void * syscallblock_getfunction(const char return_type)
-{
-	switch (return_type)
-	{
-		case T_BOOLEAN:			return syscallblock_dobool;
-		case T_INTEGER:			return syscallblock_doint;
-		case T_DOUBLE:			return syscallblock_dodouble;
-		case T_CHAR:			return syscallblock_dochar;
-		case T_STRING:			return syscallblock_dostring;
-		case T_VOID:
-		default:				return syscallblock_dovoid;
-	}
 }
 
 char * syscallblock_info(void * object)
@@ -224,11 +104,11 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 
 	// Build syscall
 	{
-		syscall_t * syscall = malloc0(sizeof(syscall_t));
-		syscall->dynamic_data = sb;
-		syscall->func = syscallblock_getfunction(ret == NULL? T_VOID : ret->output->sig);
-		syscall->name = strdup(name);
-		syscall->desc = STRDUP(desc);
+		sb->syscall = malloc0(sizeof(syscall_t));
+		//syscall->dynamic_data = sb;
+		//syscall->func = syscallblock_getfunction(ret == NULL? T_VOID : ret->output->sig);
+		sb->syscall->name = strdup(name);
+		sb->syscall->desc = STRDUP(desc);
 
 		string_t sig = string_new("%c:", ret == NULL? 'v' : ret->output->sig);
 		int i=0;
@@ -236,12 +116,25 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 		{
 			string_append(&sig, "%c", params[i]->input->sig);
 		}
-		syscall->sig = string_copy(&sig);
-
-		syscall_reg(syscall);
-		sb->syscall = syscall;
+		sb->syscall->sig = string_copy(&sig);
 	}
 
+	// Build the closure
+	{
+		exception_t * e = NULL;
+		sb->closure = closure_build(&sb->syscall->func, syscallblock_dosyscall, sb->syscall->sig, sb, &e);
+
+		if (sb->closure == NULL)
+		{
+			LOGK(LOG_ERR, "Could not create syscall block closure %s: %s", name, e->message);
+			return NULL;
+		}
+	}
+
+	// Register the syscall
+	{
+		syscall_reg(sb->syscall);
+	}
 
 	// Build block
 	{
