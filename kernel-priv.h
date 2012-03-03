@@ -30,6 +30,7 @@ struct __binput_inst_t;
 struct __kthread_t;
 
 typedef void (*blind_f)();
+typedef void (*closure_f)(void * ret, const void * args[], void * userdata);
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
 typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
@@ -54,7 +55,17 @@ typedef struct
 	void * cif;
 	void ** atypes;
 	void * rtype;
-} ffi_t;
+} ffi_function_t;
+
+typedef struct
+{
+	closure_f callback;
+	void * closure;
+	void * cif;
+	void ** atypes;
+	void * rtype;
+	void * userdata;
+} ffi_closure_t;
 
 typedef struct
 {
@@ -118,10 +129,7 @@ typedef struct
 	void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
 	syscall_f func;
 
-	ffi_t * ffi;
-	//ffi_cif * cif;
-	//ffi_type ** ptypes;			// Parameter types
-	//ffi_type * rtype;			// Return type
+	ffi_function_t * ffi;
 } syscall_t;
 
 typedef struct
@@ -379,9 +387,11 @@ runnable_t * exec_newrungroup(const char * name, runnable_t ** runnables);
 runnable_t * exec_newfunction(const char * name, handler_f runfunc, handler_f stopfunc, void * userdata);
 runnable_t * exec_getcurrent();
 
-ffi_t * function_build(void * function, const char * sig, exception_t ** err);
-void function_free(ffi_t * ffi);
-void function_call(ffi_t * ffi, void * ret, void ** args);
+ffi_function_t * function_build(void * function, const char * sig, exception_t ** err);
+void function_free(ffi_function_t * ffi);
+void function_call(ffi_function_t * ffi, void * ret, void ** args);
+ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err);
+void closure_free(ffi_closure_t * ci);
 
 char * io_blockinfo(void * obj);
 void io_blockfree(void * obj);

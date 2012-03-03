@@ -1,13 +1,49 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <argp.h>
 
 #include <max.h>
 #include <serialize.h>
 
+// Private defines
+int parse_int(const char * s, exception_t ** err);
+double parse_double(const char * s, exception_t ** err);
+bool parse_bool(const char * s, exception_t ** err);
+
+static struct
+{
+	char * host;
+} args = { 0 };
+
+static struct argp_option arg_opts[] = {
+	{ "host",	'h',	"HOST",		0,		"Execute syscall on specified host", 0 },
+	{ 0 }
+};
+
+static error_t parse_args(int key, char * arg, struct argp_state * state);
+static struct argp argp = { arg_opts, parse_args, 0, 0 };
+
+static error_t parse_args(int key, char * arg, struct argp_state * state)
+{
+	switch (key)
+	{
+		case 'h':   args.host = strdup(arg);   break;
+
+		default:
+			return ARGP_ERR_UNKNOWN;
+	}
+
+	return 0;
+}
+
 int main(int argc, char ** argv)
 {
-	if (argc < 2)
+	int argi;
+	argp_parse(&argp, argc, argv, ARGP_IN_ORDER, &argi, 0);
+
+
+	if (argi == argc)
 	{
 		fprintf(stderr, "Nothing to do.\n");
 		return EXIT_FAILURE;
@@ -20,14 +56,14 @@ int main(int argc, char ** argv)
 	return_t ret;
 	max_initialize(&hand);
 
-	success = max_connectlocal(&hand, &e);
+	success = max_connect(&hand, (args.host == NULL)? HOST_LOCAL : args.host, &e);
 	if (!success)
 	{
 		fprintf(stderr, "<error> Error during init connection: %s\n", e->message);
 		return EXIT_FAILURE;
 	}
 	
-	const char * syscall_name = argv[1];
+	const char * syscall_name = argv[argi++];
 
 	success = max_syscall(&hand, &e, &ret, "syscall_signature", "s:s", syscall_name);
 	if (!success)
@@ -53,9 +89,9 @@ int main(int argc, char ** argv)
 	const char syscall_return = method_returntype(syscall_sig);
 	size_t numparams = method_numparams(syscall_params);
 
-	if (numparams != (argc - 2))
+	if (numparams != (argc - argi))
 	{
-		fprintf(stderr, "<error> Parameter mismatch. Expected %zu got %d\n", numparams, argc - 2);
+		fprintf(stderr, "<error> Parameter mismatch. Expected %zu got %d\n", numparams, argc - argi);
 		return EXIT_FAILURE;
 	}
 
@@ -75,7 +111,7 @@ int main(int argc, char ** argv)
 			case T_BOOLEAN:
 			{
 				bool * v = malloc(sizeof(bool));
-				*v = atoi(argv[index + 2]);
+				*v = parse_bool(argv[argi++], &e);
 				syscall_args[index] = v;
 				break;
 			}
@@ -83,7 +119,7 @@ int main(int argc, char ** argv)
 			case T_INTEGER:
 			{
 				int * v = malloc(sizeof(int));
-				*v = atoi(argv[index + 2]);
+				*v = parse_int(argv[argi++], &e);
 				syscall_args[index] = v;
 				break;
 			}
@@ -91,7 +127,7 @@ int main(int argc, char ** argv)
 			case T_DOUBLE:
 			{
 				double * v = malloc(sizeof(double));
-				*v = strtod(argv[index + 2], NULL);
+				*v = parse_double(argv[argi++], &e);
 				syscall_args[index] = v;
 				break;
 			}
@@ -99,7 +135,7 @@ int main(int argc, char ** argv)
 			case T_CHAR:
 			{
 				char * v = malloc(sizeof(char));
-				*v = argv[index + 2][0];
+				*v = argv[argi++][0];
 				syscall_args[index] = v;
 				break;
 			}
@@ -107,7 +143,7 @@ int main(int argc, char ** argv)
 			case T_STRING:
 			{
 				char ** v = malloc(sizeof(char *));
-				*v = argv[index + 2];
+				*v = argv[argi++];
 				syscall_args[index] = v;
 				break;
 			}
@@ -117,17 +153,23 @@ int main(int argc, char ** argv)
 			case T_ARRAY_INTEGER:
 			case T_ARRAY_DOUBLE:
 			{
-				fprintf(stderr, "<error> Unsupported buffer or array type for #%zu\n", index);
+				fprintf(stderr, "<error> Unsupported buffer or array type for argument #%zu\n", index);
 				return EXIT_FAILURE;
 			}
 
 			default:
 			{
-				fprintf(stderr, "<error> Unknown parameter type '%c' for #%zu\n", syscall_params[index], index);
+				fprintf(stderr, "<error> Unknown parameter type (%c) for argument #%zu\n", syscall_params[index], index);
 				return EXIT_FAILURE;
 			}
 		}
 		
+		if (exception_check(&e))
+		{
+			fprintf(stderr, "<error> Could not parse parameter type (%c) for argument #%zu. What the hell is '%s'?\n", syscall_params[index], index, argv[argi]);
+			return EXIT_FAILURE;
+		}
+
 		index += 1;
 	}
 
@@ -184,7 +226,7 @@ int main(int argc, char ** argv)
 
 		default:
 		{
-			fprintf(stderr, "<error> Unknown return type '%c'\n", ret.sig);
+			fprintf(stderr, "<error> Unknown return type (%c)\n", ret.sig);
 			return EXIT_FAILURE;
 		}
 	}

@@ -1,4 +1,4 @@
-SRCS 		= syscall.c
+SRCS 		= syscall.c parse.c
 PACKAGES	= 
 
 TARGET		= max-syscall
@@ -26,4 +26,7 @@ clean:
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $*.c -o $*.o
+
+%.o: ../%.c
+	$(CC) -c $(CFLAGS) $(DEFINES) ../$*.c -o $*.o
 

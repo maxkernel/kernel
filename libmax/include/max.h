@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#define HOST_LOCAL			"local:"
 #define HOST_UNIXSOCK		"unix:"
 #define HOST_IP				"ip:"
 #define HOST_UID			"uid:"
@@ -79,13 +80,9 @@ void max_initialize(maxhandle_t * hand);
 void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc);
 void max_memerr();
 
-bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host);
+bool max_connect(maxhandle_t * hand, const char * host, exception_t ** err);
 bool max_connectlocal(maxhandle_t * hand, exception_t ** err);
 void * max_destroy(maxhandle_t * hand);
-
-string_t max_syscallsig(maxhandle_t * hand, const char * name);
-bool max_syscallcache(maxhandle_t * hand, const char * name, const char * sig);
-bool max_syscallexists(maxhandle_t * hand, const char * name, const char * sig);
 
 bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...);
 bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args);

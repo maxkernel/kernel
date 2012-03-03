@@ -151,7 +151,7 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 	string_t fsig = string_new("%c:%s", T_POINTER, blk->new_sig);
 
 	exception_t * err = NULL;
-	ffi_t * ffi = function_build(blk->new, fsig.string, &err);
+	ffi_function_t * ffi = function_build(blk->new, fsig.string, &err);
 	if (ffi == NULL)
 	{
 		LOGK(LOG_FATAL, "Could not call constructor on block %s.%s: Code %d %s", blk->module->path, blk->name, err->code, err->message);

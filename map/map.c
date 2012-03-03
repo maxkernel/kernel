@@ -129,13 +129,13 @@ map_t * map_newfromstring(char mode, const char * string)
 	double a[MAX_MATCHES];
 	double b[MAX_MATCHES];
 
-	a[0] = strtod(g_match_info_fetch(info, 1), NULL);
-	b[0] = strtod(g_match_info_fetch(info, 2), NULL);
+	a[0] = parse_double(g_match_info_fetch(info, 1), NULL);
+	b[0] = parse_double(g_match_info_fetch(info, 2), NULL);
 
 	while (g_match_info_next(info, NULL))
 	{
-		a[num] = strtod(g_match_info_fetch(info, 1), NULL);
-		b[num] = strtod(g_match_info_fetch(info, 2), NULL);
+		a[num] = parse_double(g_match_info_fetch(info, 1), NULL);
+		b[num] = parse_double(g_match_info_fetch(info, 2), NULL);
 		num++;
 
 		if (num == MAX_MATCHES)

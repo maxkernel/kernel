@@ -23,6 +23,8 @@ cfgentry_t * cfg_getparam(const char * modname, const char * cfgname)
 
 void cfg_setparam(const char * modname, const char * cfgname, const char * value)
 {
+	LABELS(err_parse);
+
 	module_t * module = module_get(modname);
 
 	if (module == NULL)
@@ -39,31 +41,69 @@ void cfg_setparam(const char * modname, const char * cfgname, const char * value
 	}
 
 	LOGK(LOG_DEBUG, "Setting configuration parameter %s to value %s", cfg->name, value);
+
+	exception_t * e = NULL;
 	switch (cfg->type) {
 
 		case T_BOOLEAN:
-			*(bool *)cfg->variable = atoi(value);
+		{
+			bool v = parse_bool(value, &e);
+			if (exception_check(&e))
+			{
+				goto err_parse;
+			}
+
+			*(bool *)cfg->variable = v;
 			break;
+		}
 
 		case T_INTEGER:
-			*(int *)cfg->variable = atoi(value);
+		{
+			int v = parse_int(value, &e);
+			if (exception_check(&e))
+			{
+				goto err_parse;
+			}
+
+			*(int *)cfg->variable = v;
 			break;
+		}
 
 		case T_DOUBLE:
-			*(double *)cfg->variable = strtod(value, NULL);
+		{
+			double v = parse_double(value, &e);
+			if (exception_check(&e))
+			{
+				goto err_parse;
+			}
+
+			*(double *)cfg->variable = v;
 			break;
+		}
 
 		case T_CHAR:
+		{
 			*(char *)cfg->variable = value[0];
 			break;
+		}
 
 		case T_STRING:
+		{
 			*(char **)cfg->variable = strdup(value);
 			break;
+		}
 
 		default:
+		{
 			LOGK(LOG_ERR, "Unknown configuration type '%c' for %s", cfg->type, cfg->name);
 			break;
+		}
 	}
+
+	return;
+
+err_parse:
+	LOGK(LOG_ERR, "Could not set config value %s: %s", cfg->name, e->message);
+	return;
 }
 

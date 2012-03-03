@@ -638,7 +638,7 @@ const char * kernel_id() { return property_get("id"); }
 const int kernel_installed()
 {
 	const char * installed = property_get("installed");
-	return installed != NULL? atoi(installed) : 0;
+	return (installed != NULL)? parse_int(installed, NULL) : 0;
 }
 
 // Microseconds since epoch
@@ -1117,6 +1117,16 @@ int main(int argc, char * argv[])
 		{
 			LOGK(LOG_ERR, "%s", err->message);
 			exception_free(err);
+		}
+	}
+
+	// Clear all the properties
+	{
+		hashentry_t * pos, * n;
+		hashtable_foreach_safe(pos, n, &properties)
+		{
+			property_t * prop = hashtable_entry(pos, property_t, entry);
+			property_clear(prop->name);
 		}
 	}
 

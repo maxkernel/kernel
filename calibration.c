@@ -99,8 +99,8 @@ void cal_setparam(const char * module, const char * name, const char * value)
 				*(int *)pvalue = t3; \
 				break; }
 
-		__cal_setparam_elem(T_INTEGER, int, atoi(value))
-		__cal_setparam_elem(T_DOUBLE, double, strtod(value, NULL))
+		__cal_setparam_elem(T_INTEGER, int, parse_int(value, NULL))
+		__cal_setparam_elem(T_DOUBLE, double, parse_double(value, NULL))
 
 		default:
 		{
@@ -231,7 +231,7 @@ static void cal_bounds(calentry_t * entry, char type, double * min_ptr, double *
 	}
 	else
 	{
-		min = strtod(min_str, NULL);
+		min = parse_double(min_str, NULL);
 	}
 
 	if (strcmp(max_str, "-") == 0)
@@ -240,7 +240,7 @@ static void cal_bounds(calentry_t * entry, char type, double * min_ptr, double *
 	}
 	else
 	{
-		max = strtod(max_str, NULL);
+		max = parse_double(max_str, NULL);
 	}
 
 	g_free(min_str);

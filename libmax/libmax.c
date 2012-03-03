@@ -12,22 +12,6 @@
 #include <max.h>
 
 
-#if 0
-#define bad_malloc(handle, ptr) __bad_malloc(handle, ptr, __FILE__, __LINE__)
-static inline bool __bad_malloc(maxhandle_t * hand, void * ptr, const char * file, unsigned int line)
-{
-	if (ptr == NULL)
-	{
-		exception_make(hand->error, ENOMEM, "Failed to allocate memory (%s:%d)", file, line);
-		hand->memerr();
-		return true;
-	}
-
-	return false;
-}
-#endif
-
-
 void max_initialize(maxhandle_t * hand)
 {
 	PZERO(hand, sizeof(maxhandle_t));
@@ -75,10 +59,10 @@ void max_memerr()
 
 bool max_connectlocal(maxhandle_t * hand, exception_t ** err)
 {
-	return max_connect(hand, err, HOST_UNIXSOCK CONSOLE_SOCKFILE);
+	return max_connect(hand, HOST_UNIXSOCK CONSOLE_SOCKFILE, err);
 }
 
-bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host)
+bool max_connect(maxhandle_t * hand, const char * host, exception_t ** err)
 {
 	if (exception_check(err))
 	{
@@ -93,7 +77,12 @@ bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host)
 		return false;
 	}
 
-	if (strprefix(host, HOST_UNIXSOCK))
+	if (strcmp(host, HOST_LOCAL) == 0)
+	{
+		// Cheap hack to recurse back to this function with correct unixsock file
+		return max_connectlocal(hand, err);
+	}
+	else if (strprefix(host, HOST_UNIXSOCK))
 	{
 		// Connect over unix socket
 		const char * file = &host[strlen(HOST_UNIXSOCK)];
@@ -110,13 +99,13 @@ bool max_connect(maxhandle_t * hand, exception_t ** err, const char * host)
 	else if (strprefix(host, HOST_IP))
 	{
 		// Connect directly to IP
-		exception_set(err, ENOSYS, "Unsupported (future release)");
+		exception_set(err, ENOSYS, "Unsupported protocol (future release)");
 		return false;
 	}
 	else if (strprefix(host, HOST_UID))
 	{
 		// Connect to the kernel with the given UID
-		exception_set(err, ENOSYS, "Unsupported (future release)");
+		exception_set(err, ENOSYS, "Unsupported protocol (future release)");
 		return false;
 	}
 	else
@@ -270,66 +259,6 @@ bool max_asyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 
 	return r;
 }
-
-#if 0
-return_t max_asyscall(maxhandle_t * hand, const char * syscall, const char * sig, void ** args)
-{
-	char buffer[CONSOLE_BUFFERMAX];
-
-	errno = 0;
-
-	ssize_t hlength = serialize_2array(buffer, sizeof(buffer), "icss", CONSOLE_FRAMEING, T_METHOD, syscall, sig);
-	if (hlength == -1)
-	{
-		return make_error(hand, errno, "Could not serialize packet header");
-	}
-
-	ssize_t blength = aserialize_2array(buffer+hlength, sizeof(buffer) - hlength, method_params(sig), args);
-	if (blength == -1)
-	{
-		return make_error(hand, errno, "Could not serialize packet parameters");
-	}
-
-	ssize_t wrote = write(hand->sock, buffer, hlength + blength);
-	if (wrote != (hlength + blength))
-	{
-		return make_error(hand, (errno != 0)? errno : EIO, "Could not write all data");
-	}
-
-	struct pollfd pfd;
-	pfd.fd = hand->sock;
-	pfd.events = POLLIN | POLLERR;
-
-	int status = poll(&pfd, 1, hand->timeout);
-	if (status < 0)
-	{
-		return make_error(hand, errno, "Could not poll for response to syscall");
-	}
-	else if (status == 0)
-	{
-		return make_error(hand, ETIMEDOUT, "Timed out waiting for response");
-	}
-
-	if (pfd.revents & POLLIN)
-	{
-		// Parse out response
-
-		//TODO - finish this function!
-		return_t ret;
-		ret.handle = hand;
-		ret.type = T_VOID;
-
-		return ret;
-	}
-	else if (pfd.revents & POLLERR)
-	{
-		// Error happened on the file descriptor
-		return make_error(hand, EIO, "Error while polling file descriptor");
-	}
-
-	return make_error(hand, EIO, "Should not have gotten here!");
-}
-#endif
 
 void max_settimeout(maxhandle_t * hand, int newtimeout)
 {

@@ -293,8 +293,9 @@ module_t * module_load(const char * name)
 						} \
 						break; }
 
-				__module_load_elem(T_INTEGER, int, atoi(value->value));
-				__module_load_elem(T_DOUBLE, double, strtod(value->value, NULL));
+				// TODO - fix this switch statement! Also, catch errors on the parse_xxx()
+				__module_load_elem(T_INTEGER, int, parse_int(value->value, NULL));
+				__module_load_elem(T_DOUBLE, double, parse_double(value->value, NULL));
 
 				default:
 					LOGK(LOG_FATAL, "Unknown calibration type %c", value->type);

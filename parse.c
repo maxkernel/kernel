@@ -14,33 +14,37 @@ int parse_int(const char * s, exception_t ** err)
 		return 0;
 	}
 
-	errno = 0;
-	long lvalue = 0;
-
-	if (strprefix(s, "0x"))
+	if (s == NULL || strlen(s) == 0)
 	{
-		// Parsing a hex number
-		lvalue = strtol(s+2, NULL, 16);
-	}
-	else
-	{
-		// Parse the regular int
-		lvalue = strtol(s, NULL, 10);
-	}
-
-	if (errno != 0)
-	{
-		exception_set(err, errno, "Could not parse '%s' to int!", s);
+		exception_set(err, EINVAL, "Could not parse null or empty string to int!");
 		return 0;
 	}
 
-	if (lvalue > INT_MAX || lvalue < INT_MIN)
+
+	errno = 0;
+
+	char * end;
+	long value = strtol(s, &end, 0);
+
+	if (errno != 0)
+	{
+		exception_set(err, errno, "Could not parse '%s' to int: %s", s, strerror(errno));
+		return 0;
+	}
+
+	if (*end != '\0')
+	{
+		exception_set(err, EINVAL, "Could not parse '%s' to int!", s);
+		return 0;
+	}
+
+	if (value > INT_MAX || value < INT_MIN)
 	{
 		exception_set(err, ERANGE, "Could not parse '%s' to int! Number to big or small!", s);
 		return 0;
 	}
 
-	return (int)lvalue;
+	return (int)value;
 }
 
 double parse_double(const char * s, exception_t ** err)
@@ -51,13 +55,28 @@ double parse_double(const char * s, exception_t ** err)
 		return 0.0;
 	}
 
+	if (s == NULL || strlen(s) == 0)
+	{
+		exception_set(err, EINVAL, "Could not parse null or empty string to double!");
+		return 0.0;
+	}
+
+
 	errno = 0;
-	double value = strtod(s, NULL);
+
+	char * end;
+	double value = strtod(s, &end);
 
 	if (errno != 0)
 	{
-		exception_set(err, errno, "Could not parse '%s' as double!", s);
+		exception_set(err, errno, "Could not parse '%s' as double: %s", s, strerror(errno));
 		return 0.0;
+	}
+
+	if (*end != '\0')
+	{
+		exception_set(err, EINVAL, "Could not parse '%s' to double!", s);
+		return 0;
 	}
 
 	return value;
@@ -70,6 +89,13 @@ bool parse_bool(const char * s, exception_t ** err)
 	{
 		return false;
 	}
+
+	if (s == NULL || strlen(s) == 0)
+	{
+		exception_set(err, EINVAL, "Could not parse null or empty string to bool!");
+		return false;
+	}
+
 
 	// Lowercase the string
 	string_t str = string_new("%s", s);

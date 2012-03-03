@@ -169,7 +169,7 @@ static int l_connect(lua_State * L)
 	}
 	else
 	{
-		success = max_connect(handle, &err, host);
+		success = max_connect(handle, host, &err);
 	}
 
 	if (exception_check(&err) || !success)

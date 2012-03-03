@@ -67,14 +67,14 @@ static double mtod(char * start, regmatch_t * m)
 {
 	char pbuf[25] = {0};
 	memcpy(pbuf, start + m->rm_so, m->rm_eo - m->rm_so);
-	return strtod(pbuf, NULL);
+	return parse_double(pbuf, NULL);
 }
 
 static int mtoi(char * start, regmatch_t * m)
 {
 	char pbuf[25] = {0};
 	memcpy(pbuf, start + m->rm_so, m->rm_eo - m->rm_so);
-	return atoi(pbuf);
+	return parse_int(pbuf, NULL);
 }
 
 static double mtoll(char * start, regmatch_t * m)

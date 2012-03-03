@@ -14,11 +14,15 @@
 #include <aul/common.h>
 #include <aul/string.h>
 
+
 #define FIFO		"/tmp/maxclient.fifo"
 #define CMDFILE		"/tmp/maxclient.cmd"
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
+
+
+bool extract(char * path, char * dir);
 
 static volatile pid_t child = 0;
 static char * tempdir = NULL;
@@ -40,8 +44,6 @@ static struct argp_option arg_opts[] = {
 	{ "directory",  'C',    "dir",      0, "change to the given directory prior to executing command", 0 },
 	{ 0 }
 };
-
-bool extract(char * path, char * dir);
 
 static error_t parse_args(int key, char * arg, struct argp_state * state);
 static struct argp argp = { arg_opts, parse_args, 0, 0 };
