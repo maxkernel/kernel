@@ -168,71 +168,7 @@ static struct argp argp = { arg_opts, parse_args, 0, 0 };
 
 
 /*---------------------- CONFUSE ----------------------*/
-static inline int cfg_runfile(const char * name)
-{
-	int ret = -1;
-	bool (*execfunc)(const char * path) = NULL;
-
-	const char * filepath = resolvepath(name, PATH_FILE);
-	if (filepath == NULL)
-	{
-		LOGK(LOG_ERR, "Could not execute file %s. It does not exist!", name);
-		goto end;
-	}
-
-	if (strsuffix(filepath, ".lua"))
-	{
-		execfunc = lua_execfile;
-	}
-	else
-	{
-		LOGK(LOG_WARN, "Could not determine how interpret file %s", filepath);
-		goto end;
-	}
-
-	ret = execfunc(filepath)? 0 : -1;
-
-end:
-	FREES(filepath);
-	return ret;
-}
-
-static inline int cfg_rundir(const char * dir)
-{
-	int ret = 0;
-
-	const char * dirpath = resolvepath(dir, PATH_DIRECTORY);
-	if (dirpath == NULL)
-	{
-		LOGK(LOG_ERR, "Could not execute directory %s. It does not exist!", dir);
-		ret = -1;
-		goto end;
-	}
-
-	string_t abspath;
-	DIR * d = opendir(dirpath);
-	struct dirent * entry;
-	while ((entry = readdir(d)) != NULL)
-	{
-		if (entry->d_name[0] == '.')
-		{
-			// Do not execute hidden files (also avoids . and ..)
-			continue;
-		}
-
-		string_clear(&abspath);
-		string_append(&abspath, "%s/%s", dirpath, entry->d_name);
-
-		ret |= cfg_runfile(abspath.string);
-	}
-	closedir(d);
-
-end:
-	FREES(dirpath);
-	return ret;
-}
-
-static int cfg_loadmodule(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
+static int cfg_loadmodule(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 {
 	if (argc < 1)
 	{
@@ -240,21 +176,25 @@ static int cfg_loadmodule(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **arg
 		return -1;
 	}
 
-	setpath(cfg_getstr(cfg, "path"));
+	if (!path_set(cfg_getstr(cfg, "path")))
+	{
+		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
+		return -1;
+	}
 
-	int i=0;
-	for (; i<argc; i++)
+	for (int i = 0; i < argc; i++)
 	{
 		if (!module_load(argv[i]))
 		{
-			LOGK(LOG_FATAL, "module_load failed");
+			cfg_error(cfg, "Could not load module: %s!", argv[i]);
+			return -1;
 		}
 	}
 	
 	return 0;
 }
 
-static int cfg_config(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
+static int cfg_config(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 {
 	if (argc != 3)
 	{
@@ -267,26 +207,7 @@ static int cfg_config(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 	return 0;
 }
 
-static int cfg_execdir(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
-{
-	if (argc < 1)
-	{
-		cfg_error(cfg, "Invalid argument length for execdirectory function");
-		return -1;
-	}
-
-	setpath(cfg_getstr(cfg, "path"));
-
-	int i=0;
-	for (; i<argc; i++)
-	{
-		cfg_rundir(argv[i]);
-	}
-
-	return 0;
-}
-
-static int cfg_execfile(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
+static int cfg_execfile(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 {
 	if (argc < 1)
 	{
@@ -294,12 +215,91 @@ static int cfg_execfile(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 		return -1;
 	}
 
-	setpath(cfg_getstr(cfg, "path"));
-
-	int i=0;
-	for (; i<argc; i++)
+	if (!path_set(cfg_getstr(cfg, "path")))
 	{
-		cfg_runfile(argv[i]);
+		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
+		return -1;
+	}
+
+	for (int i = 0; i < argc; i++)
+	{
+		const char * file = argv[i];
+		const char * prefix = path_resolve(file, P_FILE);
+
+		if (prefix == NULL)
+		{
+			cfg_error(cfg, "Could not find file in path: %s", file);
+			return -1;
+		}
+
+		string_t path = path_join(prefix, file);
+
+		bool (*execfunc)(const char * path) = NULL;
+		if (strsuffix(path.string, ".lua"))
+		{
+			execfunc = lua_execfile;
+		}
+		else
+		{
+			LOGK(LOG_WARN, "Could not determine how interpret file %s", path.string);
+			continue;
+		}
+
+		if (!execfunc(path.string))
+		{
+			cfg_error(cfg, "Error while executing file %s", path.string);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int cfg_execdir(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+{
+	if (argc < 1)
+	{
+		cfg_error(cfg, "Invalid argument length for execdirectory function");
+		return -1;
+	}
+
+	if (!path_set(cfg_getstr(cfg, "path")))
+	{
+		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
+		return -1;
+	}
+
+	for (int i = 0; i < argc; i++)
+	{
+		const char * dir = argv[i];
+		const char * prefix = path_resolve(dir, P_DIRECTORY);
+
+		if (prefix == NULL)
+		{
+			cfg_error(cfg, "Could not find directory in path: %s", dir);
+			return -1;
+		}
+
+		string_t path = path_join(prefix, dir);
+
+		struct dirent * entry;
+		DIR * d = opendir(path.string);
+		while ((entry = readdir(d)) != NULL)
+		{
+			if (entry->d_name[0] == '.')
+			{
+				// Do not execute hidden files (also avoids . and ..)
+				continue;
+			}
+
+			string_t abspath = path_join(path.string, entry->d_name);
+			const char * abspath_str = abspath.string;
+			if (cfg_execfile(cfg, opt, 1, &abspath_str) < 0)
+			{
+				return -1;
+			}
+		}
+		closedir(d);
 	}
 
 	return 0;
@@ -307,11 +307,10 @@ static int cfg_execfile(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 
 static void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
 {
-	string_t str;
-	string_clear(&str);
+	string_t str = string_blank();
 	string_vappend(&str, fmt, ap);
 
-	LOGK(LOG_ERR, "Configuration error: %s", str.string);
+	LOGK(LOG_FATAL, "%s", str.string);
 }
 
 

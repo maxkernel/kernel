@@ -2,8 +2,8 @@
 #include <string.h>
 #include <glib.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <kernel.h>
+#include "kernel-priv.h"	// TODO - is this needed?
 
 /*
 static void log_write(const char * domain, GLogLevelFlags level, const char * message, gpointer userdata)
@@ -34,20 +34,21 @@ int main(int argc, char ** argv)
 {
 	//set up logging
 	//g_log_set_default_handler(log_write, NULL);
-	setpath(".");
-	const char * file = resolvepath(argv[1]);
-	if (file == NULL)
+	path_set(".");
+	const char * prefix = path_resolve(argv[1]);
+	if (prefix == NULL)
 	{
 		return EXIT_FAILURE;
 	}
 
-	meta_t * meta = meta_parse(file);
+	string_t file = string_new("%s/%s", prefix, argv[1]);
+	meta_t * meta = meta_parse(file.string);
 
 	GHashTableIter itr;
 	List * next;
 	block_t * block;
 	
-	LOG(LOG_INFO, "Module: %s", file);
+	LOG(LOG_INFO, "Module: %s", file.string);
 	LOG(LOG_INFO, "==================================");
 	LOG(LOG_INFO, "Author:\t %s", meta->author);
 	LOG(LOG_INFO, "Version:\t %s", meta->version);

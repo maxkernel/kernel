@@ -8,7 +8,7 @@
 #include "kernel.h"
 #include "kernel-priv.h"
 
-static char path[PATH_MAX_SIZE] = {0};
+//static char path[PATH_MAX_SIZE] = {0};
 
 static GRegex * meta_regex = NULL;
 
@@ -25,7 +25,7 @@ static inline bool dir_exists(const char * path)
 	int i = stat(path, &buf);
 	return i == 0 && S_ISDIR(buf.st_mode);
 }
-
+/*
 void setpath(const char * newpath)
 {
 	path[0] = 0;
@@ -97,6 +97,7 @@ const char * resolvepath(const char * name, int etype)
 
 	return filepath;
 }
+*/
 
 static block_t * getblk(list_t * list, char * name)
 {

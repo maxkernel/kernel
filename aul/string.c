@@ -60,7 +60,7 @@ string_t string_clone(const string_t * str)
 	return cpy;
 }
 
-const char * string_copy(const string_t * str)
+char * string_copy(const string_t * str)
 {
 	size_t length = str->length + 1;
 	char * cpy = malloc(length);

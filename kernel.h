@@ -91,8 +91,8 @@ extern "C" {
 #define CAL_UPDATE(func)							__WRITE_META(M_CALUPDATE, #func)
 #define CAL_PREVIEW(func)							__WRITE_META(M_CALPREVIEW, #func)
 
-
-#define PARAMS_MAX				64
+// TODO - delete me
+//#define PARAMS_MAX				64
 
 
 typedef void (*destructor_f)(void * object);
@@ -114,6 +114,19 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 void kobj_register(kobject_t * object);		// TODO - delete this function!
 void kobj_makechild(kobject_t * parent, kobject_t * child);
 void kobj_destroy(kobject_t * object);
+
+#define PATH_BUFSIZE			2048
+#define PATH_MAXPATHS			50
+typedef enum
+{
+	P_FILE			= (1 << 0),
+	P_DIRECTORY		= (1 << 1),
+	P_MODULE		= (1 << 2),
+} ptype_t;
+bool path_set(const char * newpath);
+bool path_append(const char * path);
+const char * path_resolve(const char * name, ptype_t type);
+string_t path_join(const char * prefix, const char * file);
 
 #define KTH_PRIO_MIN			1
 #define KTH_PRIO_LOW			5

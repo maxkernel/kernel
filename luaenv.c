@@ -159,12 +159,13 @@ static int l_debug(lua_State * L)
 	return 0;
 }
 
+#if 0
 static int l_include(lua_State * L)
 {
 	// Resync the path variable
 	lua_getglobal(L, "path");
 	const char * newpath = lua_tostring(L, -1);
-	setpath(newpath);
+	path_set(newpath);
 
 	// Resolve the file
 	const char * file = luaL_checkstring(L, 1);
@@ -192,6 +193,7 @@ static int l_include(lua_State * L)
 
 	return 0;
 }
+#endif
 
 static int l_newblock(lua_State * L)
 {
@@ -302,11 +304,6 @@ static int mt_module_index(lua_State * L)
 
 static int l_loadmodule(lua_State * L)
 {
-	// Resync the path variable
-	lua_getglobal(L, "path");
-	const char * newpath = lua_tostring(L, -1);
-	setpath(newpath);
-
 	// Load the module
 	const char * modname = luaL_checkstring(L, 1);
 	module_t * module = module_load(modname);
@@ -692,17 +689,18 @@ bool lua_execfile(const char * path)
 	luaL_register(L, NULL, config_mt);
 
 	// Add path variable
-	const char * bigpath = getpath();
-	lua_pushstring(L, bigpath);
-	lua_setglobal(L, "path");
+	// TODO - make setting the path a function!
+	//const char * bigpath = getpath();
+	//lua_pushstring(L, bigpath);
+	//lua_setglobal(L, "path");
 
 	// Register the functions
 	lua_register(L, "log", l_log);
 	lua_register(L, "print", l_log);
 	lua_register(L, "warn", l_warn);
 	lua_register(L, "debug", l_debug);
-	lua_register(L, "include", l_include);
-	lua_register(L, "dofile", l_include);
+	//lua_register(L, "include", l_include);	// TODO - come up with an alternative to this!
+	//lua_register(L, "dofile", l_include);
 	lua_register(L, "loadmodule", l_loadmodule);
 	lua_register(L, "route", l_route);
 	lua_register(L, "newrategroup", l_newrategroup);
