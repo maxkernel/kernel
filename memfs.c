@@ -27,32 +27,50 @@
 #define MOUNT_TYPE		"ramfs"
 
 
-void memfs_init(exception_t ** err)
+bool memfs_init(exception_t ** err)
 {
 	memfs_destroy(NULL);
-	mkdir(MOUNT_PATH, S_IRWXU);
+	mkdir(MOUNT_PATH, S_IRWXU | S_IRWXG | S_IRWXO);
 
 	int success = mount(MOUNT_NAME, MOUNT_PATH, MOUNT_TYPE, MS_NOSUID | MS_NOEXEC | MS_NODEV, NULL);
 	if (success != 0 && err != NULL)
 	{
-		*err = exception_new(errno, "Count not mount %s of type %s on point %s: %s", MOUNT_NAME, MOUNT_TYPE, MOUNT_PATH, strerror(errno));
+		exception_set(err, errno, "Count not mount %s of type %s on point %s: %s", MOUNT_NAME, MOUNT_TYPE, MOUNT_PATH, strerror(errno));
+		return false;
 	}
+
+	return true;
 }
 
-void memfs_destroy(exception_t ** err)
+bool memfs_destroy(exception_t ** err)
 {
 	int success = umount2(MOUNT_PATH, MNT_DETACH);
 	if (success != 0 && err != NULL)
 	{
-		*err = exception_new(errno, "Count not unmount %s on point %s: %s", MOUNT_NAME, MOUNT_PATH, strerror(errno));
+		exception_set(err, errno, "Count not unmount %s on point %s: %s", MOUNT_NAME, MOUNT_PATH, strerror(errno));
+		return false;
 	}
+
+	return true;
+}
+
+int memfs_newfd(const char * name, int oflags)
+{
+	string_t path = path_join(MOUNT_PATH, name);
+	return open(path.string, oflags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+}
+
+void memfs_delete(const char * name)
+{
+	string_t path = path_join(MOUNT_PATH, name);
+	unlink(path.string);
 }
 
 int memfs_orphanfd()
 {
-	string_t path = string_new("%s/orphan-%" PRIu64 "-%d", MOUNT_PATH, kernel_timestamp(), rand());
-	int fd = open(path.string, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-	unlink(path.string);
+	string_t path = string_new("orphan-%" PRIu64 "-%d", kernel_timestamp(), rand());
+	int fd = memfs_newfd(path.string, O_RDWR | O_CREAT | O_EXCL);
+	memfs_delete(path.string);
 
 	if (fd == -1)
 	{

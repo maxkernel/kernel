@@ -32,27 +32,18 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 	ssize_t bytesread = recvfrom(fd, buf, PACKET_LEN-1, 0, (struct sockaddr *)&remote, &remote_len);
 	if (bytesread > 0)
 	{
-		bool doreply = false;
-		if (enable_discovery && strcmp(buf, "discover") == 0)
-		{
-			//sleep for a *very* short time, so other end doesn't get slammed with responses all at once
-			usleep(rand()%10000);
-			doreply = true;
-		}
-		else if (strprefix(buf, "name=") && strcmp(buf+5, hostname) == 0)
-		{
-			doreply = true;
-		}
-
+		bool doreply = (enable_discovery && strcmp(buf, "discover") == 0) || (strprefix(buf, "name=") && strcmp(buf+5, hostname) == 0);
 		if (doreply)
 		{
-			string_t reply = string_new("name=%s\nid=%s\nstarted=%"PRId64"\nnow=%"PRId64"\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, max_model(), VERSION, PROVIDER, PROVIDER_URL);
+			string_t reply = string_new("name=%s\nid=%s\nstarted=%" PRId64 "\nnow=%" PRId64 "\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, max_model(), VERSION, PROVIDER, PROVIDER_URL);
 
 			if (syscall_exists("service_getstreamconfig", "s:v"))
 			{
-				const char ** config = SYSCALL("service_getstreamconfig");
-				string_append(&reply, "%s", *config);
-				syscall_free(config);
+				const char * config = NULL;
+				if (SYSCALL("service_getstreamconfig", &config))
+				{
+					string_append(&reply, "%s", config);
+				}
 			}
 
 			sendto(fd, reply.string, reply.length+1, MSG_DONTWAIT, (struct sockaddr *)&remote, remote_len);

@@ -58,11 +58,29 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 				if (syscall_exists(msg->name, msg->sig))
 				{
 					// Execute the syscall
-					void * r = asyscall_exec(msg->name, msg->body);
+					exception_t * e = NULL;
+					sysreturn_t r = {0};
 
-					// Pack and send a return message
-					char rsig[] = { method_returntype(msg->sig), '\0' };
+					bool success = asyscall_exec(msg->name, &e, &r, msg->body);
+					if (success)
+					{
+						// Pack and send a return message
+						char rsig[] = { method_returntype(msg->sig), '\0' };
+						void * rpack = &r;
+						message_awritefd(fd, T_RETURN, msg->name, rsig, &rpack);
+					}
+					else
+					{
+						// Some error happened!
+						LOG(LOG_WARN, "Could not execute syscall %s with sig %s: Code %d %s", msg->name, msg->sig, e->code, e->message);
+						string_t payload = string_new("Syscall %s with signature '%s' failed: Code %d %s", msg->name, msg->sig, e->code, e->message);
+						message_writefd(fd, T_ERROR, msg->name, "s", payload.string);
+					}
 
+					// Free exception if set
+					exception_free(e);
+
+#if 0
 					switch (method_returntype(msg->sig))
 					{
 						case T_VOID:
@@ -104,6 +122,7 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 
 					// Free up resources
 					syscall_free(r);
+#endif
 				}
 				else
 				{

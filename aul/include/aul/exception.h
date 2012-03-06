@@ -44,7 +44,7 @@ static inline bool exception_check(exception_t ** err)
 
 static inline void exception_free(exception_t * err)
 {
-	FREE(err);
+	if (err != NULL) free(err);
 }
 
 

@@ -117,7 +117,7 @@ module_t * module_load(const char * name)
 	const char * prefix = path_resolve(name, P_MODULE);
 	if (prefix == NULL)
 	{
-		LOGK(LOG_WARN, "Could not load module %s", name);
+		LOGK(LOG_WARN, "Could not resolve module path for %s", name);
 		return NULL;
 	}
 

@@ -321,15 +321,6 @@ typedef struct
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 
-//#define PATH_BUFSIZE			2048
-//#define PATH_MAXPATHS			50
-#define PATH_FILE				(1 << 0)
-#define PATH_DIRECTORY			(1 << 1)
-//void setpath(const char * newpath);
-//void appendpath(const char * newentry);
-//const char * getpath();
-//const char * resolvepath(const char * name, int etype);
-
 meta_t * meta_parse(const char * path);
 module_t * module_get(const char * name);
 const block_t * module_getblock(const module_t * module, const char * blockname);
@@ -340,9 +331,12 @@ int module_compare(list_t * a, list_t * b);
 module_t * module_load(const char * name);
 void module_kernelinit();
 
-// memfs functions (complementary with the buffer system)
-void memfs_init(exception_t ** err);
-void memfs_destroy(exception_t ** err);
+// Memfs functions
+// TODO - clean these up and determine which ones to keep
+bool memfs_init(exception_t ** err);
+bool memfs_destroy(exception_t ** err);
+int memfs_newfd(const char * name, int oflags);
+void memfs_delete(const char * name);
 int memfs_orphanfd();
 void memfs_closefd(int fd);
 int memfs_dupfd(int fd);

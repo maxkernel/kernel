@@ -139,52 +139,6 @@ static void log_print(level_t level, const char * domain, uint64_t milliseconds,
 	fprintf(stdout, "%s (%-5s) %" PRIu64 " - %s\n", domain, level2string(level), milliseconds, message);
 }
 
-static void log_filewrite(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
-{
-	struct log_file * data = userdata;
-
-	if (data->fd == -1)
-	{
-		return;
-	}
-
-	string_t buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
-	ssize_t wrote = write(data->fd, buf.string, buf.length);
-
-	if (wrote == -1)
-	{
-		close(data->fd);
-		data->fd = -1;
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not write last log message to file. File logging to %s has been disabled for this session.", data->path);
-		return;
-	}
-
-	data->size += wrote;
-	if (data->size > AUL_LOG_MAXFILESIZE)
-	{
-		//log file has become too big. Close it, archive it, and open a new one
-		close(data->fd);
-		archive(data->path);
-		data->fd = FILEOPEN(data->path);
-		FILEOPENHEADER(data->fd);
-		data->size = 0;
-	}
-}
-
-static void log_fileclose(void * userdata)
-{
-	struct log_file * data = userdata;
-
-	if (data->fd != -1)
-	{
-		close(data->fd);
-	}
-
-	FREES(data->path);
-	FREE(data);
-}
-
-
 
 // TODO - put a mutex around accessing this struct
 static struct
@@ -209,14 +163,108 @@ void log_destroy()
 	}
 }
 
-bool log_openfile(const char * path, exception_t ** err)
+bool log_addfd(int fd, exception_t ** err)
 {
-	if (exception_check(err))
+	void log_filewrite(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Error already set in function log_open");
+		int * fd = userdata;
+		if (*fd == -1)
+		{
+			return;
+		}
+
+		string_t buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
+		ssize_t wrote = write(*fd, buf.string, buf.length);
+
+		if (wrote == -1)
+		{
+			close(*fd);
+			*fd = -1;
+			log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not write last log message to file pointer. File logging to the pointer has been disabled for this session.");
+			return;
+		}
+	}
+
+	void log_fileclose(void * userdata)
+	{
+		int * fd = userdata;
+		if (*fd != -1)
+		{
+			close(*fd);
+		}
+
+		free(fd);
+	}
+
+	// Sanity check
+	if (exception_check(err) || fd < 0)
+	{
 		return false;
 	}
-	
+
+	FILEOPENHEADER(fd);
+
+	int * data = malloc(sizeof(int));
+	*data = fd;
+	log_addlistener(log_filewrite, log_fileclose, data);
+
+	return true;
+}
+
+bool log_openfile(const char * path, exception_t ** err)
+{
+	void log_filewrite(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
+	{
+		struct log_file * data = userdata;
+
+		if (data->fd == -1)
+		{
+			return;
+		}
+
+		string_t buf = string_new("<%s, %s, %" PRIu64 "> %s\n", domain, level2string(level), milliseconds, message);
+		ssize_t wrote = write(data->fd, buf.string, buf.length);
+
+		if (wrote == -1)
+		{
+			close(data->fd);
+			data->fd = -1;
+			log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not write last log message to file. File logging to %s has been disabled for this session.", data->path);
+			return;
+		}
+
+		data->size += wrote;
+		if (data->size > AUL_LOG_MAXFILESIZE)
+		{
+			//log file has become too big. Close it, archive it, and open a new one
+			close(data->fd);
+			archive(data->path);
+			data->fd = FILEOPEN(data->path);
+			FILEOPENHEADER(data->fd);
+			data->size = 0;
+		}
+	}
+
+	void log_fileclose(void * userdata)
+	{
+		struct log_file * data = userdata;
+
+		if (data->fd != -1)
+		{
+			close(data->fd);
+		}
+
+		FREES(data->path);
+		FREE(data);
+	}
+
+	// Sanity check
+	if (exception_check(err))
+	{
+		return false;
+	}
+
+
 	int fd = FILEOPEN(path);
 	if (fd == -1)
 	{
@@ -229,8 +277,8 @@ bool log_openfile(const char * path, exception_t ** err)
 	data->path = strdup(path);
 	data->size = file_size(path);
 	data->fd = fd;
-
 	log_addlistener(log_filewrite, log_fileclose, data);
+
 	return true;
 }
 

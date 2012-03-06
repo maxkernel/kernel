@@ -25,20 +25,31 @@ static inline bool dir_exists(const char * path)
 	return i == 0 && S_ISDIR(buf.st_mode);
 }
 
-bool path_set(const char * newpath)
+bool path_set(const char * newpath, exception_t ** err)
 {
+	// Sanity check
+	if (exception_check(err))
+	{
+		return false;
+	}
+
 	memset(pathlist, 0, sizeof(pathlist));
 	memset(pathbuf, 0, sizeof(pathbuf));
 	pathbuf_next = pathbuf;
 	pathlist_next = 0;
 
-	return path_append(newpath);
+	if (newpath == NULL)
+	{
+		return true;
+	}
+
+	return path_append(newpath, err);
 }
 
-bool path_append(const char * path)
+bool path_append(const char * path, exception_t ** err)
 {
 	// Sanity check
-	if (path == NULL)
+	if (exception_check(err) || path == NULL)
 	{
 		return false;
 	}
@@ -55,7 +66,8 @@ bool path_append(const char * path)
 		// Make sure there is enough room in the path list
 		if (pathlist_next >= PATH_MAXPATHS)
 		{
-			// No enough room!
+			// Not enough room!
+			exception_set(err, ENOMEM, "Could not append path, not enough room! Consider increasing PATH_MAXPATHS (currently %d)", PATH_MAXPATHS);
 			return false;
 		}
 
@@ -63,6 +75,7 @@ bool path_append(const char * path)
 		if ((plen + 1) > (PATH_BUFSIZE - (pathbuf_next - pathbuf)))
 		{
 			// Not enough room!
+			exception_set(err, ENOMEM, "Could not append path, not enough room! Consider increasing PATH_BUFSIZE (currently %d)", PATH_BUFSIZE);
 			return false;
 		}
 
@@ -106,7 +119,7 @@ const char * path_resolve(const char * name, ptype_t type)
 	}
 	else
 	{
-		for (size_t i = 0; i < pathlist_next; i++)
+		for (size_t i = 0; pathlist[i] != NULL && i < pathlist_next; i++)
 		{
 			// Relative path
 			string_t test = path_join(pathlist[i], file.string);
@@ -123,6 +136,6 @@ const char * path_resolve(const char * name, ptype_t type)
 
 string_t path_join(const char * prefix, const char * file)
 {
-	bool slash_needed = !strsuffix(prefix, "/") && !strprefix(file, "/");
+	bool slash_needed = !strprefix(file, "/") && !strsuffix(prefix, "/");
 	return string_new("%s%s%s", prefix, (slash_needed)? "/" : "", file);
 }

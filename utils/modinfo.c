@@ -34,7 +34,7 @@ int main(int argc, char ** argv)
 {
 	//set up logging
 	//g_log_set_default_handler(log_write, NULL);
-	path_set(".");
+	path_set(".", NULL);
 	const char * prefix = path_resolve(argv[1]);
 	if (prefix == NULL)
 	{

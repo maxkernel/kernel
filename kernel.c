@@ -168,17 +168,52 @@ static struct argp argp = { arg_opts, parse_args, 0, 0 };
 
 
 /*---------------------- CONFUSE ----------------------*/
+static int cfg_setpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+{
+	if (argc != 1)
+	{
+		cfg_error(cfg, "Invalid argument length for setpath function");
+		return -1;
+	}
+
+	exception_t * e = NULL;
+	if (!path_set(argv[0], &e))
+	{
+		cfg_error(cfg, "Could not set path: Code %d %s", e->code, e->message);
+		exception_free(e);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int cfg_appendpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+{
+	if (argc < 1)
+	{
+		cfg_error(cfg, "Invalid argument length for appendpath function");
+		return -1;
+	}
+
+	exception_t * e = NULL;
+	for (int i = 0; i < argc; i++)
+	{
+		if (!path_append(argv[i], &e))
+		{
+			cfg_error(cfg, "Could not append path: Code %d %s", e->code, e->message);
+			exception_free(e);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static int cfg_loadmodule(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 {
 	if (argc < 1)
 	{
 		cfg_error(cfg, "Invalid argument length for loadmodule function");
-		return -1;
-	}
-
-	if (!path_set(cfg_getstr(cfg, "path")))
-	{
-		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
 		return -1;
 	}
 
@@ -212,12 +247,6 @@ static int cfg_execfile(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** ar
 	if (argc < 1)
 	{
 		cfg_error(cfg, "Invalid argument length for execfile function");
-		return -1;
-	}
-
-	if (!path_set(cfg_getstr(cfg, "path")))
-	{
-		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
 		return -1;
 	}
 
@@ -260,12 +289,6 @@ static int cfg_execdir(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** arg
 	if (argc < 1)
 	{
 		cfg_error(cfg, "Invalid argument length for execdirectory function");
-		return -1;
-	}
-
-	if (!path_set(cfg_getstr(cfg, "path")))
-	{
-		cfg_error(cfg, "Could not set path! Consider increasing PATH_BUFSIZE or PATH_MAXPATHS.");
 		return -1;
 	}
 
@@ -767,7 +790,9 @@ int main(int argc, char * argv[])
 		LOGK(LOG_FATAL, "Must be root!");
 	}
 
+	// Set up the working directory to the install dir
 	chdir(INSTALL);
+	path_set(".", NULL);
 	
 	// Set up signals
 	signal_init();
@@ -782,16 +807,6 @@ int main(int argc, char * argv[])
 	// Init logging
 	log_openfile(LOGDIR "/" LOGFILE, NULL);
 	log_addlistener(log_appendbuf, NULL, NULL);
-	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
-	LOGK(LOG_DEBUG, "Kernel compiled %s %s", __DATE__, __TIME__);
-
-	// Log time
-	{
-		char timebuf[50];
-		time_t now = time(NULL);
-		strftime(timebuf, sizeof(timebuf), "%F %H:%M:%S", localtime(&now));
-		LOGK(LOG_INFO, "The time is now %s", timebuf);
-	}
 
 	// Configure memory for realtime
 	if (mlockall(MCL_CURRENT | MCL_FUTURE))
@@ -799,24 +814,6 @@ int main(int argc, char * argv[])
 		LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
 	}
 	mallopt(M_TRIM_THRESHOLD, -1);
-
-	// Make pid file
-	{
-		int pfd = open(PIDFILE, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
-		if (pfd == -1)
-		{
-			LOGK(LOG_WARN, "Could not create pid file %s: %s", PIDFILE, strerror(errno));
-		}
-		else
-		{
-			string_t data = string_new("%u\n", getpid());
-			if (write(pfd, data.string, data.length) != data.length)
-			{
-				LOGK(LOG_WARN, "Could not write all data to pid file %s", PIDFILE);
-			}
-			close(pfd);
-		}
-	}
 
 	// Set up buffers
 	buffer_init();
@@ -846,24 +843,56 @@ int main(int argc, char * argv[])
 	property_set("install", INSTALL);
 	property_set("logdir", LOGDIR);
 	property_set("config", INSTALL "/" CONFIG);
+	
+	// Init memfs file system
+	{
+		exception_t * e = NULL;
+		if (!memfs_init(&e))
+		{
+			LOGK(LOG_FATAL, "%s", e->message);
+			// Will exit
+		}
+	}
 
-	//connect to sqlite database
+	// Create a log file in the memfs filesystem and log to it
+	{
+		int fd = memfs_newfd("run.log", O_RDWR | O_CREAT | O_TRUNC);
+		log_addfd(fd, NULL);
+	}
+
+	// Do some basic logging
+	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
+	LOGK(LOG_DEBUG, "Kernel compiled %s %s", __DATE__, __TIME__);
+	{
+		// Log time
+		char timebuf[50];
+		time_t now = time(NULL);
+		strftime(timebuf, sizeof(timebuf), "%F %H:%M:%S", localtime(&now));
+		LOGK(LOG_INFO, "The time is now %s", timebuf);
+	}
+
+	// Connect to sqlite database
 	LOGK(LOG_DEBUG, "Opening database file");
 	if (sqlite3_open(INSTALL "/" DBNAME, &database) != SQLITE_OK)
 	{
 		LOGK(LOG_ERR, "Could not open database file %s", DBNAME);
 	}
-	
-	//init memfs memory pool system
-	LOGK(LOG_DEBUG, "Mounting kernel memfs");
-	{
-		exception_t * err = NULL;
 
-		memfs_init(&err);
-		if (err != NULL)
+	// Make pid file
+	{
+		int pfd = open(PIDFILE, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
+		if (pfd == -1)
 		{
-			LOGK(LOG_FATAL, "%s", err->message);
-			// Will exit
+			LOGK(LOG_WARN, "Could not create pid file %s: %s", PIDFILE, strerror(errno));
+		}
+		else
+		{
+			string_t data = string_new("%u\n", getpid());
+			if (write(pfd, data.string, data.length) != data.length)
+			{
+				LOGK(LOG_WARN, "Could not write all data to pid file %s", PIDFILE);
+			}
+			close(pfd);
 		}
 	}
 
@@ -900,6 +929,8 @@ int main(int argc, char * argv[])
 		CFG_STR(	"path",			INSTALL "/modules",		CFGF_NONE	),
 		CFG_STR(	"installed",	"0",					CFGF_NONE	),
 		CFG_STR(	"model",		"(unknown)",			CFGF_NONE	),
+		CFG_FUNC(	"setpath",		cfg_setpath				),
+		CFG_FUNC(	"appendpath",	cfg_appendpath			),
 		CFG_FUNC(	"loadmodule",	cfg_loadmodule			),
 		CFG_FUNC(	"config",		cfg_config				),
 		CFG_FUNC(	"execfile",		cfg_execfile			),
@@ -1107,13 +1138,11 @@ int main(int argc, char * argv[])
 	// Destroy the memfs subsystem
 	LOGK(LOG_DEBUG, "Unmounting kernel memfs");
 	{
-		exception_t * err = NULL;
-
-		memfs_destroy(&err);
-		if (err != NULL)
+		exception_t * e = NULL;
+		if (!memfs_destroy(&e))
 		{
-			LOGK(LOG_ERR, "%s", err->message);
-			exception_free(err);
+			LOGK(LOG_ERR, "%s", e->message);
+			exception_free(e);
 		}
 	}
 

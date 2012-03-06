@@ -123,8 +123,8 @@ typedef enum
 	P_DIRECTORY		= (1 << 1),
 	P_MODULE		= (1 << 2),
 } ptype_t;
-bool path_set(const char * newpath);
-bool path_append(const char * path);
+bool path_set(const char * newpath, exception_t ** err);
+bool path_append(const char * path, exception_t ** err);
 const char * path_resolve(const char * name, ptype_t type);
 string_t path_join(const char * prefix, const char * file);
 
@@ -137,13 +137,23 @@ void kthread_newinterval(const char * name, int priority, double rate_hz, handle
 void kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata);
 bool kthread_requeststop();
 
-#define SYSCALL(name, ...) syscall_exec(name, ## __VA_ARGS__)
-#define SYSCALL_BUFFERMAX		128
+#define SYSCALL_BUFFERMAX		128		// TODO - move this constant to a private define in console.c
+typedef union
+{
+	bool t_bool;
+	int t_int;
+	double t_double;
+	char t_char;
+	const char * t_sting;
+//	const buffer_t t_buffer;	// TODO - should we support buffers and arrays in syscalls?
+//	const array_t t_array;
+} sysreturn_t;
+
+#define SYSCALL(name, ret, ...) syscall_exec(name, NULL, ret, ## __VA_ARGS__)
 bool syscall_exists(const char * name, const char * sig);
-void * syscall_exec(const char * name, ...);
-void * vsyscall_exec(const char * name, va_list args);
-void * asyscall_exec(const char * name, void ** args);
-void syscall_free(void * p);
+bool syscall_exec(const char * name, exception_t ** err, void * ret, ...);
+bool vsyscall_exec(const char * name, exception_t ** err, void * ret, va_list args);
+bool asyscall_exec(const char * name, exception_t ** err, void * ret, void ** args);
 
 void property_set(const char * name, const char * value);
 void property_clear(const char * name);

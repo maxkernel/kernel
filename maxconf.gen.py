@@ -23,7 +23,7 @@ print >> sys.stdout, '''
 # parsed by libconfuse
 
 id = "%(id)s"
-path = "%(install)s:%(install)s/modules"
+setpath("%(install)s:%(install)s/modules")
 installed = %(time)d
 model = "%(model)s"
 

@@ -159,6 +159,36 @@ static int l_debug(lua_State * L)
 	return 0;
 }
 
+static int l_setpath(lua_State * L)
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
+
+	exception_t * e = NULL;
+	if (!path_set(luaL_checkstring(L, 1), &e))
+	{
+		string_t errstr = string_new("Could not set path: Code %d %s", e->code, e->message);
+		exception_free(e);
+		return luaL_error(L, "%s", errstr.string);
+	}
+
+	return 0;
+}
+
+static int l_appendpath(lua_State * L)
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
+
+	exception_t * e = NULL;
+	if (!path_append(luaL_checkstring(L, 1), &e))
+	{
+		string_t errstr = string_new("Could not append path: Code %d %s", e->code, e->message);
+		exception_free(e);
+		return luaL_error(L, "%s", errstr.string);
+	}
+
+	return 0;
+}
+
 #if 0
 static int l_include(lua_State * L)
 {
@@ -688,17 +718,13 @@ bool lua_execfile(const char * path)
 	luaL_newmetatable(L, "MaxKernel.config");
 	luaL_register(L, NULL, config_mt);
 
-	// Add path variable
-	// TODO - make setting the path a function!
-	//const char * bigpath = getpath();
-	//lua_pushstring(L, bigpath);
-	//lua_setglobal(L, "path");
-
 	// Register the functions
 	lua_register(L, "log", l_log);
 	lua_register(L, "print", l_log);
 	lua_register(L, "warn", l_warn);
 	lua_register(L, "debug", l_debug);
+	lua_register(L, "setpath", l_setpath);
+	lua_register(L, "appendpath", l_appendpath);
 	//lua_register(L, "include", l_include);	// TODO - come up with an alternative to this!
 	//lua_register(L, "dofile", l_include);
 	lua_register(L, "loadmodule", l_loadmodule);

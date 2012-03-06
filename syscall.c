@@ -48,68 +48,59 @@ void syscall_reg(syscall_t * syscall)
 	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
 }
 
-void * asyscall_exec(const char * name, void ** args)
+bool asyscall_exec(const char * name, exception_t ** err, void * ret, void ** args)
 {
+	// Sanity check
+	if (exception_check(err))
+	{
+		return false;
+	}
+
 	syscall_t * syscall = syscall_get(name);
 	if (syscall == NULL)
 	{
-		LOGK(LOG_WARN, "Syscall %s doesn't exist!", name);
-		return NULL;
-	}
-	
-	void * ret = NULL;
-	switch (method_returntype(syscall->sig))
-	{
-		case T_BOOLEAN:		ret = malloc0(sizeof(bool));		break;
-		case T_INTEGER:		ret = malloc0(sizeof(int));			break;
-		case T_DOUBLE:		ret = malloc0(sizeof(double));		break;
-		case T_CHAR:		ret = malloc0(sizeof(char));		break;
-		case T_STRING:		ret = malloc0(sizeof(char *));		break;
-
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-		case T_BUFFER:		ret = malloc0(sizeof(buffer_t));	break;
+		exception_set(err, EINVAL, "Syscall %s doesn't exist!", name);
+		return false;
 	}
 	
 	function_call(syscall->ffi, ret, args);
-	return ret;
+	return true;
 }
 
-void * vsyscall_exec(const char * name, va_list args)
+bool vsyscall_exec(const char * name, exception_t ** err, void * ret, va_list args)
 {
+	// Sanity check
+	if (exception_check(err))
+	{
+		return false;
+	}
+
 	const syscall_t * syscall = syscall_get(name);
 	if (syscall == NULL)
 	{
-		LOGK(LOG_WARN, "Syscall %s doesn't exist!", name);
-		return NULL;
+		exception_set(err, EINVAL, "Syscall %s doesn't exist!", name);
+		return false;
 	}
 	
 	char array[SYSCALL_BUFFERMAX];
 	ssize_t result = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, method_params(syscall->sig), args);
 	if (result == -1)
 	{
-		LOGK(LOG_ERR, "Could not pack all arguments for syscall %s, consider increasing SYSCALL_BUFSIZE (currently %d)", name, SYSCALL_BUFFERMAX);
-		return NULL;
+		exception_set(err, ENOMEM, "Could not pack all arguments for syscall %s, consider increasing SYSCALL_BUFSIZE (currently %d)", name, SYSCALL_BUFFERMAX);
+		return false;
 	}
 
-	void * ret = asyscall_exec(name, (void **)array);
-	return ret;
+	return asyscall_exec(name, err, ret, (void **)array);
 }
 
-void * syscall_exec(const char * name, ...)
+bool syscall_exec(const char * name, exception_t ** err, void * ret, ...)
 {
 	va_list args;
-	va_start(args, name);
-	void * ret = vsyscall_exec(name, args);
+	va_start(args, ret);
+	bool s = vsyscall_exec(name, err, ret, args);
 	va_end(args);
 	
-	return ret;
-}
-
-void syscall_free(void * p)
-{
-	free(p);
+	return s;
 }
 
 bool syscall_exists(const char * name, const char * sig)
