@@ -93,7 +93,7 @@ runnable_t * exec_newfunction(const char * name, handler_f runfunc, handler_f st
 
 static runnable_t * __exec_getcurrent(runnable_t * run)
 {
-	if (strsuffix(run->kobject.obj_name, EXEC_GROUP_NAME))
+	if (strsuffix(run->kobject.object_name, EXEC_GROUP_NAME))
 	{
 		rungroup_t * grp = (rungroup_t *)run;
 		return __exec_getcurrent(grp->list[grp->onitem]);	//handle nested rungroups

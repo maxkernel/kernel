@@ -325,7 +325,7 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 
 	if (watcher == NULL)
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not remove fd %d from mainloop, not presently watching it!", fd);
+		// Not prenently watching fd
 		return;
 	}
 

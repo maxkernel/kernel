@@ -32,7 +32,7 @@ void syscall_destroy(void * syscall)
 void syscall_reg(syscall_t * syscall)
 {
 	syscall->kobject.class_name = "Syscall";
-	syscall->kobject.obj_name = syscall->name;
+	syscall->kobject.object_name = syscall->name;
 	syscall->kobject.info = syscall_info;
 	syscall->kobject.destructor = syscall_destroy;
 	kobj_register(&syscall->kobject);
@@ -57,64 +57,23 @@ void * asyscall_exec(const char * name, void ** args)
 		return NULL;
 	}
 	
-	void * rvalue = NULL;
-	size_t rsize = 0;
-	
-	// Get return type size
+	void * ret = NULL;
 	switch (method_returntype(syscall->sig))
 	{
-		case T_BOOLEAN:
-		{
-			rsize = sizeof(int);
-			break;
-		}
-
-		case T_INTEGER:
-		{
-			rsize = sizeof(int);
-			break;
-		}
-
-		case T_DOUBLE:
-		{
-			rsize = sizeof(double);
-			break;
-		}
-
-		case T_CHAR:
-		{
-			rsize = sizeof(char);
-			break;
-		}
-
-		case T_STRING:
-		{
-			rsize = sizeof(char *);
-			break;
-		}
+		case T_BOOLEAN:		ret = malloc0(sizeof(bool));		break;
+		case T_INTEGER:		ret = malloc0(sizeof(int));			break;
+		case T_DOUBLE:		ret = malloc0(sizeof(double));		break;
+		case T_CHAR:		ret = malloc0(sizeof(char));		break;
+		case T_STRING:		ret = malloc0(sizeof(char *));		break;
 
 		case T_ARRAY_BOOLEAN:
 		case T_ARRAY_INTEGER:
 		case T_ARRAY_DOUBLE:
-		case T_BUFFER:
-		{
-			rsize = sizeof(buffer_t);
-			break;
-		}
-
-		case T_VOID:
-		default:
-		{
-			rsize = 0;
-			break;
-		}
+		case T_BUFFER:		ret = malloc0(sizeof(buffer_t));	break;
 	}
 	
-	rvalue = (rsize > 0)? malloc0(rsize) : NULL;
-	
-	function_call(syscall->ffi, rvalue, args);
-
-	return rvalue;
+	function_call(syscall->ffi, ret, args);
+	return ret;
 }
 
 void * vsyscall_exec(const char * name, va_list args)

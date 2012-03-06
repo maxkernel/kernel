@@ -15,7 +15,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 	io_beforeblock(sb->block_inst);
 	{
 		const char * param;
-		size_t index = 1;
+		size_t index = 0;
 
 		foreach_methodparam(method_params(sb->syscall->sig), param)
 		{
@@ -64,7 +64,8 @@ char * syscallblock_info(void * object)
 
 void syscallblock_free(void * object)
 {
-	//TODO - free me
+	syscallblock_t * sb = object;
+	closure_free(sb->closure);
 }
 
 block_inst_t * syscallblock_getblockinst(syscallblock_t * sb)
@@ -105,8 +106,6 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 	// Build syscall
 	{
 		sb->syscall = malloc0(sizeof(syscall_t));
-		//syscall->dynamic_data = sb;
-		//syscall->func = syscallblock_getfunction(ret == NULL? T_VOID : ret->output->sig);
 		sb->syscall->name = strdup(name);
 		sb->syscall->desc = STRDUP(desc);
 
@@ -150,15 +149,15 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 		LIST_INIT(&blk->inputs);
 		LIST_INIT(&blk->outputs);
 
-		for(size_t i=0; i<numparams; i++)
+		for(size_t index = 0; index < numparams; index++)
 		{
-			string_t pname = string_new("p%zu", i+1);
+			string_t pname = string_new("p%zu", index);
 
 			bio_t * out = malloc0(sizeof(bio_t));
 			out->block = blk;
 			out->name = string_copy(&pname);
-			out->desc = STRDUP(params[i]->input->desc);
-			out->sig = params[i]->input->sig;
+			out->desc = STRDUP(params[index]->input->desc);
+			out->sig = params[index]->input->sig;
 
 			list_add(&blk->outputs, &out->block_list);
 		}
@@ -179,21 +178,21 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 	}
 
 	// Create block instance
-	sb->block_inst = io_newblock(sb->block, NULL);
+	sb->block_inst = io_newblockinst(sb->block, NULL);
 
 	// Route the data
 	{
-		for (size_t i = 0; i < numparams; i++)
+		for (size_t index = 0; index < numparams; index++)
 		{
-			string_t pname = string_new("p%zu", i+1);
+			string_t pname = string_new("p%zu", index);
 			boutput_inst_t * out = io_getboutput(sb->block_inst, pname.string);
 			if (out != NULL)
 			{
-				io_route(out, params[i]);
+				io_route(out, params[index]);
 			}
 			else
 			{
-				LOGK(LOG_FATAL, "Could not route %s -> %s in syscall block! This error should be impossible to trigger!", pname.string, params[i]->input->name);
+				LOGK(LOG_FATAL, "Could not route %s -> %s in syscall block! This error should be impossible to trigger!", pname.string, params[index]->input->name);
 				// Will exit
 			}
 		}

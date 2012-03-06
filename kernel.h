@@ -99,17 +99,20 @@ typedef void (*destructor_f)(void * object);
 typedef char * (*info_f)(void * object);
 typedef void (*handler_f)(void * userdata);
 
-typedef struct
+typedef struct __kobject_t
 {
 	const char * class_name;
-	const char * obj_name;
+	const char * object_name;
+	struct __kobject_t * parent;
+
 	info_f info;
 	destructor_f destructor;
-	list_t kobjdb;
+	list_t objects_list;
 } kobject_t;
 
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size);
-void kobj_register(kobject_t * object);
+void kobj_register(kobject_t * object);		// TODO - delete this function!
+void kobj_makechild(kobject_t * parent, kobject_t * child);
 void kobj_destroy(kobject_t * object);
 
 #define KTH_PRIO_MIN			1

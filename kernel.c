@@ -361,7 +361,7 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 
 	kobject_t * object = malloc0(size);
 	object->class_name = class_name;
-	object->obj_name = name;
+	object->object_name = name;
 	object->info = info;
 	object->destructor = destructor;
 
@@ -369,11 +369,17 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 	return object;
 }
 
+void kobj_makechild(kobject_t * parent, kobject_t * child)
+{
+	child->parent = parent;
+}
+
+// TODO - remove this function! Merge with kobject_new
 void kobj_register(kobject_t * object)
 {
 	mutex_lock(&kobj_mutex);
 	{
-		list_push(&objects, &object->kobjdb);
+		list_add(&objects, &object->objects_list);
 	}
 	mutex_unlock(&kobj_mutex);
 }
@@ -387,15 +393,15 @@ void kobj_destroy(kobject_t * object)
 
 	mutex_lock(&kobj_mutex);
 	{
-		LOGK(LOG_DEBUG, "Destroying %s: %s", object->class_name, object->obj_name);
+		LOGK(LOG_DEBUG, "Destroying %s: %s", object->class_name, object->object_name);
 		if (object->destructor != NULL)
 		{
 			object->destructor(object);
 		}
 
-		list_remove(&object->kobjdb);
+		list_remove(&object->objects_list);
 
-		FREES(object->obj_name);
+		FREES(object->object_name);
 		FREE(object);
 	}
 	mutex_unlock(&kobj_mutex);
@@ -422,6 +428,9 @@ static void kthread_destroy(void * kthread)
 
 		pthread_join(kth->thread, NULL);
 	}
+
+	kobj_destroy(&kth->trigger->kobject);
+	kobj_destroy(&kth->runnable->kobject);
 }
 
 static void * kthread_dothread(void * object)
@@ -441,12 +450,12 @@ static void * kthread_dothread(void * object)
 			param.sched_priority = CLAMP(prio, min, max);
 			if (sched_setscheduler(0, KTHREAD_SCHED, &param) == -1)
 			{
-				LOGK(LOG_WARN, "Could not set scheduler parameters on thread %s: %s", kth->kobject.obj_name, strerror(errno));
+				LOGK(LOG_WARN, "Could not set scheduler parameters on thread %s: %s", kth->kobject.object_name, strerror(errno));
 			}
 		}
 		else
 		{
-			LOGK(LOG_WARN, "Could not get scheduler parameters on thread %s: %s", kth->kobject.obj_name, strerror(errno));
+			LOGK(LOG_WARN, "Could not get scheduler parameters on thread %s: %s", kth->kobject.object_name, strerror(errno));
 		}
 	}
 
@@ -461,30 +470,8 @@ static void * kthread_dothread(void * object)
 
 		if (!kth->stop)
 		{
-#ifdef EN_PROFILE
-			int tmres = 0;
-			struct timespec rtbefore, rtafter, cpubefore, cpuafter;
-
-			tmres |= clock_gettime(CLOCK_REALTIME, &rtbefore);
-			tmres |= clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpubefore);
-#endif
-
 			kth->runnable->runfunc(kth->runnable);	//this function will do the thread execution
 													//rinse and repeat
-
-#ifdef EN_PROFILE
-			tmres |= clock_gettime(CLOCK_REALTIME, &rtafter);
-			tmres |= clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpuafter);
-
-			if (tmres == 0)
-			{
-				uint64_t rtdiff = (rtafter.tv_sec - rtbefore.tv_sec) * NANOS_PER_SECOND + (rtafter.tv_nsec - rtbefore.tv_nsec);
-				uint64_t cpudiff = (cpuafter.tv_sec - cpubefore.tv_sec) * NANOS_PER_SECOND + (cpuafter.tv_nsec - cpubefore.tv_nsec);
-
-				profile_addthreadrealtime(kth, rtdiff);
-				profile_addthreadcputime(kth, cpudiff);
-			}
-#endif
 
 			//yield before the next round
 			sched_yield();
@@ -512,7 +499,7 @@ static bool kthread_start(kthread_t * kth)
 void kthread_schedule(kthread_t * thread)
 {
 	kthread_task_t * task = malloc0(sizeof(kthread_task_t));
-	string_t str = string_new("Starting thread '%s'", thread->kobject.obj_name);
+	string_t str = string_new("Starting thread '%s'", thread->kobject.object_name);
 
 	task->desc = string_copy(&str);
 	task->thread = thread;
@@ -530,6 +517,9 @@ kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * run
 	kth->running = false;
 	kth->trigger = trigger;
 	kth->runnable = runnable;
+
+	kobj_makechild(&kth->kobject, &kth->trigger->kobject);
+	kobj_makechild(&kth->kobject, &kth->runnable->kobject);
 
 	return kth;
 }
@@ -882,11 +872,6 @@ int main(int argc, char * argv[])
 	mainloop_init();
 	iterator_init();
 
-	//initialize profiler
-#ifdef EN_PROFILE
-	profile_init();
-#endif
-
 	// Initialize kernel vars and subsystems
 	module_kernelinit();	//a generic module that points to kernel space
 	
@@ -1068,12 +1053,6 @@ int main(int argc, char * argv[])
 
 		// Check for new kernel thread tasks every second
 		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);
-
-		// If we are configured to profile, start that now
-#ifdef EN_PROFILE
-		mainloop_addtimer(NULL, "Profiler", (1.0 / PROFILE_UPDATEHZ) * NANOS_PER_SECOND, profile_track, NULL);
-#endif
-
 	}
 
 	// Run maxkernel mainloop
@@ -1095,10 +1074,29 @@ int main(int argc, char * argv[])
 		}
 		*/
 
-		list_t * pos, * q;
-		list_foreach_safe(pos, q, &objects)
+		while (objects.next != &objects)
 		{
-			kobject_t * item = list_entry(pos, kobject_t, kobjdb);
+			kobject_t * item = NULL;
+			bool found = false;
+
+			list_t * pos;
+			list_foreach(pos, &objects)
+			{
+				item = list_entry(pos, kobject_t, objects_list);
+				if (item->parent == NULL)
+				{
+					// We've found a root object
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				LOGK(LOG_ERR, "Orphan kobject found: %s: %s", item->class_name, item->object_name);
+			}
+
+			LOG(LOG_DEBUG, "Destroying kobject tree %s: %s", item->class_name, item->object_name);
 			kobj_destroy(item);
 		}
 	}

@@ -165,7 +165,7 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 static block_inst_t * io_currentblockinst()
 {
 	runnable_t * run = exec_getcurrent();
-	if (strsuffix(run->kobject.obj_name, IO_BLOCK_NAME))
+	if (strsuffix(run->kobject.object_name, IO_BLOCK_NAME))
 	{
 		return (block_inst_t *)run;
 	}
@@ -208,11 +208,11 @@ void io_blockfree(void * obj)
 	//TODO - finish me (free inputs/outputs/links)
 }
 
-block_inst_t * io_newblock(block_t * blk, void ** args)
+block_inst_t * io_newblockinst(block_t * blk, void ** args)
 {
-	LOGK(LOG_DEBUG, "Creating new block %s in module %s", blk->name, blk->module->kobject.obj_name);
+	LOGK(LOG_DEBUG, "Creating new block instance %s in module %s", blk->name, blk->module->kobject.object_name);
 
-	string_t str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.obj_name, blk->name);
+	string_t str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.object_name, blk->name);
 	block_inst_t * blk_inst = exec_new(string_copy(&str), io_instinfo, io_instdestroy, io_doinst, NULL, sizeof(block_inst_t));
 	list_add(&blk->module->block_inst, &blk_inst->module_list);
 
@@ -289,7 +289,7 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 		return false;
 	}
 
-	LOGK(LOG_DEBUG, "Routing %s:%s.%s -> %s:%s.%s", out->block_inst->block->module->kobject.obj_name, out->block_inst->block->name, out->output->name, in->block_inst->block->module->kobject.obj_name, in->block_inst->block->name, in->input->name);
+	LOGK(LOG_DEBUG, "Routing %s:%s.%s -> %s:%s.%s", out->block_inst->block->module->kobject.object_name, out->block_inst->block->name, out->output->name, in->block_inst->block->module->kobject.object_name, in->block_inst->block->name, in->input->name);
 
 	if (in->src_inst != NULL)
 	{

@@ -366,7 +366,7 @@ const char * http_getparam(http_context * ctx, const char * name)
 
 void http_destroy(http_context * ctx)
 {
-	mainloop_removewatch(ctx->mainloop, ctx->socket, FD_READ);
+	//mainloop_removewatch(ctx->mainloop, ctx->socket, FD_READ);
 	close(ctx->socket);
 	free(ctx);
 }

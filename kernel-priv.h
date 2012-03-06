@@ -122,11 +122,10 @@ typedef struct
 	list_t module_list;
 	hashentry_t global_entry;
 
-	const char * name;			//a copy of pointer obj_name
+	const char * name;
 	module_t * module;
 	const char * desc;
 	const char * sig;
-	//void * dynamic_data;		//if this is a dynamic syscall (internal to the kernel), put any info here
 
 	syscall_f func;
 	ffi_function_t * ffi;
@@ -361,14 +360,6 @@ void syscall_destroy(void * syscall);
 syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc);
 block_inst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
-#ifdef EN_PROFILE
-#define PROFILE_UPDATEHZ		1.0
-void profile_init();
-void profile_addthreadrealtime(kthread_t * kth, uint64_t nanoseconds);
-void profile_addthreadcputime(kthread_t * kth, uint64_t nanoseconds);
-bool profile_track(mainloop_t * loop, uint64_t nanoseconds, void * userdata);
-#endif
-
 #define KTHREAD_SCHED		SCHED_RR
 kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * runnable, int priority);
 void kthread_schedule(kthread_t * thread);
@@ -396,7 +387,7 @@ void closure_free(ffi_closure_t * ci);
 
 char * io_blockinfo(void * obj);
 void io_blockfree(void * obj);
-block_inst_t * io_newblock(block_t * blk, void ** args);
+block_inst_t * io_newblockinst(block_t * blk, void ** args);
 void io_beforeblock(block_inst_t * block);
 void io_afterblock(block_inst_t * block);
 const void * io_doinput(block_inst_t * blk, const char * name);

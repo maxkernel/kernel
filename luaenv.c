@@ -254,7 +254,7 @@ static int l_newblock(lua_State * L)
 		stack += 1;
 	}
 
-	block_inst_t * blk_inst = io_newblock(blk, params);
+	block_inst_t * blk_inst = io_newblockinst(blk, params);
 	if (blk_inst == NULL)
 	{
 		return luaL_error(L, "Could not create block instance of block %s in module %s", blk->name, blk->module->path);
@@ -310,6 +310,12 @@ static int l_loadmodule(lua_State * L)
 	// Load the module
 	const char * modname = luaL_checkstring(L, 1);
 	module_t * module = module_load(modname);
+
+	if (module == NULL)
+	{
+		// TODO - add a more classy error message
+		return luaL_error(L, "Could not load module %s!", modname);
+	}
 
 	// Create the lua module object
 	module_t ** modobject = lua_newuserdata(L, sizeof(module_t *));

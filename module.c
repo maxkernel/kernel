@@ -30,7 +30,7 @@ static void module_destroy(void * object)
 
 	if (module->destroy != NULL)
 	{
-		LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.obj_name);
+		LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.object_name);
 		module->destroy();
 	}
 
@@ -129,7 +129,6 @@ module_t * module_load(const char * name)
 	}
 
 	module_t * module = NULL;
-
 	if ((module = module_get(path)) != NULL)
 	{
 		return module;
@@ -353,10 +352,10 @@ module_t * module_load(const char * name)
 		{
 			list_t * pos2;
 			block_t * block = list_entry(pos, block_t, module_list);
-			string_t obj_name = string_new("%s:%s", module->kobject.obj_name, block->name);
+			string_t obj_name = string_new("%s:%s", module->kobject.object_name, block->name);
 
 			block->module = module;
-			block->kobject.obj_name = strdup(obj_name.string);
+			block->kobject.object_name = strdup(obj_name.string);
 			block->kobject.info = io_blockinfo;
 			block->kobject.destructor = io_blockfree;
 
@@ -411,7 +410,7 @@ module_t * module_load(const char * name)
 				LOGK(LOG_DEBUG, "Initializing global block in module %s", name);
 
 				// TODO - is this the best place to initialize the static block??
-				block_inst_t * blk_inst = io_newblock(block, NULL);
+				block_inst_t * blk_inst = io_newblockinst(block, NULL);
 				if (blk_inst == NULL)
 				{
 					LOG(LOG_FATAL, "Could not create global block instance in module %s", name);
@@ -475,7 +474,7 @@ void module_init(const module_t * module)
 		return;
 
 	//now call it
-	LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.obj_name);
+	LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.object_name);
 	module->initialize();
 }
 
@@ -483,6 +482,6 @@ int module_compare(list_t * a, list_t * b)
 {
 	module_t * ma = list_entry(a, module_t, global_list);
 	module_t * mb = list_entry(b, module_t, global_list);
-	return strcmp(ma->kobject.obj_name, mb->kobject.obj_name);
+	return strcmp(ma->kobject.object_name, mb->kobject.object_name);
 }
 

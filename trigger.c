@@ -102,7 +102,7 @@ static bool trigger_waitclock(void * object)
 	{
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
-			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", clk->kobject.obj_name, (diff - clk->interval_nsec));
+			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", clk->kobject.object_name, (diff - clk->interval_nsec));
 			gettime(&clk->last_trigger);
 		}
 		else
@@ -130,53 +130,6 @@ static bool trigger_waitclock(void * object)
 		addnanos(&clk->last_trigger, clk->interval_nsec);
 		return true;
 	}
-
-
-
-/*
-	if (clk->next_trigger == NULL)
-	{
-		//first execution - construct GTimeVal and return, don't wait
-
-		clk->next_trigger = g_malloc0(sizeof(GTimeVal));
-		g_get_current_time(clk->next_trigger);
-
-		long useconds = (long)(1.0 / clk->freq_hz * 1000000.0);
-		g_time_val_add(clk->next_trigger, useconds);
-	}
-
-	GTimeVal now;
-	g_get_current_time(&now);
-	long diff = (clk->next_trigger->tv_sec - now.tv_sec) * 1000000 + (clk->next_trigger->tv_usec - now.tv_usec);
-
-	if (diff < 0)
-	{
-		if (diff < -WARN_USEC_TOLLERENCE)
-		{
-			LOGK(LOG_WARN, "Trigger %s updating at %f Hz had become unsynchronized (clock overshoot of %ld microseconds)", clk->kobject.obj_name, clk->freq_hz, -diff);
-
-			g_free(clk->next_trigger);
-			clk->next_trigger = NULL;
-		}
-
-		return true;
-	}
-
-	if (diff > MAXIMUM_SLEEP)
-	{
-		usleep(MAXIMUM_SLEEP);
-		return false;
-	}
-
-	//if we're here, diff is less than MAXIMUM_SLEEP
-	//just sleep it off
-	usleep(diff);
-
-	//increment the next_trigger timer
-	long useconds = (long)(1.0 / clk->freq_hz * 1000000.0);
-	g_time_val_add(clk->next_trigger, useconds);
-*/
-//	return true;
 }
 
 trigger_t * trigger_newclock(const char * name, double freq_hz)
@@ -292,9 +245,9 @@ static bool trigger_waitvarclock(void * object)
 
 block_inst_t * trigger_varclock_getblockinst(trigger_t * trigger)
 {
-	if (strcmp(trigger->kobject.obj_name + (strlen(trigger->kobject.obj_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
+	if (strcmp(trigger->kobject.object_name + (strlen(trigger->kobject.object_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
 	{
-		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.obj_name);
+		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.object_name);
 		return NULL;
 	}
 
@@ -304,9 +257,9 @@ block_inst_t * trigger_varclock_getblockinst(trigger_t * trigger)
 
 binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
 {
-	if (strcmp(trigger->kobject.obj_name + (strlen(trigger->kobject.obj_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
+	if (strcmp(trigger->kobject.object_name + (strlen(trigger->kobject.object_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
 	{
-		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.obj_name);
+		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.object_name);
 		return NULL;
 	}
 
@@ -326,7 +279,7 @@ binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
 
 	if (in == NULL)
 	{
-		LOGK(LOG_WARN, "Variable clock '%s' doesn't have a connected input!", clk->kobject.obj_name);
+		LOGK(LOG_WARN, "Variable clock '%s' doesn't have a connected input!", clk->kobject.object_name);
 	}
 
 	return in;
@@ -381,7 +334,7 @@ trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 	string_t str = string_new("%s " VARCLOCK_NAME, name);
 	trigger_varclock_t * clk = trigger_new(string_copy(&str), trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	clk->interval_nsec = hz2nanos(initial_freq_hz);
-	clk->block_inst = io_newblock(blk, NULL);
+	clk->block_inst = io_newblockinst(blk, NULL);
 
 	return (trigger_t *)clk;
 }
