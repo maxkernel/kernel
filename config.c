@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <kernel.h>
+#include <kernel-priv.h>
 
 cfgentry_t * cfg_getparam(const char * modname, const char * cfgname)
 {

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
 #include <aul/common.h>
 #include <aul/exception.h>
 
