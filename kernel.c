@@ -1148,10 +1148,10 @@ int main(int argc, char * argv[])
 
 	// Clear all the properties
 	{
-		hashentry_t * pos, * n;
+		list_t * pos, * n;
 		hashtable_foreach_safe(pos, n, &properties)
 		{
-			property_t * prop = hashtable_entry(pos, property_t, entry);
+			property_t * prop = hashtable_itrentry(pos, property_t, entry);
 			property_clear(prop->name);
 		}
 	}

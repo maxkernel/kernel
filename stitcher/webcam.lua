@@ -30,6 +30,6 @@ pipeline = newrategroup("Camera pipeline", { camera, jpegcompress, camerasink },
 
 
 -- Allow us to muck with the width/height and framerate through a syscall
-newsyscall("videoparams", {camera.width, camera.height, pipeline.rate})
+newsyscall("videoparams", {camera.width, camera.height, pipeline.rate}, nil)
 
 

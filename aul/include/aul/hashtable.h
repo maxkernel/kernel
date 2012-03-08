@@ -112,24 +112,24 @@ static inline list_t * hashtable_itr(hashtable_t * table)
 
 /**
  * hashtable_foreach	-	iterate over a hashtable in the order elements were added
- * @pos:	the &hashentry_t to use as a loop counter.
+ * @pos:	the &list_t to use as a loop counter.
  * @table:	the hashtable.
  */
 #define hashtable_foreach(pos, table) \
-		for ((pos) = list_entry((table)->iterator.next, hashentry_t, itr); \
-		&(pos)->itr != &(table)->iterator; \
-		(pos) = list_entry((pos)->itr.next, hashentry_t, itr))
+		for ((pos) = (table)->iterator.next; \
+		(pos) != &(table)->iterator; \
+		(pos) = (pos)->next)
 
 /**
  * hashtable_foreach_safe	-	iterate over a hashtable safe against removal of entry
- * @pos:	the &hashentry_t to use as a loop counter.
- * @n:		another &hashentry_t to use as temporary storage
+ * @pos:	the &list_t to use as a loop counter.
+ * @n:		another &list_t to use as temporary storage
  * @table:	the hashtable.
  */
 #define hashtable_foreach_safe(pos, n, table) \
-	for ((pos) = list_entry((table)->iterator.next, hashentry_t, itr), (n) = list_entry(pos->itr.next, hashentry_t, itr); \
-	&(pos)->itr != &(table)->iterator; \
-	(pos) = (n), (n) = list_entry((pos)->itr.next, hashentry_t, itr))
+	for ((pos) = (table)->iterator.next, (n) = (pos)->next; \
+	(pos) != &(table)->iterator; \
+	(pos) = (n), (n) = (pos)->next)
 
 
 // .c functions

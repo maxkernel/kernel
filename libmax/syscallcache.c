@@ -91,10 +91,10 @@ syscall_t * max_syscallcache_lookup(maxhandle_t * hand, exception_t ** err, cons
 		if (list_isempty(&cache->syscalls_free))
 		{
 			// No free syscall_t's, re-use one from cache. Find the oldest-accessed one
-			hashentry_t * pos = NULL;
+			list_t * pos = NULL;
 			hashtable_foreach(pos, &cache->syscalls)
 			{
-				syscall_t * cmp = hashtable_entry(pos, syscall_t, syscalls_entry);
+				syscall_t * cmp = hashtable_itrentry(pos, syscall_t, syscalls_entry);
 				if (syscall == NULL || cmp->last_access < syscall->last_access)
 				{
 					syscall = cmp;
