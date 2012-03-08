@@ -1,4 +1,4 @@
-SRCS		= exception.c log.c net.c serial.c string.c mainloop.c hashtable.c iterator.c crc.c
+SRCS		= exception.c log.c net.c serial.c string.c mainloop.c hashtable.c iterator.c crc.c base64.c
 OBJS		= $(SRCS:.c=.o)
 
 INCLUDES	= -Iinclude
