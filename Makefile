@@ -1,10 +1,4 @@
-
-#REMOVE PRIOR TO RELEASE
-ifeq ("$(shell whoami)", "dklofas")
-INSTALL		= /home/dklofas/Projects/maxkernel/src
-else
 INSTALL		= /usr/lib/maxkernel
-endif
 LOGDIR		= /var/log/maxkernel
 DBNAME		= kern-1.db
 CONFIG		= max.conf
@@ -21,11 +15,11 @@ HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 SRCS		= kernel.c meta.c module.c memfs.c path.c function.c syscall.c io.c syscallblock.c property.c config.c parse.c calibration.c buffer.c serialize.c trigger.c exec.c luaenv.c
 OBJS		= $(SRCS:.c=.o)
 PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
-INCLUDES	= -I. -Iaul/include $(shell pkg-config --cflags-only-I $(PACKAGES))
+INCLUDES	= -I. -Iaul/include -Ilibmodel/include $(shell pkg-config --cflags-only-I $(PACKAGES))
 DEFINES		= -D_GNU_SOURCE -DKERNEL -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\""
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
-LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul  -lbfd -ldl -lrt
-LFLAGS		= -Laul -Wl,--export-dynamic
+LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul -lmaxmodel -lbfd -ldl -lrt
+LFLAGS		= -Laul -Llibmodel -Wl,--export-dynamic
 
 TARGET		= maxkernel
 
@@ -58,6 +52,7 @@ install:
 	cp -f $(HEADERS) /usr/include/maxkernel
 	python maxconf.gen.py --install '$(INSTALL)' --model '$(MODEL)' >$(INSTALL)/$(CONFIG)
 	$(MAKE) -C aul install
+	$(MAKE) -C libmodel install
 	$(MAKE) -C libmax install
 	$(MAKE) -C testmax install
 	$(foreach util,$(UTILS), $(MAKE) -C utils -f Makefile.$(util) install &&) true
@@ -70,6 +65,7 @@ install:
 clean:
 	( $(foreach module,$(MODULES),$(MAKE) -C $(module) clean; ( cd $(module) && bash clean.part.bash );) ) || true
 	$(MAKE) -C aul clean
+	$(MAKE) -C libmodel clean
 	$(MAKE) -C libmax clean
 	$(MAKE) -C testmax clean
 	$(foreach util,$(UTILS), $(MAKE) -C utils -f Makefile.$(util) clean &&) true
@@ -80,6 +76,7 @@ rebuild: clean all
 depend: $(SRCS)
 	makedepend $(DEFINES) $(INCLUDES) $^ 2>/dev/null
 	$(MAKE) -C aul depend
+	$(MAKE) -C libmodel depend
 	$(MAKE) -C testmax depend
 
 prepare:
@@ -87,6 +84,7 @@ prepare:
 
 prereq: prepare
 	( echo "In aul" >>buildlog && $(MAKE) -C aul all 2>>buildlog ) || ( cat buildlog && false )
+	( echo "In model" >>buildlog && $(MAKE) -C libmodel all 2>>buildlog ) || ( cat buildlog && false )
 
 .c.o:
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c $< -o $@ 2>>buildlog || ( cat buildlog && false )

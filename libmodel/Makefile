@@ -1,10 +1,10 @@
-SRCS		= libmax.c syscallcache.c serialize.c message.c
-TARGET		= libmax.so
+SRCS		= meta.c
+TARGET		= libmaxmodel.so
 PACKAGES	= 
-INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../console -I../console/include
-DEFINES		= -DLIBMAX -D_GNU_SOURCE
+INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include
+DEFINES		= -DLIBMAXMODEL -DUSE_BFD
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
-LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lrt
+LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lbfd
 LFLAGS		= -shared -L../aul
 
 OBJS		= $(SRCS:.c=.o)
@@ -15,22 +15,19 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
-	$(MAKE) -C lua all
 
 test: test.o
-	$(CC) -o test test.o -L. -lmax -L../aul -laul
+	$(CC) -o test test.o -L. -lmaxmodel -L../aul -laul
+	rm test.o
 
 install:
-	mkdir -p /usr/include/max
 	cp -f $(TARGET) /usr/lib
-	cp -f include/*.h /usr/include/max
+	cp -f include/*.h /usr/include
 	ldconfig
-	$(MAKE) -C lua install
 
 clean:
 	rm -f $(OBJS) $(TARGET)
 	rm -f test test.o
-	$(MAKE) -C lua clean
 
 rebuild: clean all
 
@@ -39,7 +36,4 @@ rebuild: clean all
 
 %.o: ../%.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../$*.c -o $*.o
-
-%.o: ../console/%.c
-	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../console/$*.c -o $*.o
 

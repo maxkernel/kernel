@@ -26,6 +26,7 @@ extern "C" {
 #undef  UNLIKELY
 #define UNLIKELY(x)     __builtin_expect(!!(x), 0)
 
+// TODO - make these lower case
 #undef	MAX
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 
