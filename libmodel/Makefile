@@ -1,4 +1,4 @@
-SRCS		= meta.c
+SRCS		= meta.c model.c
 TARGET		= libmaxmodel.so
 PACKAGES	= 
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include

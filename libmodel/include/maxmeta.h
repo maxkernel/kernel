@@ -1,7 +1,6 @@
 #ifndef __MAX_META_H
 #define __MAX_META_H
 
-//#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -12,6 +11,7 @@
 extern "C" {
 #endif
 
+#define META_SIZE_PATH					1024
 #define META_SIZE_ANNOTATE				50
 #define META_SIZE_DEPENDENCY			50
 #define META_SIZE_LONGDESCRIPTION		200
@@ -42,39 +42,39 @@ typedef void * meta_variable_m;
 
 typedef enum
 {
-	m_none			= 0x00,
+	meta_none			= 0x00,
 
-	m_name			= 0x10,
-	m_version,
-	m_author,
-	m_description,
-	m_dependency,
+	meta_name			= 0x10,
+	meta_version,
+	meta_author,
+	meta_description,
+	meta_dependency,
 
-	m_init			= 0x20,
-	m_destroy,
-	m_preactivate,
-	m_postactivate,
+	meta_init			= 0x20,
+	meta_destroy,
+	meta_preactivate,
+	meta_postactivate,
 
-	m_syscall		= 0x30,
+	meta_syscall		= 0x30,
 
-	m_configparam	= 0x40,
+	meta_configparam	= 0x40,
 
-	m_calparam		= 0x50,
-	m_calmodechange,
-	m_calpreview,
+	meta_calparam		= 0x50,
+	meta_calmodechange,
+	meta_calpreview,
 
-	m_block			= 0x60,
-	m_blockupdate,
-	m_blockdestroy,
-	m_blockinput,
-	m_blockoutput,
+	meta_block			= 0x60,
+	meta_blockupdate,
+	meta_blockdestroy,
+	meta_blockinput,
+	meta_blockoutput,
 
 } metatype_t;
 
 typedef enum
 {
-	m_input			= 'I',
-	m_output		= 'O',
+	meta_input			= 'I',
+	meta_output			= 'O',
 } metaiotype_t;
 
 typedef struct
@@ -183,14 +183,13 @@ typedef struct
 } meta_blockio_t;
 
 
-#define ___meta_name(a, b)					__ ## a ## __ ## b
-#define __meta_name(a, b)					___meta_name(a, b)
+#define ___meta_name(a, b, c)				__ ## a ## ___ ## b ## _ ## c
+#define __meta_name(a, b, c)				___meta_name(a, b, c)
 #define __meta_head(s, t)					{ (s), (t) }
-#define __meta_intro(type, code)			static const type __meta_name(code,__LINE__) __attribute__((section(".meta"),unused,aligned(1)))
+#define __meta_intro(type, code)			static const type __meta_name(code,__LINE__, __COUNTER__) __attribute__((section(".meta"),unused,aligned(1)))
 #define __meta_write(type, code, ...)		__meta_intro(type, code) = { __meta_head(sizeof(type), code), __VA_ARGS__ }
 #define __meta_cbwrite(type, code, a,b,c, ...)		__meta_intro(type, code) = {{ __meta_head(sizeof(type), code), a,b,c }, __VA_ARGS__ }
 
-// TODO - fill all these in!!
 #define meta_sizemax \
 	(MAX(sizeof(meta_annotate_t),			\
 	 MAX(sizeof(meta_version_t),			\
@@ -203,37 +202,39 @@ typedef struct
 	 sizeof(meta_blockio_t)					\
 	 )))))))))
 
-#define module_name(name)					__meta_write(meta_annotate_t, m_name, (name))
-#define module_version(version)				__meta_write(meta_version_t, m_version, (version))
-#define module_author(author)				__meta_write(meta_annotate_t, m_author, (author))
-#define module_description(description)		__meta_write(meta_description_t, m_description, (description))
-#define module_dependency(dependency)		__meta_write(meta_dependency_t, m_dependency, (dependency))
+#define module_name(name)					__meta_write(meta_annotate_t, meta_name, (name))
+#define module_version(version)				__meta_write(meta_version_t, meta_version, (version))
+#define module_author(author)				__meta_write(meta_annotate_t, meta_author, (author))
+#define module_description(description)		__meta_write(meta_description_t, meta_description, (description))
+#define module_dependency(dependency)		__meta_write(meta_dependency_t, meta_dependency, (dependency))
 
-#define module_oninitialize(function)		__meta_cbwrite(meta_callback_bv_t, m_init, (#function), "b:v", "", (function))
-#define module_ondestroy(function)			__meta_cbwrite(meta_callback_vv_t, m_destroy, (#function), "v:v", "", (function))
-#define module_onpreactivate(function)		__meta_cbwrite(meta_callback_vv_t, m_preactivate, (#function), "v:v", "", (function))
-#define module_onpostactivate(function)		__meta_cbwrite(meta_callback_vv_t, m_postactivate, (#function), "v:v", "", (function))
+#define module_oninitialize(function)		__meta_cbwrite(meta_callback_bv_t, meta_init, (#function), "b:v", "", (function))
+#define module_ondestroy(function)			__meta_cbwrite(meta_callback_vv_t, meta_destroy, (#function), "v:v", "", (function))
+#define module_onpreactivate(function)		__meta_cbwrite(meta_callback_vv_t, meta_preactivate, (#function), "v:v", "", (function))
+#define module_onpostactivate(function)		__meta_cbwrite(meta_callback_vv_t, meta_postactivate, (#function), "v:v", "", (function))
 
-#define define_syscall(function, sig, desc)		__meta_cbwrite(meta_callback_t, m_syscall, (#function), (sig), (desc), (meta_callback_f)(function))
+#define define_syscall(function, sig, desc)		__meta_cbwrite(meta_callback_t, meta_syscall, (#function), (sig), (desc), (meta_callback_f)(function))
 
-#define config_param(variable, sig, desc)		__meta_write(meta_variable_t, m_configparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
+#define config_param(variable, sig, desc)		__meta_write(meta_variable_t, meta_configparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
 
-#define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, m_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
-#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, m_calmodechange, (#function), "v:i", "", (function))
-#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, m_calpreview, (#function), "b:scpp", "", (function))
+#define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, meta_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
+#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calmodechange, (#function), "v:i", "", (function))
+#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calpreview, (#function), "b:scpp", "", (function))
 
 #define define_block(block_name, block_desc, constructor, sig, constructor_desc) \
-												__meta_write(meta_block_t, m_block, (#block_name), (block_desc), (#constructor), (sig), (constructor_desc), (meta_callback_f)(constructor))
-#define block_onupdate(block_name, function)	__meta_cbwrite(meta_blockcallback_t, m_blockupdate, (#function), "v:p", "", (#block_name), (function))
-#define block_ondestroy(block_name, function)	__meta_cbwrite(meta_blockcallback_t, m_blockdestroy, (#function), "v:p", "", (#block_name), (function))
+												__meta_write(meta_block_t, meta_block, (#block_name), (block_desc), (#constructor), (sig), (constructor_desc), (meta_callback_f)(constructor))
+#define block_onupdate(block_name, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockupdate, (#function), "v:p", "", (#block_name), (function))
+#define block_ondestroy(block_name, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockdestroy, (#function), "v:p", "", (#block_name), (function))
 #define block_input(block_name, input_name, sig, desc) \
-												__meta_write(meta_blockio_t, m_blockinput, (#block_name), (#input_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockinput, (#block_name), (#input_name), (sig), (desc))
 #define block_output(block_name, output_name, sig, desc) \
-												__meta_write(meta_blockio_t, m_blockoutput, (#block_name), (#output_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockoutput, (#block_name), (#output_name), (sig), (desc))
 
+#define __meta_struct_version				1.0
 
 typedef struct
 {
+	char path[META_SIZE_PATH] __meta_a1;
 	char name[META_SIZE_ANNOTATE] __meta_a1;
 	double version __meta_a1;
 	char author[META_SIZE_ANNOTATE] __meta_a1;
@@ -308,8 +309,17 @@ typedef struct
 } meta_t;
 
 #if defined(USE_BFD)
-bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err);
+meta_t * meta_parseelf(const char * path, exception_t ** err);
 #endif
+
+meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err);
+size_t meta_encodebase64(meta_t * meta, const char * to, size_t length);
+
+meta_t * meta_copy(meta_t * meta);
+void meta_free(meta_t * meta);
+
+bool meta_getblock(const meta_t * meta, const char * blockname, char * const * constructor_sig, size_t * ios_length);
+bool meta_getblockios(const meta_t * meta, const char * blockname, char * const * names, const metaiotype_t * types, const char * sigs, size_t length);
 
 #ifdef __cplusplus
 }

@@ -24,8 +24,8 @@
 #include <aul/iterator.h>
 #include <aul/mutex.h>
 
+#include <compiler.h>
 #include <buffer.h>
-
 #include <kernel.h>
 #include <kernel-priv.h>
 
@@ -790,6 +790,14 @@ int main(int argc, char * argv[])
 		LOGK(LOG_FATAL, "Must be root!");
 	}
 
+	// Runtime check for hard-requirements on kernel
+	{
+		if(*(int32_t *)"\200\0\0\0\0\0\0\0" < 0)
+		{
+			LOGK(LOG_FATAL, "Failed little-endian runtime check!");
+		}
+	}
+
 	// Set up the working directory to the install dir
 	chdir(INSTALL);
 	path_set(".", NULL);
@@ -862,7 +870,7 @@ int main(int argc, char * argv[])
 
 	// Do some basic logging
 	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
-	LOGK(LOG_DEBUG, "Kernel compiled %s %s", __DATE__, __TIME__);
+	LOGK(LOG_DEBUG, "Kernel compiled on %s with compiler version %s", __TIMESTAMP__, __VERSION__);
 	{
 		// Log time
 		char timebuf[50];

@@ -2,34 +2,33 @@
 #include <string.h>
 #include <errno.h>
 
+#include <aul/base64.h>
 #include <maxmeta.h>
 
-// TODO - remove before commit
-#ifndef USE_BFD
-#define USE_BFD
-#endif
 
 #if defined(USE_BFD)
 #include <bfd.h>
 
-bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
+meta_t * meta_parseelf(const char * path, exception_t ** err)
 {
 	LABELS(end);
 
 	// Sanity check
 	if (exception_check(err))
 	{
-		return false;
+		return NULL;
 	}
 
+	bool status = false;
+	meta_t * meta = malloc(sizeof(meta_t));
 	memset(meta, 0, sizeof(meta_t));
-	bool rval = false;
+	strncpy(meta->path, path, META_SIZE_PATH);
 
 	bfd * abfd = bfd_openr(path, NULL);
 	if (abfd == NULL)
 	{
 		exception_set(err, EACCES, "Error reading meta information: %s", bfd_errmsg(bfd_get_error()));
-		return false;
+		return NULL;
 	}
 
 	{
@@ -44,7 +43,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 		{
 			// TODO - should we allow this? If the section doesn't exist, we might want to error ?!?
 			// Section doesn't exist, nothing to do
-			rval = true;
+			status = true;
 			goto end;
 		}
 
@@ -75,22 +74,22 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 
 				switch (head->type)
 				{
-					case m_name:
-					case m_author:
+					case meta_name:
+					case meta_author:
 					{
 						const char * switch_name = NULL;
 						char * name = NULL;
 
 						switch (head->type)
 						{
-							case m_name:
+							case meta_name:
 							{
 								switch_name = "name";
 								name = &meta->name[0];
 								break;
 							}
 
-							case m_author:
+							case meta_author:
 							{
 								switch_name = "author";
 								name = &meta->author[0];
@@ -116,7 +115,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_version:
+					case meta_version:
 					{
 						if (meta->version != 0.0)
 						{
@@ -130,7 +129,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_description:
+					case meta_description:
 					{
 						if (meta->description[0] != '\0')
 						{
@@ -144,7 +143,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_dependency:
+					case meta_dependency:
 					{
 						metasize_t i = 0;
 						for (; i < META_MAX_DEPENDENCIES; i++)
@@ -168,7 +167,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_init:
+					case meta_init:
 					{
 						if (meta->init_name[0] != '\0')
 						{
@@ -189,9 +188,9 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_destroy:
-					case m_preactivate:
-					case m_postactivate:
+					case meta_destroy:
+					case meta_preactivate:
+					case meta_postactivate:
 					{
 						const char * switch_name = NULL;
 						char * name = NULL;
@@ -199,7 +198,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 
 						switch (head->type)
 						{
-							case m_destroy:
+							case meta_destroy:
 							{
 								switch_name = "destroy";
 								name = &meta->destroy_name[0];
@@ -207,7 +206,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 								break;
 							}
 
-							case m_preactivate:
+							case meta_preactivate:
 							{
 								switch_name = "preactivate";
 								name = &meta->preact_name[0];
@@ -215,7 +214,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 								break;
 							}
 
-							case m_postactivate:
+							case meta_postactivate:
 							{
 								switch_name = "postactivate";
 								name = &meta->postact_name[0];
@@ -249,7 +248,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_syscall:
+					case meta_syscall:
 					{
 						metasize_t i = 0;
 						for (; i < META_MAX_SYSCALLS; i++)
@@ -276,9 +275,11 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_configparam:
-					case m_calparam:
+					case meta_configparam:
+					case meta_calparam:
 					{
+						// TODO - make this switch statement better! (not my best work)
+
 						const char * switch_name = NULL;
 						char * elems = NULL;
 						size_t elem_size = 0;
@@ -287,7 +288,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 
 						switch (head->type)
 						{
-							case m_configparam:
+							case meta_configparam:
 							{
 								switch_name = "config param";
 								elems = (char *)&meta->configparams[0];
@@ -297,7 +298,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 								break;
 							}
 
-							case m_calparam:
+							case meta_calparam:
 							{
 								switch_name = "cal param";
 								elems = (char *)&meta->calparams[0];
@@ -326,7 +327,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 
 								switch (head->type)
 								{
-									case m_configparam:
+									case meta_configparam:
 									{
 										name = &meta->configparams[i].config_name[0];
 										sig = &meta->configparams[i].config_signature;
@@ -335,7 +336,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 										break;
 									}
 
-									case m_calparam:
+									case meta_calparam:
 									{
 										name = &meta->calparams[i].cal_name[0];
 										sig = &meta->calparams[i].cal_signature;
@@ -372,7 +373,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_calmodechange:
+					case meta_calmodechange:
 					{
 						if (meta->cal_modechange_name[0] != '\0')
 						{
@@ -393,7 +394,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_calpreview:
+					case meta_calpreview:
 					{
 						if (meta->cal_preview_name[0] != '\0')
 						{
@@ -414,7 +415,7 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_block:
+					case meta_block:
 					{
 						metasize_t i = 0;
 						for (; i < META_MAX_BLOCKS; i++)
@@ -443,20 +444,20 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_blockupdate:
-					case m_blockdestroy:
+					case meta_blockupdate:
+					case meta_blockdestroy:
 					{
 						const char * switch_name = NULL;
 
 						switch (head->type)
 						{
-							case m_blockupdate:
+							case meta_blockupdate:
 							{
 								switch_name = "block update";
 								break;
 							}
 
-							case m_blockdestroy:
+							case meta_blockdestroy:
 							{
 								switch_name = "block destroy";
 								break;
@@ -487,14 +488,14 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 
 								switch (head->type)
 								{
-									case m_blockupdate:
+									case meta_blockupdate:
 									{
 										name = &meta->blocks[i].update_name[0];
 										function = &meta->blocks[i].update;
 										break;
 									}
 
-									case m_blockdestroy:
+									case meta_blockdestroy:
 									{
 										name = &meta->blocks[i].destroy_name[0];
 										function = &meta->blocks[i].destroy;
@@ -529,25 +530,25 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 						break;
 					}
 
-					case m_blockinput:
-					case m_blockoutput:
+					case meta_blockinput:
+					case meta_blockoutput:
 					{
 						const char * switch_name = NULL;
 						metaiotype_t type;
 
 						switch (head->type)
 						{
-							case m_blockinput:
+							case meta_blockinput:
 							{
 								switch_name = "block input";
-								type = m_input;
+								type = meta_input;
 								break;
 							}
 
-							case m_blockoutput:
+							case meta_blockoutput:
 							{
 								switch_name = "block output";
-								type = m_output;
+								type = meta_output;
 								break;
 							}
 
@@ -623,12 +624,66 @@ bool meta_parseelf(meta_t * meta, const char * path, exception_t ** err)
 		}
 
 		// Horray! We parsed everything
-		rval = true;
+		status = true;
 	}
 
 end:
 	bfd_close(abfd);
-	return rval;
+	if (!status)
+	{
+		// We're here in error, free meta and return null
+		free(meta);
+		return NULL;
+	}
+
+	return meta;
 }
 
 #endif
+
+
+meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err)
+{
+	// TODO - finish me
+	// TODO - make sure to check the meta_version against __meta_struct_version
+
+	return NULL;
+}
+
+size_t meta_encodebase64(meta_t * meta, const char * to, size_t length)
+{
+	// TODO - finish me
+	//return base64_encode((void *)meta, sizeof(meta_t), to, length);
+
+	return 0;
+}
+
+
+meta_t * meta_copy(meta_t * meta)
+{
+	meta_t * newmeta = malloc(sizeof(meta_t));
+	memcpy(newmeta, meta, sizeof(meta_t));
+	return newmeta;
+}
+
+void meta_free(meta_t * meta)
+{
+	// Sanity check
+	if (meta == NULL)
+	{
+		return;
+	}
+
+	free(meta);
+}
+
+
+bool meta_getblock(const meta_t * meta, const char * blockname, char * const * constructor_sig, size_t * ios_length)
+{
+	return false;
+}
+
+bool meta_getblockios(const meta_t * meta, const char * blockname, char * const * names, const metaiotype_t * types, const char * sigs, size_t length)
+{
+	return false;
+}
