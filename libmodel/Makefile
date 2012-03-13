@@ -17,8 +17,12 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
 test: test.o
-	$(CC) -o test test.o -L. -lmaxmodel -L../aul -laul
+	$(CC) -o test test.o -L. -lmaxmodel -L../aul -laul -ldl -rdynamic
 	rm test.o
+
+test2: test2.o
+	$(CC) -o libtest2.so test2.o -L. -lmaxmodel -L../aul -laul -shared -fpic
+	rm test2.o
 
 install:
 	cp -f $(TARGET) /usr/lib

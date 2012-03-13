@@ -1,93 +1,81 @@
 #include <stdio.h>
 #include <string.h>
+#include <dlfcn.h>
 
 #include <maxmeta.h>
 
 
-bool mod_init()
+meta_t * m = NULL;
+
+void __meta_init_(const meta_begin_t * begin)
 {
-	printf("Init!\n");
-	return true;
+	memcpy(m->buffer, begin, m->section_size);
 }
 
-void mod_destroy()
+__meta_begin_callback __meta_init = __meta_init_;
+
+
+void print_meta(meta_t * m)
 {
-	printf("Destroy!\n");
-}
+	printf("-------------------------------\n");
+	printf("Path: %s\n", m->path);
+	printf("Name: %s\n", m->name->name);
 
-void mod_preact()
-{
-	printf("Preact!\n");
-}
+	string_t v = version_tostring(m->version->version);
+	printf("Version: %s\n", v.string);
+	printf("Author: %s\n", m->author->name);
+	printf("Description: %s\n", m->description->description);
 
-void mod_postact()
-{
-	printf("Postact!\n");
-}
+	meta_dependency_t * dependency = NULL;
+	meta_foreach(dependency, m->dependencies, META_MAX_DEPENDENCIES)
+	{
+		printf("-- Dependency: %s\n", dependency->dependency);
+	}
 
-int new_syscall(const char * str, char c)
-{
-	return 0;
-}
+	printf("Init: %s -> %zx\n", m->init->callback.function_name, (size_t)m->init->function);
+	printf("Destroy: %s -> %zx\n", m->destroy->callback.function_name, (size_t)m->destroy->function);
+	printf("Preact: %s -> %zx\n", m->preact->callback.function_name, (size_t)m->preact->function);
+	printf("Postact: %s -> %zx\n", m->postact->callback.function_name, (size_t)m->postact->function);
 
-int cfg_param = 6;
-int cal_param = 7;
+	meta_callback_t * syscall = NULL;
+	meta_foreach(syscall, m->syscalls, META_MAX_SYSCALLS)
+	{
+		printf("-- Syscall: %s (%s) %s -> %zx\n", syscall->callback.function_name, syscall->callback.function_signature, syscall->callback.function_description, (size_t)syscall->function);
+	}
 
-void cal_modechange(int newmode)
-{
-
-}
-
-bool cal_preview(const char * name, const char sig, void * oldval, void * newval)
-{
-	return false;
-}
-
-void * tblock_new(bool v1, int v2, double v3)
-{
-	return NULL;
-}
-
-void tblock_update(void * object)
-{
-
-}
-
-void tblock_destroy(void * object)
-{
-
-}
-
-module_name("Test Module");
-module_version(3.5);
-module_author("Andrew Klofas <andrew@maxkernel.com>");
-module_description("This is a description");
-module_dependency("dependency1");
-
-module_oninitialize(mod_init);
-module_ondestroy(mod_destroy);
-module_onpreactivate(mod_preact);
-module_onpostactivate(mod_postact);
-
-define_syscall(new_syscall, "i:sc", "The syscall description");
-
-config_param(cfg_param, 'i', "Config param desc");
-
-cal_param(cal_param, 'i', "Cal param desc");
-cal_onmodechange(cal_modechange);
-cal_onpreview(cal_preview);
-
-define_block(test_block, "Test block desc", tblock_new, "v:bid", "Constructor desc");
-block_onupdate(test_block, tblock_update);
-block_ondestroy(test_block, tblock_destroy);
-block_input(test_block, tinput1, 'i', "Input 1 desc");
-block_input(test_block, tinput, 'b', "Input 2 desc");
-block_output(test_block, toutput1, 's', "Output 1 desc");
+	//meta_variable_t * config_param = NULL;
 
 
-void func(char array[10])
-{
-	array = "Hello Wor";
+	/*
+
+	printf("Config params: %d\n", m->configparams_length);
+	for (size_t i = 0; i < m->configparams_length; i++)
+	{
+		printf("(%zu) Config param: %s (%c) %s -> %zx\n", i, m->configparams[i].config_name, m->configparams[i].config_signature, m->configparams[i].config_description, (size_t)m->configparams[i].variable);
+	}
+
+	printf("Cal modechange: %s -> %zx\n", m->cal_modechange_name, (size_t)m->cal_modechange);
+	printf("Cal preview: %s -> %zx\n", m->cal_preview_name, (size_t)m->cal_preview);
+	printf("Cal params: %d\n", m->calparams_length);
+	for (size_t i = 0; i < m->configparams_length; i++)
+	{
+		printf("(%zu) Cal param: %s (%c) %s -> %zx\n", i, m->calparams[i].cal_name, m->calparams[i].cal_signature, m->calparams[i].cal_description, (size_t)m->calparams[i].variable);
+	}
+
+	printf("Blocks: %d\n", m->blocks_length);
+	for (size_t i = 0; i < m->blocks_length; i++)
+	{
+		printf("(%zu) Block: %s %s\n", i, m->blocks[i].block_name, m->blocks[i].block_description);
+		printf("(%zu) Constructor: %s (%s) %s -> %zx\n", i, m->blocks[i].constructor_name, m->blocks[i].constructor_signature, m->blocks[i].constructor_description, (size_t)m->blocks[i].constructor);
+		printf("(%zu) Block funcs: %s -> %zx, %s -> %zx\n", i, m->blocks[i].update_name, (size_t)m->blocks[i].update, m->blocks[i].destroy_name, (size_t)m->blocks[i].destroy);
+
+		printf("Ios: %d\n", m->blocks[i].ios_length);
+		for (size_t j = 0; j < m->blocks[i].ios_length; j++)
+		{
+			printf("(%zu) %c %s (%c) %s\n", j, (char)m->blocks[i].ios[j].io_type, m->blocks[i].ios[j].io_name, m->blocks[i].ios[j].io_signature, m->blocks[i].ios[j].io_description);
+		}
+	}
+	*/
 }
 
 int main()
@@ -95,15 +83,8 @@ int main()
 	printf("Begin\n");
 	printf("Size of meta_t: %zu\n", sizeof(meta_t));
 
-	char foo[10] = "123456789";
-	printf("%s\n", foo);
-	func(foo);
-	printf("%s\n", foo);
-
-	return 0;
-
 	exception_t * e = NULL;
-	meta_t * m = meta_parseelf("test", &e);
+	m = meta_parseelf("libtest2.so", &e);
 	if (m == NULL)
 	{
 		if (e != NULL)
@@ -118,58 +99,19 @@ int main()
 		return -1;
 	}
 
-	printf("Path: %s\n", m->path);
-	printf("Name: %s\n", m->name);
-	printf("Version: %f\n", m->version);
-	printf("Author: %s\n", m->author);
-	printf("Description: %s\n", m->description);
+	printf("Size of section: %zu\n", m->section_size);
+	print_meta(m);
 
-	printf("Dependencies: %d\n", m->dependencies_length);
-	for (size_t i = 0; i < m->dependencies_length; i++)
+	// TODO - find out if we can do RTLD_LOCAL
+	void * d = dlopen("libtest2.so", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+	if (d == NULL)
 	{
-		printf("(%zu) Dependency: %s\n", i, m->dependencies[i]);
+		printf("* Fail dl: %s\n", dlerror());
 	}
 
-	printf("Init: %s -> %zu\n", m->init_name, (size_t)m->init);
-	printf("Destroy: %s -> %zu\n", m->destroy_name, (size_t)m->destroy);
-	printf("Preact: %s -> %zu\n", m->preact_name, (size_t)m->preact);
-	printf("Postact: %s -> %zu\n", m->postact_name, (size_t)m->postact);
-
-	printf("Syscalls: %d\n", m->syscalls_length);
-	for (size_t i = 0; i < m->syscalls_length; i++)
-	{
-		printf("(%zu) Syscall: %s (%s) %s -> %zu\n", i, m->syscalls[i].syscall_name, m->syscalls[i].syscall_signature, m->syscalls[i].syscall_description, (size_t)m->syscalls[i].function);
-	}
-
-	printf("Config params: %d\n", m->configparams_length);
-	for (size_t i = 0; i < m->configparams_length; i++)
-	{
-		printf("(%zu) Config param: %s (%c) %s -> %zu\n", i, m->configparams[i].config_name, m->configparams[i].config_signature, m->configparams[i].config_description, (size_t)m->configparams[i].variable);
-	}
-
-	printf("Cal modechange: %s -> %zu\n", m->cal_modechange_name, (size_t)m->cal_modechange);
-	printf("Cal preview: %s -> %zu\n", m->cal_preview_name, (size_t)m->cal_preview);
-	printf("Cal params: %d\n", m->calparams_length);
-	for (size_t i = 0; i < m->configparams_length; i++)
-	{
-		printf("(%zu) Cal param: %s (%c) %s -> %zu\n", i, m->calparams[i].cal_name, m->calparams[i].cal_signature, m->calparams[i].cal_description, (size_t)m->calparams[i].variable);
-	}
-
-	printf("Blocks: %d\n", m->blocks_length);
-	for (size_t i = 0; i < m->blocks_length; i++)
-	{
-		printf("(%zu) Block: %s %s\n", i, m->blocks[i].block_name, m->blocks[i].block_description);
-		printf("(%zu) Constructor: %s (%s) %s -> %zu\n", i, m->blocks[i].constructor_name, m->blocks[i].constructor_signature, m->blocks[i].constructor_description, (size_t)m->blocks[i].constructor);
-		printf("(%zu) Block funcs: %s -> %zu, %s -> %zu\n", i, m->blocks[i].update_name, (size_t)m->blocks[i].update, m->blocks[i].destroy_name, (size_t)m->blocks[i].destroy);
-
-		printf("Ios: %d\n", m->blocks[i].ios_length);
-		for (size_t j = 0; j < m->blocks[i].ios_length; j++)
-		{
-			printf("(%zu) %c %s (%c) %s\n", j, (char)m->blocks[i].ios[j].io_type, m->blocks[i].ios[j].io_name, m->blocks[i].ios[j].io_signature, m->blocks[i].ios[j].io_description);
-		}
-	}
-
+	print_meta(m);
 	meta_free(m);
+
 	return 0;
 }
 

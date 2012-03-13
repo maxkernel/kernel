@@ -3,7 +3,7 @@
  */
 
 
-// 1) Make sure int and double are 4 bytes
+// 1) Make sure int and double are 4 and 8 bytes respectively
 #if __SIZEOF_INT__ != 4
 	#error Size of integer incompatible. Must be 4 bytes!
 #endif

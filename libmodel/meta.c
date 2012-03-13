@@ -14,15 +14,19 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 	LABELS(end);
 
 	// Sanity check
-	if (exception_check(err))
 	{
-		return NULL;
+		if (exception_check(err))
+		{
+			return NULL;
+		}
+
+		if (strlen(path) >= META_SIZE_PATH)
+		{
+			exception_set(err, ENOMEM, "Path length too long (META_SIZE_PATH = %d)", META_SIZE_PATH);
+			return NULL;
+		}
 	}
 
-	bool status = false;
-	meta_t * meta = malloc(sizeof(meta_t));
-	memset(meta, 0, sizeof(meta_t));
-	strncpy(meta->path, path, META_SIZE_PATH);
 
 	bfd * abfd = bfd_openr(path, NULL);
 	if (abfd == NULL)
@@ -31,6 +35,13 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 		return NULL;
 	}
 
+	bool status = false;
+	meta_t * meta = malloc(sizeof(meta_t));
+	memset(meta, 0, sizeof(meta_t));
+
+	meta->meta_version = __meta_struct_version;
+	strncpy(meta->path, path, META_SIZE_PATH);
+
 	{
 		if (!bfd_check_format(abfd, bfd_object))
 		{
@@ -38,606 +49,186 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 			goto end;
 		}
 
+		// Get meta section
 		asection * sect = bfd_get_section_by_name(abfd, ".meta");
 		if (sect == NULL)
 		{
-			// TODO - should we allow this? If the section doesn't exist, we might want to error ?!?
-			// Section doesn't exist, nothing to do
-			status = true;
+			exception_set(err, EINVAL, "Meta section for file %s doesn't exist! (Invalid module object)", path);
 			goto end;
 		}
 
-		size_t section_length = bfd_get_section_size(sect);
-		size_t section_index = 0;
-
-		size_t buffer_length = meta_sizemax;
-		size_t buffer_index = 0;
-		uint8_t buffer[buffer_length];
-
-		while (section_index < section_length)
+		// Get the size of the meta section
+		meta->section_size = bfd_get_section_size(sect);
+		if (meta->section_size < sizeof(meta_begin_t))
 		{
-			size_t read_length = MIN(buffer_length - buffer_index, section_length - section_index);
-			if (!bfd_get_section_contents(abfd, sect, buffer + buffer_index, section_index, read_length))
+			exception_set(err, EINVAL, "Meta section too small!");
+			goto end;
+		}
+
+		// Read in the meta section
+		meta->buffer = malloc(meta->section_size);
+		if (!bfd_get_section_contents(abfd, sect, meta->buffer, 0, meta->section_size))
+		{
+			exception_set(err, EINVAL, "Could not read meta section: %s", bfd_errmsg(bfd_get_error()));
+			goto end;
+		}
+
+		// Verify the first few bytes of the meta section (which should be a meta_begin_t struct)
+		{
+			meta_begin_t * begin = (meta_begin_t *)meta->buffer;
+			if (begin->head.size != sizeof(meta_begin_t) || begin->head.type != meta_begin || begin->special != __meta_special)
 			{
-				exception_set(err, EINVAL, "Could not read meta section: %s", bfd_errmsg(bfd_get_error()));
+				exception_set(err, EINVAL, "Unknown start of meta section! [Meta section must begin with meta_name(...)]");
 				goto end;
 			}
+		}
 
-			buffer_index += read_length;
-			section_index += read_length;
+		// Now parse through the meta section
+		size_t buffer_index = 0;
+		size_t struct_index = 0;
+		while (buffer_index < meta->section_size && struct_index < META_MAX_STRUCTS)
+		{
+			metahead_t * head = (metahead_t *)&meta->buffer[buffer_index];
+			meta->buffer_indexes[struct_index] = head;
+			meta->buffer_layout[struct_index] = head->type;
 
-			// Process as many items in this buffer as possible
-			metahead_t * head = (metahead_t *)buffer;
-			while (buffer_index > 0 && head->size <= buffer_index)
+
+			switch (head->type)
 			{
-				size_t struct_length = 0;
-
-				switch (head->type)
+				case meta_begin:
+				case meta_name:
+				case meta_version:
+				case meta_author:
+				case meta_description:
+				case meta_init:
+				case meta_destroy:
+				case meta_preactivate:
+				case meta_postactivate:
+				case meta_calmodechange:
+				case meta_calpreview:
 				{
-					case meta_name:
-					case meta_author:
+					const char * name = NULL;
+					void ** meta_location = NULL;
+
+					switch (head->type)
 					{
-						const char * switch_name = NULL;
-						char * name = NULL;
-
-						switch (head->type)
+						case meta_begin:			name = "meta_begin";			meta_location = (void **)&meta->begin;			break;
+						case meta_name:				name = "meta_name";				meta_location = (void **)&meta->name;			break;
+						case meta_version:			name = "meta_version";			meta_location = (void **)&meta->version;		break;
+						case meta_author:			name = "meta_author";			meta_location = (void **)&meta->author;			break;
+						case meta_description:		name = "meta_description";		meta_location = (void **)&meta->description;	break;
+						case meta_init:				name = "meta_init";				meta_location = (void **)&meta->init;			break;
+						case meta_destroy:			name = "meta_destroy";			meta_location = (void **)&meta->destroy;		break;
+						case meta_preactivate:		name = "meta_preactivate";		meta_location = (void **)&meta->preact;			break;
+						case meta_postactivate:		name = "meta_postactivate";		meta_location = (void **)&meta->postact;		break;
+						case meta_calmodechange:	name = "meta_calmodechange";	meta_location = (void **)&meta->cal_modechange;	break;
+						case meta_calpreview:		name = "meta_calpreview";		meta_location = (void **)&meta->cal_preview;	break;
+						default:
 						{
-							case meta_name:
-							{
-								switch_name = "name";
-								name = &meta->name[0];
-								break;
-							}
-
-							case meta_author:
-							{
-								switch_name = "author";
-								name = &meta->author[0];
-								break;
-							}
-
-							default:
-							{
-								exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-								goto end;
-							}
-						}
-
-						if (name[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate %s entries!", switch_name);
+							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
 							goto end;
 						}
-
-						struct_length = sizeof(meta_annotate_t);
-						meta_annotate_t * annotate = (meta_annotate_t *)head;
-						strncpy(name, annotate->name, META_SIZE_ANNOTATE-1);
-						break;
 					}
 
-					case meta_version:
+					if (*meta_location != NULL)
 					{
-						if (meta->version != 0.0)
-						{
-							exception_set(err, EINVAL, "Duplicate version entries!");
-							goto end;
-						}
-
-						struct_length = sizeof(meta_version_t);
-						meta_version_t * version = (meta_version_t *)head;
-						meta->version = version->version;
-						break;
-					}
-
-					case meta_description:
-					{
-						if (meta->description[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate description entries!");
-							goto end;
-						}
-
-						struct_length = sizeof(meta_description_t);
-						meta_description_t * desc = (meta_description_t *)head;
-						strncpy(meta->description, desc->description, META_SIZE_LONGDESCRIPTION-1);
-						break;
-					}
-
-					case meta_dependency:
-					{
-						metasize_t i = 0;
-						for (; i < META_MAX_DEPENDENCIES; i++)
-						{
-							if (meta->dependencies[i][0] == '\0')
-							{
-								struct_length = sizeof(meta_dependency_t);
-								meta_dependency_t * dep = (meta_dependency_t *)head;
-								strncpy(meta->dependencies[i], dep->dependency, META_SIZE_DEPENDENCY-1);
-								break;
-							}
-						}
-
-						if (i == META_MAX_DEPENDENCIES)
-						{
-							exception_set(err, ENOMEM, "Too many dependencies! (Out of memory)");
-							goto end;
-						}
-
-						meta->dependencies_length = i+1;
-						break;
-					}
-
-					case meta_init:
-					{
-						if (meta->init_name[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate initialization entries!");
-							goto end;
-						}
-
-						struct_length = sizeof(meta_callback_bv_t);
-						meta_callback_bv_t * cb = (meta_callback_bv_t *)head;
-						if (strncmp(cb->callback.function_signature, "b:v", META_SIZE_SIGNATURE) != 0)
-						{
-							exception_set(err, EINVAL, "Invalid initialization function signature!");
-							goto end;
-						}
-
-						strncpy(meta->init_name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-						meta->init = cb->function;
-						break;
-					}
-
-					case meta_destroy:
-					case meta_preactivate:
-					case meta_postactivate:
-					{
-						const char * switch_name = NULL;
-						char * name = NULL;
-						meta_callback_vv_f * function = NULL;
-
-						switch (head->type)
-						{
-							case meta_destroy:
-							{
-								switch_name = "destroy";
-								name = &meta->destroy_name[0];
-								function = &meta->destroy;
-								break;
-							}
-
-							case meta_preactivate:
-							{
-								switch_name = "preactivate";
-								name = &meta->preact_name[0];
-								function = &meta->preact;
-								break;
-							}
-
-							case meta_postactivate:
-							{
-								switch_name = "postactivate";
-								name = &meta->postact_name[0];
-								function = &meta->postact;
-								break;
-							}
-
-							default:
-							{
-								exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-								goto end;
-							}
-						}
-
-						if (name[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate %s entries!", switch_name);
-							goto end;
-						}
-
-						struct_length = sizeof(meta_callback_vv_t);
-						meta_callback_vv_t * cb = (meta_callback_vv_t *)head;
-						if (strncmp(cb->callback.function_signature, "v:v", META_SIZE_SIGNATURE) != 0)
-						{
-							exception_set(err, EINVAL, "Invalid %s function signature!", switch_name);
-							goto end;
-						}
-
-						strncpy(name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-						*function = cb->function;
-						break;
-					}
-
-					case meta_syscall:
-					{
-						metasize_t i = 0;
-						for (; i < META_MAX_SYSCALLS; i++)
-						{
-							if (meta->syscalls[i].syscall_name[0] == '\0')
-							{
-								struct_length = sizeof(meta_callback_t);
-								meta_callback_t * cb = (meta_callback_t *)head;
-								strncpy(meta->syscalls[i].syscall_name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-								strncpy(meta->syscalls[i].syscall_signature, cb->callback.function_signature, META_SIZE_SIGNATURE-1);
-								strncpy(meta->syscalls[i].syscall_description, cb->callback.function_description, META_SIZE_SHORTDESCRIPTION-1);
-								meta->syscalls[i].function = cb->function;
-								break;
-							}
-						}
-
-						if (i == META_MAX_DEPENDENCIES)
-						{
-							exception_set(err, ENOMEM, "Too many dependencies! (Out of memory)");
-							goto end;
-						}
-
-						meta->syscalls_length = i+1;
-						break;
-					}
-
-					case meta_configparam:
-					case meta_calparam:
-					{
-						// TODO - make this switch statement better! (not my best work)
-
-						const char * switch_name = NULL;
-						char * elems = NULL;
-						size_t elem_size = 0;
-						metasize_t elems_max = 0;
-						metasize_t * length;
-
-						switch (head->type)
-						{
-							case meta_configparam:
-							{
-								switch_name = "config param";
-								elems = (char *)&meta->configparams[0];
-								elem_size = sizeof(meta->configparams[0]);
-								elems_max = META_MAX_CONFIGPARAMS;
-								length = &meta->configparams_length;
-								break;
-							}
-
-							case meta_calparam:
-							{
-								switch_name = "cal param";
-								elems = (char *)&meta->calparams[0];
-								elem_size = sizeof(meta->calparams[0]);
-								elems_max = META_MAX_CALPARAMS;
-								length = &meta->calparams_length;
-								break;
-							}
-
-							default:
-							{
-								exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-								goto end;
-							}
-						}
-
-						metasize_t i = 0;
-						for (; i < elems_max; i++)
-						{
-							if (elems[i * elem_size] == '\0')
-							{
-								char * name = NULL;
-								char * sig = NULL;
-								char * desc = NULL;
-								meta_variable_m * var = NULL;
-
-								switch (head->type)
-								{
-									case meta_configparam:
-									{
-										name = &meta->configparams[i].config_name[0];
-										sig = &meta->configparams[i].config_signature;
-										desc = &meta->configparams[i].config_description[0];
-										var = &meta->configparams[i].variable;
-										break;
-									}
-
-									case meta_calparam:
-									{
-										name = &meta->calparams[i].cal_name[0];
-										sig = &meta->calparams[i].cal_signature;
-										desc = &meta->calparams[i].cal_description[0];
-										var = &meta->calparams[i].variable;
-										break;
-									}
-
-									default:
-									{
-										exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-										goto end;
-									}
-								}
-
-								struct_length = sizeof(meta_variable_t);
-								meta_variable_t * cb = (meta_variable_t *)head;
-								strncpy(name, cb->variable_name, META_SIZE_VARIABLE-1);
-								*sig = cb->variable_signature;
-								strncpy(desc, cb->variable_description, META_SIZE_SHORTDESCRIPTION-1);
-								*var = cb->variable;
-
-								break;
-							}
-						}
-
-						if (i == elems_max)
-						{
-							exception_set(err, ENOMEM, "Too many %ss! (Out of memory)", switch_name);
-							goto end;
-						}
-
-						*length = i+1;
-						break;
-					}
-
-					case meta_calmodechange:
-					{
-						if (meta->cal_modechange_name[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate calmodechange entries!");
-							goto end;
-						}
-
-						struct_length = sizeof(meta_callback_vi_t);
-						meta_callback_vi_t * cb = (meta_callback_vi_t *)head;
-						if (strncmp(cb->callback.function_signature, "v:i", META_SIZE_SIGNATURE) != 0)
-						{
-							exception_set(err, EINVAL, "Invalid calmodechange function signature!");
-							goto end;
-						}
-
-						strncpy(meta->cal_modechange_name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-						meta->cal_modechange = cb->function;
-						break;
-					}
-
-					case meta_calpreview:
-					{
-						if (meta->cal_preview_name[0] != '\0')
-						{
-							exception_set(err, EINVAL, "Duplicate calpreview entries!");
-							goto end;
-						}
-
-						struct_length = sizeof(meta_callback_bscpp_t);
-						meta_callback_bscpp_t * cb = (meta_callback_bscpp_t *)head;
-						if (strncmp(cb->callback.function_signature, "b:scpp", META_SIZE_SIGNATURE) != 0)
-						{
-							exception_set(err, EINVAL, "Invalid calpreview function signature!");
-							goto end;
-						}
-
-						strncpy(meta->cal_preview_name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-						meta->cal_preview = cb->function;
-						break;
-					}
-
-					case meta_block:
-					{
-						metasize_t i = 0;
-						for (; i < META_MAX_BLOCKS; i++)
-						{
-							if (meta->blocks[i].block_name[0] == '\0')
-							{
-								struct_length = sizeof(meta_block_t);
-								meta_block_t * block = (meta_block_t *)head;
-								strncpy(meta->blocks[i].block_name, block->block_name, META_SIZE_BLOCKNAME-1);
-								strncpy(meta->blocks[i].block_description, block->block_description, META_SIZE_LONGDESCRIPTION-1);
-								strncpy(meta->blocks[i].constructor_name, block->constructor_name, META_SIZE_FUNCTION-1);
-								strncpy(meta->blocks[i].constructor_signature, block->constructor_signature, META_SIZE_SIGNATURE-1);
-								strncpy(meta->blocks[i].constructor_description, block->constructor_description, META_SIZE_SHORTDESCRIPTION-1);
-								meta->blocks[i].constructor = block->constructor;
-								break;
-							}
-						}
-
-						if (i == META_MAX_BLOCKS)
-						{
-							exception_set(err, ENOMEM, "Too many blocks! (Out of memory)");
-							goto end;
-						}
-
-						meta->blocks_length = i+1;
-						break;
-					}
-
-					case meta_blockupdate:
-					case meta_blockdestroy:
-					{
-						const char * switch_name = NULL;
-
-						switch (head->type)
-						{
-							case meta_blockupdate:
-							{
-								switch_name = "block update";
-								break;
-							}
-
-							case meta_blockdestroy:
-							{
-								switch_name = "block destroy";
-								break;
-							}
-
-							default:
-							{
-								exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-								goto end;
-							}
-						}
-
-						struct_length = sizeof(meta_blockcallback_t);
-						meta_blockcallback_t * cb = (meta_blockcallback_t *)head;
-						if (strncmp(cb->callback.function_signature, "v:p", META_SIZE_SIGNATURE) != 0)
-						{
-							exception_set(err, EINVAL, "Invalid %s function signature!", switch_name);
-							goto end;
-						}
-
-						metasize_t i = 0;
-						for (; i < META_MAX_BLOCKS; i++)
-						{
-							if (strncmp(meta->blocks[i].block_name, cb->block_name, META_SIZE_BLOCKNAME) == 0)
-							{
-								char * name = NULL;
-								meta_callback_vp_f * function;
-
-								switch (head->type)
-								{
-									case meta_blockupdate:
-									{
-										name = &meta->blocks[i].update_name[0];
-										function = &meta->blocks[i].update;
-										break;
-									}
-
-									case meta_blockdestroy:
-									{
-										name = &meta->blocks[i].destroy_name[0];
-										function = &meta->blocks[i].destroy;
-										break;
-									}
-
-									default:
-									{
-										exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-										goto end;
-									}
-								}
-
-								if (name[0] != '\0')
-								{
-									exception_set(err, EINVAL, "Duplicate %s entries!", switch_name);
-									goto end;
-								}
-
-								strncpy(name, cb->callback.function_name, META_SIZE_FUNCTION-1);
-								*function = cb->function;
-								break;
-							}
-						}
-
-						if (i == META_MAX_BLOCKS)
-						{
-							exception_set(err, ENOMEM, "Block %s hasn't been defined for %s!", cb->block_name, switch_name);
-							goto end;
-						}
-
-						break;
-					}
-
-					case meta_blockinput:
-					case meta_blockoutput:
-					{
-						const char * switch_name = NULL;
-						metaiotype_t type;
-
-						switch (head->type)
-						{
-							case meta_blockinput:
-							{
-								switch_name = "block input";
-								type = meta_input;
-								break;
-							}
-
-							case meta_blockoutput:
-							{
-								switch_name = "block output";
-								type = meta_output;
-								break;
-							}
-
-							default:
-							{
-								exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
-								goto end;
-							}
-						}
-
-						struct_length = sizeof(meta_blockio_t);
-						meta_blockio_t * io = (meta_blockio_t *)head;
-
-						metasize_t i = 0;
-						for (; i < META_MAX_BLOCKS; i++)
-						{
-							if (strncmp(meta->blocks[i].block_name, io->block_name, META_SIZE_BLOCKNAME) == 0)
-							{
-								metasize_t j = 0;
-								for (; j < META_MAX_BLOCKIOS; j++)
-								{
-									if (meta->blocks[i].ios[j].io_name[0] == '\0')
-									{
-										strncpy(meta->blocks[i].ios[j].io_name, io->io_name, META_SIZE_BLOCKIONAME-1);
-										meta->blocks[i].ios[j].io_type = type;
-										meta->blocks[i].ios[j].io_signature = io->io_signature;
-										strncpy(meta->blocks[i].ios[j].io_description, io->io_description, META_SIZE_SHORTDESCRIPTION-1);
-										break;
-									}
-								}
-
-								if (j == META_MAX_BLOCKIOS)
-								{
-									exception_set(err, ENOMEM, "Too many ios for block %s! Out of memory)", io->block_name);
-									goto end;
-								}
-
-								meta->blocks[i].ios_length = j+1;
-								break;
-							}
-						}
-
-						if (i == META_MAX_BLOCKS)
-						{
-							exception_set(err, ENOMEM, "Block %s hasn't been defined! Can't add a %s!", io->block_name, switch_name);
-							goto end;
-						}
-
-						break;
-					}
-
-					default:
-					{
-						exception_set(err, EINVAL, "Unknown meta entry: %x", head->type);
+						exception_set(err, EINVAL, "Duplicate %s entries!", name);
 						goto end;
 					}
+
+					*meta_location = (void *)head;
+					break;
 				}
 
-				// Move the processed struct out of the buffer
-				memmove(&buffer[0], &buffer[struct_length], buffer_index - struct_length);
-				buffer_index -= struct_length;
+				case meta_dependency:
+				case meta_syscall:
+				case meta_configparam:
+				case meta_calparam:
+				case meta_block:
+				case meta_blockupdate:
+				case meta_blockdestroy:
+				case meta_blockinput:
+				case meta_blockoutput:
+				{
+					const char * name = NULL;
+					void ** list = NULL;
+					size_t length = 0;
 
-				// Zero out the upper part of the buffer
-				memset(&buffer[buffer_index], 0, buffer_length - buffer_index);
+					switch (head->type)
+					{
+						case meta_dependency:		name = "meta_dependency";	list = (void **)&meta->dependencies;	length = META_MAX_DEPENDENCIES;		break;
+						case meta_syscall:			name = "meta_syscall";		list = (void **)&meta->syscalls;		length = META_MAX_SYSCALLS;			break;
+						case meta_configparam:		name = "meta_configparam";	list = (void **)&meta->config_params;	length = META_MAX_CONFIGPARAMS;		break;
+						case meta_calparam:			name = "meta_calparam";		list = (void **)&meta->cal_params;		length = META_MAX_CALPARAMS;		break;
+						case meta_block:			name = "meta_block";		list = (void **)&meta->blocks;			length = META_MAX_BLOCKS;			break;
+						case meta_blockupdate:
+						case meta_blockdestroy:		name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKS * 2;		break;
+						case meta_blockinput:
+						case meta_blockoutput:		name = "meta_io";			list = (void **)&meta->block_ios;		length = META_MAX_BLOCKS * META_MAX_BLOCKIOS; break;
+						default:
+						{
+							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
+							goto end;
+						}
+					}
+
+					size_t i = 0;
+					for (; i < length; i++)
+					{
+						if (list[i] == NULL)
+						{
+							list[i] = (void *)head;
+							break;
+						}
+					}
+
+					if (i == length)
+					{
+						exception_set(err, ENOMEM, "Out of %s memory! (size = %d)", name, length);
+						goto end;
+					}
+
+					break;
+				}
+
+				default:
+				{
+					exception_set(err, EINVAL, "Unknown meta entry: %x", head->type);
+					goto end;
+				}
 			}
+
+
+			struct_index += 1;
+			buffer_index += head->size;
 		}
 
-		if (buffer_index > 0)
+		if (buffer_index != meta->section_size)
 		{
-			// We haven't parsed entire region
-			exception_set(err, EINVAL, "Could not parse meta entire region!");
+			exception_set(err, EINVAL, "Unexpected end of meta section.");
 			goto end;
 		}
-
-		// Horray! We parsed everything
-		status = true;
 	}
+
+	// Horray! We've parsed it all without errors!
+	status = true;
 
 end:
 	bfd_close(abfd);
 	if (!status)
 	{
 		// We're here in error, free meta and return null
+		if (meta->buffer)
+		{
+			free(meta->buffer);
+		}
 		free(meta);
 		return NULL;
 	}
 
 	return meta;
 }
+
 
 #endif
 

@@ -214,7 +214,9 @@ model_module_t * model_script_addmodule_frommeta(model_t * model, model_script_t
 		// Module already exists, check the version to verify they are the same
 		if (module->meta->version != meta->version)
 		{
-			exception_set(err, EINVAL, "Module version mismatch. Expected %f, got %f for module %s", module->meta->version, meta->version, module->meta->path);
+			string_t meta_version = version_tostring(meta->version->version);
+			string_t module_version = version_tostring(module->meta->version->version);
+			exception_set(err, EINVAL, "Module version mismatch. Expected %s, got %s for module %s", module_version.string, meta_version.string, module->meta->path);
 			return NULL;
 		}
 	}
@@ -239,7 +241,7 @@ model_blockinst_t * model_module_newblockinst(model_t * model, model_module_t * 
 			return NULL;
 		}
 	}
-
+/*
 	char constructor_sig[META_SIZE_SIGNATURE];
 	size_t ios_length = 0;
 
@@ -248,6 +250,7 @@ model_blockinst_t * model_module_newblockinst(model_t * model, model_module_t * 
 		exception_set(err, EINVAL, "Module %s does not have block %s", module->meta->path, blockname);
 		return NULL;
 	}
+	*/
 
 	return NULL;
 }
