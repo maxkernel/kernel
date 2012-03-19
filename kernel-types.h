@@ -1,36 +1,24 @@
 #ifndef __KERNEL_TYPES_H
 #define __KERNEL_TYPES_H
 
-#define T_METHOD		'M'
-#define T_ERROR			'E'
-#define T_RETURN		'R'
-#define T_VOID			'v'
-#define T_BOOLEAN		'b'
-#define T_INTEGER		'i'
-#define T_DOUBLE		'd'
-#define T_CHAR			'c'
-#define T_STRING		's'
-#define T_ARRAY_BOOLEAN	'B'
-#define T_ARRAY_INTEGER	'I'
-#define T_ARRAY_DOUBLE	'D'
-#define T_BUFFER		'x'
+// TODO - should these be moved to console/libmax?
+#define T_METHOD		'M'		// Used in messages (rpc)
+#define T_ERROR			'E'		// Used in messages (rpc)
+#define T_RETURN		'R'		// Used in messages (rpc)
 
-#ifdef KERNEL
-// Internal to kernel usage. Do not use!
-#define T_POINTER		'p'
-#endif
 
-#if 0
-#define S_VOID			"v"
-#define S_BOOLEAN		"b"
-#define S_INTEGER		"i"
-#define S_DOUBLE		"d"
-#define S_CHAR			"c"
-#define S_STRING		"s"
-#define S_ARRAY_BOOLEAN	"B"
-#define S_ARRAY_INTEGER	"I"
-#define S_ARRAY_DOUBLE	"D"
-#define S_BUFFER		"x"
-#endif
+#define T_VOID			'v'		// Valid in any signature
+#define T_BOOLEAN		'b'		// Valid in any signature
+#define T_INTEGER		'i'		// Valid in any signature
+#define T_DOUBLE		'd'		// Valid in any signature
+#define T_CHAR			'c'		// Valid in any signature.
+#define T_STRING		's'		// Valid in any signature. In rpc, the mapping is (const char *). As input, the maximum size is deined as ?? TODO - find the size!
+
+#define T_ARRAY_BOOLEAN	'B'		// Only valid in input/output signatures
+#define T_ARRAY_INTEGER	'I'		// Only valid in input/output signatures
+#define T_ARRAY_DOUBLE	'D'		// Only valid in input/output signatures
+#define T_BUFFER		'x'		// Only valid in input/output signatures
+
+#define T_POINTER		'p'		// Never valid. Do not use! (Internal to kernel usage. Do not use!)
 
 #endif

@@ -162,9 +162,9 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 						case meta_calparam:			name = "meta_calparam";		list = (void **)&meta->cal_params;		length = META_MAX_CALPARAMS;		break;
 						case meta_block:			name = "meta_block";		list = (void **)&meta->blocks;			length = META_MAX_BLOCKS;			break;
 						case meta_blockupdate:
-						case meta_blockdestroy:		name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKS * 2;		break;
+						case meta_blockdestroy:		name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKCBS;			break;
 						case meta_blockinput:
-						case meta_blockoutput:		name = "meta_io";			list = (void **)&meta->block_ios;		length = META_MAX_BLOCKS * META_MAX_BLOCKIOS; break;
+						case meta_blockoutput:		name = "meta_io";			list = (void **)&meta->block_ios;		length = META_MAX_BLOCKIOS; 		break;
 						default:
 						{
 							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
@@ -229,9 +229,156 @@ end:
 	return meta;
 }
 
-
 #endif
 
+#ifdef USE_DL
+#include <dlfcn.h>
+
+__meta_begin_callback __meta_init = NULL;
+
+bool meta_loadmodule(meta_t * meta, exception_t ** err)
+{
+	// Sanity check
+	{
+		if (exception_check(err))
+		{
+			return false;
+		}
+
+		if (meta == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
+
+		if (meta->path[0] == '\0')
+		{
+			exception_set(err, EINVAL, "Meta path not set!");
+			return false;
+		}
+	}
+
+	if (meta->dlobject != NULL || meta->resolved)
+	{
+		exception_set(err, EALREADY, "Module %s has already been loaded", meta->path);
+		return false;
+	}
+
+	meta->dlobject = dlopen(meta->path, RTLD_NOLOAD);
+	if (meta->dlobject != NULL)
+	{
+		exception_set(err, EALREADY, "Module %s has already been loaded without meta reflect!", meta->path);
+		return false;
+	}
+
+	exception_t * e = NULL;
+	void meta_init(const meta_begin_t * begin)
+	{
+		LABELS(end_init);
+
+		// Sanity check
+		{
+			if (begin == NULL)
+			{
+				exception_set(&e, EINVAL, "Bad meta address!");
+				goto end_init;
+			}
+		}
+
+		if (begin->head.type != meta_begin || begin->special != __meta_special)
+		{
+			exception_set(&e, EINVAL, "Bad beginning of meta section! (corrupt?)");
+			goto end_init;
+		}
+
+		const char * buffer = (const char *)begin;
+		for (size_t i = 0; meta->buffer_layout[i] != '\0' && i < META_MAX_SYSCALLS; i++)
+		{
+			const metahead_t * head = (const metahead_t *)&buffer[(off_t)meta->buffer_indexes[i] - (off_t)meta->buffer];
+			if (head->type != meta->buffer_layout[i])
+			{
+				exception_set(&e, EINVAL, "Meta section mismatch for element %zu. Expected %zx, is %zx", i, meta->buffer_layout[i], head->type);
+				goto end_init;
+			}
+
+			switch (head->type)
+			{
+				case meta_name:
+				{
+					if (meta->name == NULL)
+					{
+						exception_set(&e, EINVAL, "Meta name not set!");
+						goto end_init;
+					}
+
+					const meta_annotate_t * name = (const meta_annotate_t *)head;
+					if (strcmp(meta->name->name, name->name) != 0)
+					{
+						exception_set(&e, EINVAL, "Meta name mismatch! Expected %s, is %s", meta->name->name, name->name);
+						goto end_init;
+					}
+
+					break;
+				}
+
+				case meta_version:
+				{
+					if (meta->version == NULL)
+					{
+						exception_set(&e, EINVAL, "Meta version not set!");
+						goto end_init;
+					}
+
+					const meta_version_t * version = (const meta_version_t *)head;
+					if (meta->version->version != version->version)
+					{
+						string_t expect_version = version_tostring(meta->version->version);
+						string_t is_version = version_tostring(version->version);
+						exception_set(&e, EINVAL, "Meta version mismatch! Expected %s, is %s", expect_version.string, is_version.string);
+						goto end_init;
+					}
+
+					break;
+				}
+
+				default: break;
+			}
+		}
+
+		memcpy(meta->buffer, begin, meta->section_size);
+		meta->resolved = true;
+
+end_init:
+		__meta_init = NULL;
+	}
+
+	__meta_init = meta_init;
+	meta->dlobject = dlopen(meta->path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+
+	if (exception_check(&e))
+	{
+		exception_set(err, e->code, "Module %s load error: %s", meta->path, e->message);
+		exception_free(e);
+		return false;
+	}
+
+	char * error = dlerror();
+	if (error != NULL)
+	{
+		exception_set(err, EFAULT, "Could not load module %s. DL error: %s", meta->path, error);
+		return false;
+	}
+
+	if (meta->dlobject == NULL || !meta->resolved)
+	{
+		exception_set(err, EFAULT, "Could not resolve module memory addresses in module %s! (Unknown fault, cb failure)", meta->path);
+		return false;
+	}
+
+	return true;
+}
+
+#endif
 
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err)
 {
@@ -269,12 +416,149 @@ void meta_free(meta_t * meta)
 }
 
 
-bool meta_getblock(const meta_t * meta, const char * blockname, char * const * constructor_sig, size_t * ios_length)
+bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc)
 {
+	// Sanity check
+	{
+		if (meta == NULL || configname == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(configname) >= META_SIZE_VARIABLE)
+		{
+			return false;
+		}
+	}
+
+	meta_variable_t * variable = NULL;
+	meta_foreach(variable, meta->config_params, META_MAX_CONFIGPARAMS)
+	{
+		if (strcmp(variable->variable_name, configname) == 0)
+		{
+			if (sig != NULL)
+			{
+				*sig = variable->variable_signature;
+			}
+
+			if (desc != NULL)
+			{
+				*desc = variable->variable_description;
+			}
+
+			return true;
+		}
+	}
+
 	return false;
 }
 
-bool meta_getblockios(const meta_t * meta, const char * blockname, char * const * names, const metaiotype_t * types, const char * sigs, size_t length)
+
+bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc)
 {
+	// Sanity check
+	{
+		if (meta == NULL || blockname == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(blockname) >= META_SIZE_BLOCKNAME)
+		{
+			return false;
+		}
+	}
+
+	meta_block_t * block = NULL;
+	meta_foreach(block, meta->blocks, META_MAX_BLOCKS)
+	{
+		if (strcmp(block->block_name, blockname) == 0)
+		{
+			if (constructor_sig != NULL)
+			{
+				*constructor_sig = block->constructor_signature;
+			}
+
+			if (ios_length != NULL)
+			{
+				*ios_length = 0;
+
+				meta_blockio_t * blockio = NULL;
+				meta_foreach(blockio, meta->block_ios, META_MAX_BLOCKIOS)
+				{
+					if (strcmp(blockio->blockname, blockname) == 0)
+					{
+						*ios_length += 1;
+					}
+				}
+			}
+
+			if (desc != NULL)
+			{
+				*desc = block->block_description;
+			}
+
+			return true;
+		}
+	}
+
 	return false;
+}
+
+bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length)
+{
+	// Sanity check
+	{
+		if (meta == NULL || blockname == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(blockname) >= META_SIZE_BLOCKNAME)
+		{
+			return false;
+		}
+	}
+
+	meta_blockio_t * blockio = NULL;
+	size_t index = 0;
+	meta_foreach(blockio, meta->block_ios, META_MAX_BLOCKIOS)
+	{
+		if (index == length)
+		{
+			break;
+		}
+
+		if (strcmp(blockio->blockname, blockname) == 0)
+		{
+			if (names != NULL)
+			{
+				names[index] = blockio->io_name;
+			}
+
+			if (types != NULL)
+			{
+				switch (blockio->head.type)
+				{
+					case meta_blockinput:	types[index] = meta_input;		break;
+					case meta_blockoutput:	types[index] = meta_output;		break;
+					default:				types[index] = meta_unknownio;	break;
+				}
+			}
+
+			if (sigs != NULL)
+			{
+				sigs[index] = blockio->io_signature;
+			}
+
+			if (descs != NULL)
+			{
+				descs[index] = blockio->io_description;
+			}
+
+			index += 1;
+		}
+	}
+
+	return true;
 }

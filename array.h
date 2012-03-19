@@ -24,10 +24,10 @@ static inline size_t array_typesize(const char sig)
 	}
 }
 
-static inline array_t array_new(const char type, size_t elems)
+static inline array_t array_new(const char type, size_t nelems)
 {
 	array_t a = buffer_new();
-	buffer_write(a, NULL, array_typesize(type) * elems, 0);
+	buffer_write(a, NULL, array_typesize(type) * nelems, 0);
 	return a;
 }
 
@@ -54,6 +54,16 @@ static inline size_t array_read(array_t array, const char type, off_t index, voi
 static inline void array_write(array_t array, const char type, off_t index, void * elems, size_t nelems)
 {
 	buffer_write(array, elems, index * array_typesize(type), nelems * array_typesize(type));
+}
+
+static inline bool array_readindex(array_t array, const char type, off_t index, void * elem)
+{
+	return array_read(array, type, index, elem, 1) == array_typesize(type);
+}
+
+static inline void array_writeindex(array_t array, const char type, off_t index, void * elem)
+{
+	array_write(array, type, index, elem, 1);
 }
 
 #ifdef __cplusplus

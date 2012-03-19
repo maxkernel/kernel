@@ -7,13 +7,14 @@
 
 meta_t * m = NULL;
 
+/*
 void __meta_init_(const meta_begin_t * begin)
 {
 	memcpy(m->buffer, begin, m->section_size);
 }
 
 __meta_begin_callback __meta_init = __meta_init_;
-
+*/
 
 void print_meta(meta_t * m)
 {
@@ -43,39 +44,37 @@ void print_meta(meta_t * m)
 		printf("-- Syscall: %s (%s) %s -> %zx\n", syscall->callback.function_name, syscall->callback.function_signature, syscall->callback.function_description, (size_t)syscall->function);
 	}
 
-	//meta_variable_t * config_param = NULL;
-
-
-	/*
-
-	printf("Config params: %d\n", m->configparams_length);
-	for (size_t i = 0; i < m->configparams_length; i++)
+	meta_variable_t * config_param = NULL;
+	meta_foreach(config_param, m->config_params, META_MAX_CONFIGPARAMS)
 	{
-		printf("(%zu) Config param: %s (%c) %s -> %zx\n", i, m->configparams[i].config_name, m->configparams[i].config_signature, m->configparams[i].config_description, (size_t)m->configparams[i].variable);
+		printf("-- Config Param: %s (%c) %s -> %zx\n", config_param->variable_name, config_param->variable_signature, config_param->variable_description, (size_t)config_param->variable);
 	}
 
-	printf("Cal modechange: %s -> %zx\n", m->cal_modechange_name, (size_t)m->cal_modechange);
-	printf("Cal preview: %s -> %zx\n", m->cal_preview_name, (size_t)m->cal_preview);
-	printf("Cal params: %d\n", m->calparams_length);
-	for (size_t i = 0; i < m->configparams_length; i++)
+	meta_variable_t * cal_param = NULL;
+	printf("Cal modechange: %s -> %zx\n", m->cal_modechange->callback.function_name, (size_t)m->cal_modechange->function);
+	printf("Cal preview: %s -> %zx\n", m->cal_preview->callback.function_name, (size_t)m->cal_preview->function);
+	meta_foreach(cal_param, m->cal_params, META_MAX_CALPARAMS)
 	{
-		printf("(%zu) Cal param: %s (%c) %s -> %zx\n", i, m->calparams[i].cal_name, m->calparams[i].cal_signature, m->calparams[i].cal_description, (size_t)m->calparams[i].variable);
+		printf("-- Cal Param: %s (%c) %s -> %zx\n", cal_param->variable_name, cal_param->variable_signature, cal_param->variable_description, (size_t)cal_param->variable);
 	}
 
-	printf("Blocks: %d\n", m->blocks_length);
-	for (size_t i = 0; i < m->blocks_length; i++)
+	meta_block_t * block = NULL;
+	meta_foreach(block, m->blocks, META_MAX_BLOCKS)
 	{
-		printf("(%zu) Block: %s %s\n", i, m->blocks[i].block_name, m->blocks[i].block_description);
-		printf("(%zu) Constructor: %s (%s) %s -> %zx\n", i, m->blocks[i].constructor_name, m->blocks[i].constructor_signature, m->blocks[i].constructor_description, (size_t)m->blocks[i].constructor);
-		printf("(%zu) Block funcs: %s -> %zx, %s -> %zx\n", i, m->blocks[i].update_name, (size_t)m->blocks[i].update, m->blocks[i].destroy_name, (size_t)m->blocks[i].destroy);
-
-		printf("Ios: %d\n", m->blocks[i].ios_length);
-		for (size_t j = 0; j < m->blocks[i].ios_length; j++)
-		{
-			printf("(%zu) %c %s (%c) %s\n", j, (char)m->blocks[i].ios[j].io_type, m->blocks[i].ios[j].io_name, m->blocks[i].ios[j].io_signature, m->blocks[i].ios[j].io_description);
-		}
+		printf("-- Block: %s %s -- %s (%s) %s -> %zx\n", block->block_name, block->block_description, block->constructor_name, block->constructor_signature, block->constructor_description, (size_t)block->constructor);
 	}
-	*/
+
+	meta_blockcallback_t * blockcb = NULL;
+	meta_foreach(blockcb, m->block_callbacks, META_MAX_BLOCKCBS)
+	{
+		printf("-- Block Callback: %s -- %x %s -> %zx\n", blockcb->blockname, blockcb->callback.head.type, blockcb->callback.function_name, (size_t)blockcb->function);
+	}
+
+	meta_blockio_t * blockio = NULL;
+	meta_foreach(blockio, m->block_ios, META_MAX_BLOCKIOS)
+	{
+		printf("-- Block IO: %s -- %x %s (%c) %s\n", blockio->blockname, blockio->head.type, blockio->io_name, blockio->io_signature, blockio->io_description);
+	}
 }
 
 int main()
@@ -102,11 +101,19 @@ int main()
 	printf("Size of section: %zu\n", m->section_size);
 	print_meta(m);
 
+	/*
 	// TODO - find out if we can do RTLD_LOCAL
 	void * d = dlopen("libtest2.so", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
 	if (d == NULL)
 	{
 		printf("* Fail dl: %s\n", dlerror());
+	}
+	*/
+
+	if (!meta_loadmodule(m, &e))
+	{
+		printf("* Fail: Code %d %s\n", e->code, e->message);
+		return -1;
 	}
 
 	print_meta(m);

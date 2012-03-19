@@ -28,7 +28,8 @@ extern "C" {
 #define META_MAX_CONFIGPARAMS			50
 #define META_MAX_CALPARAMS				50
 #define META_MAX_BLOCKS					25
-#define META_MAX_BLOCKIOS				30
+#define META_MAX_BLOCKCBS				(2 * META_MAX_BLOCKS)
+#define META_MAX_BLOCKIOS				(2 * 30 * META_MAX_BLOCKS)
 #define META_MAX_STRUCTS 				\
 	/* Maximum number of structs in meta section */ \
 	( 1		/* meta_begin */		\
@@ -47,8 +48,8 @@ extern "C" {
 	+ 1		/* meta_modechange */	\
 	+ 1		/* meta_preview */		\
 	+ META_MAX_BLOCKS				\
-	+ (2 * META_MAX_BLOCKS)		/* block_update and block_destroy */ \
-	+ (2 * META_MAX_BLOCKIOS * META_MAX_BLOCKIOS)	/* block_input and block_output */ \
+	+ META_MAX_BLOCKCBS				\
+	+ META_MAX_BLOCKIOS				\
 	)
 
 
@@ -98,6 +99,7 @@ typedef enum
 
 typedef enum
 {
+	meta_unknownio		= '?',
 	meta_input			= 'I',
 	meta_output			= 'O',
 } metaiotype_t;
@@ -200,14 +202,14 @@ typedef struct
 typedef struct
 {
 	meta_callback_head_t callback __meta_a1;
-	const char block_name[META_SIZE_BLOCKNAME] __meta_a1;
+	const char blockname[META_SIZE_BLOCKNAME] __meta_a1;
 	meta_callback_vp_f function __meta_a1;
 } meta_blockcallback_t;
 
 typedef struct
 {
 	const metahead_t head __meta_a1;
-	const char block_name[META_SIZE_BLOCKNAME] __meta_a1;
+	const char blockname[META_SIZE_BLOCKNAME] __meta_a1;
 	const char io_name[META_SIZE_BLOCKIONAME] __meta_a1;
 	const char io_signature __meta_a1;
 	const char io_description[META_SIZE_SHORTDESCRIPTION] __meta_a1;
@@ -223,8 +225,7 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 #define __meta_unique(type, code)				__meta_intro(type, __meta_name(code,__LINE__, __COUNTER__))
 #define __meta_begin()							__meta_intro(meta_begin_t, __meta_begin_here) = { __meta_head(sizeof(meta_begin_t), meta_begin), __meta_special }
 #define __meta_constructor						__attribute__((constructor)) static void __meta_name(constructor,__LINE__, __COUNTER__) () \
-													{ extern __meta_begin_callback __meta_init; if (__meta_init != NULL) __meta_init(&__meta_begin_here); } \
-													/*{ void __meta_init_(const meta_begin_t * begin); __meta_init_(&__meta_begin_here); }*/
+													{ extern __meta_begin_callback __meta_init; if (__meta_init != NULL) __meta_init(&__meta_begin_here); }
 #define __meta_write(type, code, ...)			__meta_unique(type, code) = { __meta_head(sizeof(type), code), __VA_ARGS__ }
 #define __meta_cbwrite(type, code, a,b,c, ...)	__meta_unique(type, code) = {{ __meta_head(sizeof(type), code), a,b,c }, __VA_ARGS__ }
 
@@ -289,6 +290,9 @@ typedef struct
 	version_t meta_version;
 	size_t section_size;
 
+	bool resolved;
+	void * dlobject;
+
 	char path[META_SIZE_PATH];
 	uint8_t * buffer;
 	uint8_t buffer_layout[META_MAX_STRUCTS];
@@ -310,13 +314,13 @@ typedef struct
 
 	meta_variable_t * config_params[META_MAX_CONFIGPARAMS];
 
-	meta_variable_t * cal_params[META_MAX_CALPARAMS];
 	meta_callback_vi_t * cal_modechange;
 	meta_callback_bscpp_t * cal_preview;
+	meta_variable_t * cal_params[META_MAX_CALPARAMS];
 
 	meta_block_t * blocks[META_MAX_BLOCKS];
-	meta_blockcallback_t * block_callbacks[META_MAX_BLOCKS * 2];
-	meta_blockio_t * block_ios[2 * META_MAX_BLOCKS * META_MAX_BLOCKIOS];
+	meta_blockcallback_t * block_callbacks[META_MAX_BLOCKCBS];
+	meta_blockio_t * block_ios[META_MAX_BLOCKIOS];
 } meta_t;
 
 
@@ -327,14 +331,19 @@ typedef struct
 meta_t * meta_parseelf(const char * path, exception_t ** err);
 #endif
 
+#if defined(USE_DL)
+bool meta_loadmodule(meta_t * meta, exception_t ** err);
+#endif
+
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err);
 size_t meta_encodebase64(meta_t * meta, const char * to, size_t length);
 
 meta_t * meta_copy(meta_t * meta);
 void meta_free(meta_t * meta);
 
-bool meta_getblock(const meta_t * meta, const char * blockname, char * const * constructor_sig, size_t * ios_length);
-bool meta_getblockios(const meta_t * meta, const char * blockname, char * const * names, const metaiotype_t * types, const char * sigs, size_t length);
+bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc);
+bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
+bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
 
 #ifdef __cplusplus
 }

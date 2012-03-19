@@ -81,7 +81,7 @@ define_block(test_block, "Test block desc", tblock_new, "v:bid", "Constructor de
 block_onupdate(test_block, tblock_update);
 block_ondestroy(test_block, tblock_destroy);
 block_input(test_block, tinput1, 'i', "Input 1 desc");
-block_input(test_block, tinput, 'b', "Input 2 desc");
+block_input(test_block, tinput2, 'b', "Input 2 desc");
 block_output(test_block, toutput1, 's', "Output 1 desc");
 
 
