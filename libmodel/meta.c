@@ -100,12 +100,12 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 				case meta_version:
 				case meta_author:
 				case meta_description:
-				case meta_init:
-				case meta_destroy:
-				case meta_preactivate:
-				case meta_postactivate:
-				case meta_calmodechange:
-				case meta_calpreview:
+				case meta_oninit:
+				case meta_ondestroy:
+				case meta_onpreact:
+				case meta_onpostact:
+				case meta_calonmodechange:
+				case meta_calonpreview:
 				{
 					const char * name = NULL;
 					void ** meta_location = NULL;
@@ -117,12 +117,12 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 						case meta_version:			name = "meta_version";			meta_location = (void **)&meta->version;		break;
 						case meta_author:			name = "meta_author";			meta_location = (void **)&meta->author;			break;
 						case meta_description:		name = "meta_description";		meta_location = (void **)&meta->description;	break;
-						case meta_init:				name = "meta_init";				meta_location = (void **)&meta->init;			break;
-						case meta_destroy:			name = "meta_destroy";			meta_location = (void **)&meta->destroy;		break;
-						case meta_preactivate:		name = "meta_preactivate";		meta_location = (void **)&meta->preact;			break;
-						case meta_postactivate:		name = "meta_postactivate";		meta_location = (void **)&meta->postact;		break;
-						case meta_calmodechange:	name = "meta_calmodechange";	meta_location = (void **)&meta->cal_modechange;	break;
-						case meta_calpreview:		name = "meta_calpreview";		meta_location = (void **)&meta->cal_preview;	break;
+						case meta_oninit:			name = "meta_init";				meta_location = (void **)&meta->init;			break;
+						case meta_ondestroy:		name = "meta_destroy";			meta_location = (void **)&meta->destroy;		break;
+						case meta_onpreact:			name = "meta_preactivate";		meta_location = (void **)&meta->preact;			break;
+						case meta_onpostact:		name = "meta_postactivate";		meta_location = (void **)&meta->postact;		break;
+						case meta_calonmodechange:	name = "meta_calmodechange";	meta_location = (void **)&meta->cal_modechange;	break;
+						case meta_calonpreview:		name = "meta_calpreview";		meta_location = (void **)&meta->cal_preview;	break;
 						default:
 						{
 							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
@@ -145,8 +145,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 				case meta_configparam:
 				case meta_calparam:
 				case meta_block:
-				case meta_blockupdate:
-				case meta_blockdestroy:
+				case meta_blockonupdate:
+				case meta_blockondestroy:
 				case meta_blockinput:
 				case meta_blockoutput:
 				{
@@ -161,8 +161,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 						case meta_configparam:		name = "meta_configparam";	list = (void **)&meta->config_params;	length = META_MAX_CONFIGPARAMS;		break;
 						case meta_calparam:			name = "meta_calparam";		list = (void **)&meta->cal_params;		length = META_MAX_CALPARAMS;		break;
 						case meta_block:			name = "meta_block";		list = (void **)&meta->blocks;			length = META_MAX_BLOCKS;			break;
-						case meta_blockupdate:
-						case meta_blockdestroy:		name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKCBS;			break;
+						case meta_blockonupdate:
+						case meta_blockondestroy:	name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKCBS;			break;
 						case meta_blockinput:
 						case meta_blockoutput:		name = "meta_io";			list = (void **)&meta->block_ios;		length = META_MAX_BLOCKIOS; 		break;
 						default:
@@ -272,7 +272,7 @@ bool meta_loadmodule(meta_t * meta, exception_t ** err)
 	}
 
 	exception_t * e = NULL;
-	void meta_init(const meta_begin_t * begin)
+	void __do_meta_init(const meta_begin_t * begin)
 	{
 		LABELS(end_init);
 
@@ -352,8 +352,8 @@ end_init:
 		__meta_init = NULL;
 	}
 
-	__meta_init = meta_init;
-	meta->dlobject = dlopen(meta->path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+	__meta_init = __do_meta_init;
+	meta->dlobject = dlopen(meta->path, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
 	if (exception_check(&e))
 	{
@@ -401,10 +401,64 @@ meta_t * meta_copy(meta_t * meta)
 {
 	meta_t * newmeta = malloc(sizeof(meta_t));
 	memcpy(newmeta, meta, sizeof(meta_t));
+
+	newmeta->buffer = malloc(newmeta->section_size);
+	memcpy(newmeta->buffer, meta->buffer, newmeta->section_size);
+
+	ssize_t offset = ((ssize_t)newmeta->buffer - (ssize_t)meta->buffer);
+	#define fixptr(p)		(p) = ((p) == NULL)? NULL : (void *)((ssize_t)(p) + (offset))
+
+	// Fix the pointers to point to the new buffer
+	{
+		for (size_t i = 0; i < META_MAX_STRUCTS; i++)
+		{
+			fixptr(newmeta->buffer_indexes[i]);
+		}
+		fixptr(newmeta->begin);
+		fixptr(newmeta->name);
+		fixptr(newmeta->version);
+		fixptr(newmeta->author);
+		fixptr(newmeta->description);
+		for (size_t i = 0; i < META_MAX_DEPENDENCIES; i++)
+		{
+			fixptr(newmeta->dependencies[i]);
+		}
+		fixptr(newmeta->init);
+		fixptr(newmeta->destroy);
+		fixptr(newmeta->preact);
+		fixptr(newmeta->postact);
+		for (size_t i = 0; i < META_MAX_SYSCALLS; i++)
+		{
+			fixptr(newmeta->syscalls[i]);
+		}
+		for (size_t i = 0; i < META_MAX_CONFIGPARAMS; i++)
+		{
+			fixptr(newmeta->config_params[i]);
+		}
+		fixptr(newmeta->cal_modechange);
+		fixptr(newmeta->cal_preview);
+		for (size_t i = 0; i < META_MAX_CALPARAMS; i++)
+		{
+			fixptr(newmeta->cal_params[i]);
+		}
+		for (size_t i = 0; i < META_MAX_BLOCKS; i++)
+		{
+			fixptr(newmeta->blocks[i]);
+		}
+		for (size_t i = 0; i < META_MAX_BLOCKCBS; i++)
+		{
+			fixptr(newmeta->block_callbacks[i]);
+		}
+		for (size_t i = 0; i < META_MAX_BLOCKIOS; i++)
+		{
+			fixptr(newmeta->block_ios[i]);
+		}
+	}
+
 	return newmeta;
 }
 
-void meta_free(meta_t * meta)
+void meta_destroy(meta_t * meta)
 {
 	// Sanity check
 	if (meta == NULL)
@@ -412,6 +466,7 @@ void meta_free(meta_t * meta)
 		return;
 	}
 
+	if (meta->buffer != NULL)	free(meta->buffer);
 	free(meta);
 }
 

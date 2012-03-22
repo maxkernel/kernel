@@ -5,7 +5,6 @@
 #include <model.h>
 
 
-
 #define nextfree(type, items, maxsize)	(type **)__nextfree((void **)(items), (maxsize))
 static inline void ** __nextfree(void ** items, size_t maxsize)
 {
@@ -20,17 +19,33 @@ static inline void ** __nextfree(void ** items, size_t maxsize)
 	return NULL;
 }
 
+static void compact(void ** elems, size_t length)
+{
+	size_t next = 0;
+	for (size_t i = 0; i < length; i++)
+	{
+		if (elems[i] != NULL)
+		{
+			elems[next++] = elems[i];
+		}
+	}
+}
 
 static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f destroy, model_analyse_f analyse, size_t size)
 {
 	// Sanity check
 	{
-		if (model == NULL || size < sizeof(modelhead_t))
+		if (UNLIKELY(model == NULL || size < sizeof(modelhead_t)))
 		{
 			return NULL;
 		}
 	}
 
+	if (UNLIKELY(model->numids >= MODEL_MAX_IDS))
+	{
+		// No memory for new ID
+		return NULL;
+	}
 
 	modelhead_t * head = malloc(size);
 	if (LIKELY(head != NULL))
@@ -47,40 +62,326 @@ static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f de
 	return head;
 }
 
+static bool model_free(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	if (self == NULL)
+	{
+		return false;
+	}
+
+	if (self->destroy(model, self, target))
+	{
+		model->id[self->id] = NULL;
+		free(self);
+		return true;
+	}
+
+	return false;
+}
+
+#define model_handlefree(elem) \
+	if ((elem) != NULL && model_free(model, &(elem)->head, (isself)? NULL : target)) (elem) = NULL;
+
+#define model_array_handlefree(elems, size) \
+	for (size_t i = 0; i < (size); i++) model_handlefree((elems)[i]); compact((void **)elems, (size))
+
+
+
+static bool model_model_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	bool isself = (target == NULL)? true : self->id == target->id;
+
+	model_array_handlefree(model->scripts, MODEL_MAX_SCRIPTS);
+	model_array_handlefree(model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
+
+	return isself;
+}
+
+static bool model_script_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	model_script_t * script = (model_script_t *)self;
+	bool isself = (target == NULL)? true : self->id == target->id;
+
+	model_array_handlefree(script->links, MODEL_MAX_LINKS);
+	model_array_handlefree(script->linkables, MODEL_MAX_LINKABLES);
+	model_array_handlefree(script->modules, MODEL_MAX_MODULES);
+
+	return isself;
+}
+
+static bool model_module_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	model_module_t * module = (model_module_t *)self;
+	bool isself = (target == NULL)? true : self->id == target->id;
+
+	model_array_handlefree(module->configparams, MODEL_MAX_CONFIGPARAMS);
+
+	if (isself)
+	{
+		module->backing->refs -= 1;
+	}
+
+	return isself;
+}
+
+static bool model_modulebacking_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	model_modulebacking_t * backing = (model_modulebacking_t *)self;
+
+	if (backing->refs == 0)
+	{
+		meta_destroy(backing->meta);
+		backing->meta = NULL;
+
+		return true;
+	}
+
+	return false;
+}
+
+static bool model_configparam_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	return (target == NULL)? true : self->id == target->id;
+}
+
+static bool model_linkable_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	model_linkable_t * linkable = (model_linkable_t *)self;
+	bool isself = (target == NULL)? true : self->id == target->id;
+
+	if (!isself)
+	{
+		if (self->type == model_rategroup && target->type == model_blockinst)
+		{
+			for (size_t i = 0; i < MODEL_MAX_RATEGROUPELEMS; i++)
+			{
+				const model_linkable_t * item = linkable->backing.rategroup->blocks[i];
+				if (item != NULL && item->head.id == target->id)
+				{
+					linkable->backing.rategroup->blocks[i] = NULL;
+				}
+			}
+			compact((void **)linkable->backing.rategroup->blocks, MODEL_MAX_RATEGROUPELEMS);
+		}
+	}
+
+	return isself;
+}
+
+static bool model_link_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+{
+	model_link_t * link = (model_link_t *)self;
+	bool isself = (target == NULL)? true : self->id == target->id;
+
+	if (!isself)
+	{
+		// If any of the linkables we are linking is being deleted, delete ourselves too
+		isself |= link->out->head.id == target->id;
+		isself |= link->in->head.id == target->id;
+	}
+
+	return isself;
+}
+
+
+
+static inline void traverse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void ** items, size_t maxsize)
+{
+	modelhead_t * item = NULL;
+	model_foreach(item, items, maxsize)
+	{
+		item->analyse(model, traversal, cbs, item);
+	}
+}
+
+#define model_handlecallback(callback, object) \
+	if (callback != NULL) object->head.userdata = callback(object->head.userdata, object)
+
+static void model_model_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			traverse(model, traversal, cbs, (void **)model->scripts, MODEL_MAX_SCRIPTS);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_script_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	model_script_t * script = object;
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			model_handlecallback(cbs->scripts, script);
+			traverse(model, traversal, cbs, (void **)script->modules, MODEL_MAX_MODULES);
+			traverse(model, traversal, cbs, (void **)script->linkables, MODEL_MAX_LINKABLES);
+			traverse(model, traversal, cbs, (void **)script->links, MODEL_MAX_LINKS);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_module_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	model_module_t * module = object;
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			model_handlecallback(cbs->modules, module);
+			traverse(model, traversal, cbs, (void **)module->configparams, MODEL_MAX_CONFIGPARAMS);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_modulebacking_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	//model_modulebacking_t * backing = object;
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			// Not analyzing here, this is covered by model_module_analyse
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_configparam_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	model_configparam_t * configparam = object;
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			model_handlecallback(cbs->configs, configparam);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_linkable_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	model_linkable_t * linkable = object;
+
+	void linkable_handlecallbacks()
+	{
+		model_handlecallback(cbs->linkables, linkable);
+		switch (linkable->head.type)
+		{
+			case model_blockinst:	model_handlecallback(cbs->blockinsts, linkable);		break;
+			case model_syscall:		model_handlecallback(cbs->syscalls, linkable);			break;
+			case model_rategroup:	model_handlecallback(cbs->rategroups, linkable);		break;
+			default: break;
+		}
+	}
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			linkable_handlecallbacks();
+			break;
+		}
+
+		default: break;
+	}
+}
+
+static void model_link_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+{
+	model_link_t * link = object;
+
+	switch (traversal)
+	{
+		case traversal_scripts_modules_configs_linkables_links:
+		{
+			model_handlecallback(cbs->links, link);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+
 
 model_t * model_new()
 {
 	model_t * model = malloc(sizeof(model_t));
+	if (model == NULL)
+	{
+		return NULL;
+	}
+
 	memset(model, 0, sizeof(model_t));
+	model->malloc_size += sizeof(model_t);
+
+	modelhead_t * head = &model->head;
+
+
+
+	model->id[head->id = model->numids++] = head;
+	head->type = model_model;
+	head->destroy = model_model_destroy;
+	head->analyse = model_model_analyse;
 
 	return model;
 }
 
 void * model_setuserdata(modelhead_t * head, void * newuserdata)
 {
+	// Sanity check
+	{
+		if (head == NULL)
+		{
+			return NULL;
+		}
+	}
+
 	void * olduserdata = head->userdata;
 	head->userdata = newuserdata;
 	return olduserdata;
 }
 
-void model_free(model_t * model)
+void model_clearalluserdata(model_t * model)
 {
-	// Destroy the scripts
-	model_script_t * script = NULL;
-	model_foreach (script, model->scripts, MODEL_MAX_SCRIPTS)
+	// Sanity check
 	{
-		script->head.destroy(model, script);
+		if (model == NULL)
+		{
+			return;
+		}
 	}
 
-	// Destroy the modules
-	model_module_t * module = NULL;
-	model_foreach(module, model->modules, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS)
+	for (size_t i = 0; i < model->numids; i++)
 	{
-		module->head.destroy(model, module);
+		model->id[i]->userdata = NULL;
 	}
+}
 
-	// Free the model
-	free(model);
+void model_destroy(model_t * model)
+{
+	model_free(model, &model->head, &model->head);
 }
 
 string_t model_getconstraint(const char * desc)
@@ -100,61 +401,6 @@ string_t model_getsubscript(const char * ioname)
 	// TODO - finish me!
 	return string_blank();
 }
-
-
-static void model_script_destroy(model_t * model, model_script_t * script)
-{
-	// TODO - finish me!
-}
-
-static void model_module_destroy(model_t * model, model_module_t * module)
-{
-	// TODO - finish me!
-}
-
-static void model_configparam_destroy(model_t model, model_configparam_t * configparam)
-{
-	// TODO - finish me!
-}
-
-static void model_linkable_destroy(model_t model, model_linkable_t * linkable)
-{
-	// TODO - finish me!
-}
-
-static void model_link_destroy(model_t model, model_link_t * link)
-{
-	// TODO - finish me!
-}
-
-
-
-static void model_script_analyse(model_t * model, model_analysis_t * cbs, model_script_t * script)
-{
-	// TODO - finish me!
-}
-
-static void model_module_analyse(model_t * model, model_analysis_t * cbs, model_module_t * module)
-{
-	// TODO - finish me!
-}
-
-static void model_configparam_analyse(model_t model, model_analysis_t * cbs, model_configparam_t * configparam)
-{
-	// TODO - finish me!
-}
-
-static void model_linkable_analyse(model_t model, model_analysis_t * cbs, model_linkable_t * linkable)
-{
-	// TODO - finish me!
-}
-
-static void model_link_analyse(model_t model, model_analysis_t * cbs, model_link_t * link)
-{
-	// TODO - finish me!
-}
-
-
 
 
 model_script_t * model_script_new(model_t * model, const char * path, exception_t ** err)
@@ -242,82 +488,93 @@ model_module_t * model_module_add(model_t * model, model_script_t * script, meta
 	}
 
 	model_module_t * module = NULL;
+	model_modulebacking_t * backing = NULL;
 	{
 		// See if module exists in script
-		model_module_t * item = NULL;
-		model_foreach(item, script->modules, MODEL_MAX_MODULES)
 		{
-			if (strcmp(item->meta->path, meta->path) == 0)
+			model_module_t * item = NULL;
+			model_foreach(item, script->modules, MODEL_MAX_MODULES)
 			{
-				module = item;
+				if (strcmp(item->backing->meta->path, meta->path) == 0)
+				{
+					module = item;
+					backing = item->backing;
+					break;
+				}
 			}
 		}
 
 		if (module == NULL)
 		{
-			// Module isn't registered with script, see if it's in the model
-			model_foreach(item, model->modules, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS)
+			// Module isn't registered with script, see if we can find the backing
+			model_modulebacking_t * item = NULL;
+			model_foreach(item, model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS)
 			{
 				if (strcmp(item->meta->path, meta->path) == 0)
 				{
-					// Module exists in model, register it with script
-					model_module_t ** mem = nextfree(model_module_t, script->modules, MODEL_MAX_MODULES);
-					if (mem == NULL)
-					{
-						exception_set(err, ENOMEM, "Out of module memory! (MODEL_MAX_MODULES)");
-						return NULL;
-					}
-
-					module = *mem = item;
+					backing = item;
 					break;
 				}
 			}
 		}
 	}
 
-	if (module == NULL)
+	if (backing == NULL)
 	{
-		model_module_t ** mem1 = nextfree(model_module_t, script->modules, MODEL_MAX_MODULES);
-		if (mem1 == NULL)
-		{
-			exception_set(err, ENOMEM, "Out of script module memory! (MODEL_MAX_MODULES = %d)", MODEL_MAX_MODULES);
-			return NULL;
-		}
-
-		model_module_t ** mem2 = nextfree(model_module_t, model->modules, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
-		if (mem2 == NULL)
+		model_modulebacking_t ** mem = nextfree(model_modulebacking_t, model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
+		if (mem == NULL)
 		{
 			exception_set(err, ENOMEM, "Out of model module memory! (MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS = %d)", MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
 			return NULL;
 		}
 
-		module = *mem1 = *mem2 = model_malloc(model, model_module, model_module_destroy, model_module_analyse, sizeof(model_module_t));
+		backing = *mem = model_malloc(model, model_modulebacking, model_modulebacking_destroy, model_modulebacking_analyse, sizeof(model_modulebacking_t));
+		if (backing == NULL)
+		{
+			exception_set(err, ENOMEM, "Out of heap memory!");
+			return NULL;
+		}
+
+		backing->meta = meta_copy(meta);
+		strcpy(backing->path, meta->path);
+		strcpy(backing->name, meta->name->name);
+		backing->version = meta->version->version;
+	}
+
+	if (module == NULL)
+	{
+		model_module_t ** mem = nextfree(model_module_t, script->modules, MODEL_MAX_MODULES);
+		if (mem == NULL)
+		{
+			exception_set(err, ENOMEM, "Out of script module memory! (MODEL_MAX_MODULES = %d)", MODEL_MAX_MODULES);
+			return NULL;
+		}
+
+		module = *mem = model_malloc(model, model_module, model_module_destroy, model_module_analyse, sizeof(model_module_t));
 		if (module == NULL)
 		{
 			exception_set(err, ENOMEM, "Out of heap memory!");
 			return NULL;
 		}
 
-		// Copy the meta object over
-		module->meta = meta_copy(meta);
-		strcpy(module->path, module->meta->path);
-		strcpy(module->name, module->meta->name->name);
-		module->version = module->meta->version->version;
+		module->backing = backing;
+		module->backing->refs += 1;
 	}
 	else
 	{
 		// Module already exists, check the version and name to verify they are the same
-		if (module->meta->version != meta->version)
+		if (backing->meta->version != meta->version)
 		{
 			string_t meta_version = version_tostring(meta->version->version);
-			string_t module_version = version_tostring(module->meta->version->version);
-			exception_set(err, EINVAL, "Module version mismatch. Expected %s, got %s for module %s", module_version.string, meta_version.string, module->meta->path);
+			string_t module_version = version_tostring(backing->meta->version->version);
+			exception_set(err, EINVAL, "Module version mismatch. Expected %s, got %s for module %s", module_version.string, meta_version.string, backing->meta->path);
 			return NULL;
 		}
 
-		if (strcmp(module->meta->name->name, meta->name->name) != 0)
+		if (strcmp(backing->meta->name->name, meta->name->name) != 0)
 		{
-			exception_set(err, EINVAL, "Module name mismatch. Expected %s, got %s for module %s", module->meta->name->name, meta->name->name, module->meta->path);
+			exception_set(err, EINVAL, "Module name mismatch. Expected %s, got %s for module %s", backing->meta->name->name, meta->name->name, backing->meta->path);
+			return NULL;
 		}
 	}
 
@@ -345,26 +602,28 @@ bool model_module_setconfig(model_t * model, model_module_t * module, const char
 			return false;
 		}
 
-		if (module->meta == NULL)
+		if (module->backing->meta == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return false;
 		}
 	}
 
+	model_modulebacking_t * backing = module->backing;
+
 	char sig;
 	const char * desc;
 
-	if (!meta_getconfigparam(module->meta, configname, &sig, &desc))
+	if (!meta_getconfigparam(backing->meta, configname, &sig, &desc))
 	{
-		exception_set(err, EINVAL, "Module %s does not have config param %s", module->meta->path, configname);
+		exception_set(err, EINVAL, "Module %s does not have config param %s", backing->meta->path, configname);
 		return false;
 	}
 
 	string_t constraint = model_getconstraint(desc);
 	if (constraint.length >= MODEL_SIZE_CONSTRAINT)
 	{
-		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, module->meta->path);
+		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, backing->meta->path);
 		return false;
 	}
 
@@ -418,17 +677,19 @@ model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module,
 			return NULL;
 		}
 
-		if (module->meta == NULL)
+		if (module->backing->meta == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return NULL;
 		}
 	}
 
+	model_modulebacking_t * backing = module->backing;
+
 	const char * constructor_sig = NULL;
-	if (!meta_getblock(module->meta, blockname, &constructor_sig, NULL, NULL))
+	if (!meta_getblock(backing->meta, blockname, &constructor_sig, NULL, NULL))
 	{
-		exception_set(err, EINVAL, "Module %s does not have block %s", module->meta->path, blockname);
+		exception_set(err, EINVAL, "Module %s does not have block %s", backing->meta->path, blockname);
 		return NULL;
 	}
 
@@ -520,7 +781,6 @@ model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script,
 		}
 	}
 
-	// Allocate script memory and add it to model
 	model_linkable_t ** mem = nextfree(model_linkable_t, script->linkables, MODEL_MAX_LINKABLES);
 	if (mem == NULL)
 	{
@@ -542,7 +802,7 @@ model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script,
 	rategroup->hertz = hertz;
 	for (size_t i = 0; i < elems_length; i++)
 	{
-		rategroup->blocks[i] = elems[i]->backing.blockinst;
+		rategroup->blocks[i] = elems[i];
 	}
 
 	return linkable;

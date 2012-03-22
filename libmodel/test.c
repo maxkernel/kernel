@@ -5,17 +5,6 @@
 #include <maxmeta.h>
 
 
-meta_t * m = NULL;
-
-/*
-void __meta_init_(const meta_begin_t * begin)
-{
-	memcpy(m->buffer, begin, m->section_size);
-}
-
-__meta_begin_callback __meta_init = __meta_init_;
-*/
-
 void print_meta(meta_t * m)
 {
 	printf("-------------------------------\n");
@@ -83,7 +72,7 @@ int main()
 	printf("Size of meta_t: %zu\n", sizeof(meta_t));
 
 	exception_t * e = NULL;
-	m = meta_parseelf("libtest2.so", &e);
+	meta_t * m = meta_parseelf("libtest2.so", &e);
 	if (m == NULL)
 	{
 		if (e != NULL)
@@ -101,15 +90,6 @@ int main()
 	printf("Size of section: %zu\n", m->section_size);
 	print_meta(m);
 
-	/*
-	// TODO - find out if we can do RTLD_LOCAL
-	void * d = dlopen("libtest2.so", RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
-	if (d == NULL)
-	{
-		printf("* Fail dl: %s\n", dlerror());
-	}
-	*/
-
 	if (!meta_loadmodule(m, &e))
 	{
 		printf("* Fail: Code %d %s\n", e->code, e->message);
@@ -117,7 +97,12 @@ int main()
 	}
 
 	print_meta(m);
-	meta_free(m);
+
+	meta_t * m2 = meta_copy(m);
+	print_meta(m2);
+
+	meta_destroy(m2);
+	meta_destroy(m);
 
 	return 0;
 }

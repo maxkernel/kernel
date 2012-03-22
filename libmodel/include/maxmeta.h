@@ -76,22 +76,22 @@ typedef enum
 	meta_description,
 	meta_dependency,
 
-	meta_init			= 0x20,
-	meta_destroy,
-	meta_preactivate,
-	meta_postactivate,
+	meta_oninit			= 0x20,
+	meta_ondestroy,
+	meta_onpreact,
+	meta_onpostact,
 
 	meta_syscall		= 0x30,
 
 	meta_configparam	= 0x40,
 
 	meta_calparam		= 0x50,
-	meta_calmodechange,
-	meta_calpreview,
+	meta_calonmodechange,
+	meta_calonpreview,
 
 	meta_block			= 0x60,
-	meta_blockupdate,
-	meta_blockdestroy,
+	meta_blockonupdate,
+	meta_blockondestroy,
 	meta_blockinput,
 	meta_blockoutput,
 
@@ -261,23 +261,23 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 #define module_description(description)			__meta_write(meta_description_t, meta_description, (description))
 #define module_dependency(dependency)			__meta_write(meta_dependency_t, meta_dependency, (dependency))
 
-#define module_oninitialize(function)			__meta_cbwrite(meta_callback_bv_t, meta_init, (#function), "b:v", "", (function))
-#define module_ondestroy(function)				__meta_cbwrite(meta_callback_vv_t, meta_destroy, (#function), "v:v", "", (function))
-#define module_onpreactivate(function)			__meta_cbwrite(meta_callback_vv_t, meta_preactivate, (#function), "v:v", "", (function))
-#define module_onpostactivate(function)			__meta_cbwrite(meta_callback_vv_t, meta_postactivate, (#function), "v:v", "", (function))
+#define module_oninitialize(function)			__meta_cbwrite(meta_callback_bv_t, meta_oninit, (#function), "b:v", "", (function))
+#define module_ondestroy(function)				__meta_cbwrite(meta_callback_vv_t, meta_ondestroy, (#function), "v:v", "", (function))
+#define module_onpreactivate(function)			__meta_cbwrite(meta_callback_vv_t, meta_onpreact, (#function), "v:v", "", (function))
+#define module_onpostactivate(function)			__meta_cbwrite(meta_callback_vv_t, meta_onpostact, (#function), "v:v", "", (function))
 
 #define define_syscall(function, sig, desc)		__meta_cbwrite(meta_callback_t, meta_syscall, (#function), (sig), (desc), (meta_callback_f)(function))
 
 #define config_param(variable, sig, desc)		__meta_write(meta_variable_t, meta_configparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
 
 #define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, meta_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
-#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calmodechange, (#function), "v:i", "", (function))
-#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calpreview, (#function), "b:scpp", "", (function))
+#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calonmodechange, (#function), "v:i", "", (function))
+#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calonpreview, (#function), "b:scpp", "", (function))
 
 #define define_block(blockname, block_desc, constructor, sig, constructor_desc) \
 												__meta_write(meta_block_t, meta_block, (#blockname), (block_desc), (#constructor), (sig), (constructor_desc), (meta_callback_f)(constructor))
-#define block_onupdate(blockname, function)		__meta_cbwrite(meta_blockcallback_t, meta_blockupdate, (#function), "v:p", "", (#blockname), (function))
-#define block_ondestroy(blockname, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockdestroy, (#function), "v:p", "", (#blockname), (function))
+#define block_onupdate(blockname, function)		__meta_cbwrite(meta_blockcallback_t, meta_blockonupdate, (#function), "v:p", "", (#blockname), (function))
+#define block_ondestroy(blockname, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockondestroy, (#function), "v:p", "", (#blockname), (function))
 #define block_input(blockname, input_name, sig, desc) \
 												__meta_write(meta_blockio_t, meta_blockinput, (#blockname), (#input_name), (sig), (desc))
 #define block_output(blockname, output_name, sig, desc) \
@@ -339,7 +339,7 @@ meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err);
 size_t meta_encodebase64(meta_t * meta, const char * to, size_t length);
 
 meta_t * meta_copy(meta_t * meta);
-void meta_free(meta_t * meta);
+void meta_destroy(meta_t * meta);
 
 bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc);
 bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);

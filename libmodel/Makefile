@@ -31,7 +31,7 @@ install:
 
 clean:
 	rm -f $(OBJS) $(TARGET)
-	rm -f test test.o
+	rm -f test libtest2.so
 
 rebuild: clean all
 
@@ -46,18 +46,3 @@ depend: $(SRCS)
 
 # DO NOT DELETE THIS LINE -- make depend needs it
 
-meta.o: /usr/include/stdio.h /usr/include/features.h /usr/include/libio.h
-meta.o: /usr/include/_G_config.h /usr/include/wchar.h /usr/include/string.h
-meta.o: /usr/include/xlocale.h /usr/include/errno.h
-meta.o: ../aul/include/aul/base64.h /usr/include/stdlib.h
-meta.o: /usr/include/alloca.h /usr/include/stdint.h include/maxmeta.h
-meta.o: ../aul/include/aul/common.h /usr/include/inttypes.h
-meta.o: ../aul/include/aul/exception.h ../aul/include/aul/string.h
-meta.o: ../aul/include/aul/version.h /usr/include/bfd.h
-meta.o: /usr/include/ansidecl.h /usr/include/symcat.h
-model.o: /usr/include/stdlib.h /usr/include/features.h /usr/include/alloca.h
-model.o: /usr/include/string.h /usr/include/xlocale.h /usr/include/errno.h
-model.o: include/model.h /usr/include/inttypes.h /usr/include/stdint.h
-model.o: ../aul/include/aul/exception.h ../aul/include/aul/common.h
-model.o: ../aul/include/aul/string.h include/maxmeta.h
-model.o: ../aul/include/aul/version.h
