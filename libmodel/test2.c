@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <maxmeta.h>
+#include <maxmodel/meta.h>
 
 
 bool mod_init()

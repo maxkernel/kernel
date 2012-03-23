@@ -1,8 +1,8 @@
-SRCS		= meta.c model.c
+SRCS		= meta.c model.c luainterpret.c
 TARGET		= libmaxmodel.so
-PACKAGES	= 
+PACKAGES	= lua5.1
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include
-DEFINES		= -DLIBMAXMODEL -DUSE_BFD -DUSE_DL
+DEFINES		= -DLIBMAXMODEL -DUSE_BFD -DUSE_DL -DUSE_LUA
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
 LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lbfd -ldl
 LFLAGS		= -shared  -rdynamic -L../aul

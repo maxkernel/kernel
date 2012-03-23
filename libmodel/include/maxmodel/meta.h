@@ -1,5 +1,5 @@
-#ifndef __MAX_META_H
-#define __MAX_META_H
+#ifndef __MAXMODEL_META_H
+#define __MAXMODEL_META_H
 
 #include <stdint.h>
 #include <stdbool.h>

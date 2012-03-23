@@ -2,7 +2,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include <model.h>
+#include <maxmodel/model.h>
 
 
 #define nextfree(type, items, maxsize)	(type **)__nextfree((void **)(items), (maxsize))
@@ -458,7 +458,7 @@ model_script_t * model_script_new(model_t * model, const char * path, exception_
 	return script;
 }
 
-model_module_t * model_module_add(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err)
+model_module_t * model_module_new(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -581,7 +581,7 @@ model_module_t * model_module_add(model_t * model, model_script_t * script, meta
 	return module;
 }
 
-bool model_module_setconfig(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
+model_configparam_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -593,19 +593,19 @@ bool model_module_setconfig(model_t * model, model_module_t * module, const char
 		if (model == NULL || module == NULL || configname == NULL || value == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
-			return false;
+			return NULL;
 		}
 
 		if (strlen(configname) >= MODEL_SIZE_NAME)
 		{
 			exception_set(err, ENOMEM, "Config name is too long! (MODEL_SIZE_NAME = %d)", MODEL_SIZE_NAME);
-			return false;
+			return NULL;
 		}
 
 		if (module->backing->meta == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
-			return false;
+			return NULL;
 		}
 	}
 
@@ -617,14 +617,14 @@ bool model_module_setconfig(model_t * model, model_module_t * module, const char
 	if (!meta_getconfigparam(backing->meta, configname, &sig, &desc))
 	{
 		exception_set(err, EINVAL, "Module %s does not have config param %s", backing->meta->path, configname);
-		return false;
+		return NULL;
 	}
 
 	string_t constraint = model_getconstraint(desc);
 	if (constraint.length >= MODEL_SIZE_CONSTRAINT)
 	{
 		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, backing->meta->path);
-		return false;
+		return NULL;
 	}
 
 	// Allocate script memory and add it to model
@@ -639,7 +639,7 @@ bool model_module_setconfig(model_t * model, model_module_t * module, const char
 	if (configparam == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
-		return false;
+		return NULL;
 	}
 
 	strcpy(configparam->name, configname);
@@ -829,9 +829,9 @@ model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, c
 			return NULL;
 		}
 
-		if (desc != NULL && strlen(desc) >= MODEL_SIZE_SHORTDESCRIPTION)
+		if (desc != NULL && strlen(desc) >= MODEL_SIZE_DESCRIPTION)
 		{
-			exception_set(err, ENOMEM, "Syscall description is too long! (MODEL_SIZE_SHORTDESCRIPTION = %d)", MODEL_SIZE_SHORTDESCRIPTION);
+			exception_set(err, ENOMEM, "Syscall description is too long! (MODEL_SIZE_SHORTDESCRIPTION = %d)", MODEL_SIZE_DESCRIPTION);
 			return NULL;
 		}
 	}
@@ -914,4 +914,17 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 	link->in = ininst;
 
 	return link;
+}
+
+void model_analyse(model_t * model, modeltraversal_t traversal, const model_analysis_t * funcs)
+{
+	// Sanity check
+	{
+		if (model == NULL || funcs == NULL)
+		{
+			return;
+		}
+	}
+
+	model->head.analyse(model, traversal, funcs, model);
 }

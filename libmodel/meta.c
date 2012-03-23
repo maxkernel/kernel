@@ -3,7 +3,7 @@
 #include <errno.h>
 
 #include <aul/base64.h>
-#include <maxmeta.h>
+#include <maxmodel/meta.h>
 
 
 #if defined(USE_BFD)
@@ -351,6 +351,8 @@ bool meta_loadmodule(meta_t * meta, exception_t ** err)
 end_init:
 		__meta_init = NULL;
 	}
+
+	// TODO (IMPORTANT) handle dependencies before loading
 
 	__meta_init = __do_meta_init;
 	meta->dlobject = dlopen(meta->path, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);

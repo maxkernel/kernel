@@ -15,11 +15,11 @@ extern "C" {
 
 typedef enum
 {
-	LEVEL_FATAL		= 1 << 1,
-	LEVEL_ERROR		= 1 << 2,
-	LEVEL_WARNING	= 1 << 3,
-	LEVEL_INFO		= 1 << 4,
-	LEVEL_DEBUG		= 1 << 5
+	LEVEL_FATAL		= (1 << 0),
+	LEVEL_ERROR		= (1 << 1),
+	LEVEL_WARNING	= (1 << 2),
+	LEVEL_INFO		= (1 << 3),
+	LEVEL_DEBUG		= (1 << 4),
 } level_t;
 
 typedef void (*log_f)(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata);

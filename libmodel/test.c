@@ -2,7 +2,8 @@
 #include <string.h>
 #include <dlfcn.h>
 
-#include <maxmeta.h>
+#include <maxmodel/meta.h>
+#include <maxmodel/interpret.h>
 
 
 void print_meta(meta_t * m)
@@ -97,12 +98,59 @@ int main()
 	}
 
 	print_meta(m);
-
-	meta_t * m2 = meta_copy(m);
-	print_meta(m2);
-
-	meta_destroy(m2);
 	meta_destroy(m);
+
+
+	void cbs_log(level_t level, const char * message)
+	{
+		printf("L %X: %s\n", level, message);
+	}
+
+	meta_t * cbs_metalookup(const char * modulename, exception_t ** err)
+	{
+		return meta_parseelf(modulename, err);
+	}
+
+	interpret_callbacks cbs = {
+		.log = cbs_log,
+		.metalookup = cbs_metalookup,
+	};
+
+	model_t * model = model_new();
+	if (!interpret_lua(model, "test.lua", &cbs, &e))
+	{
+		printf("* Fail: Code %d %s\n", e->code, e->message);
+		return -1;
+	}
+
+
+	void * cbs_scripts(void * udata, const model_script_t * script)
+	{
+		printf("Script: %s\n", script->path);
+		return NULL;
+	}
+
+	void * cbs_modules(void * udata, const model_module_t * module)
+	{
+		printf("Module: %s -> %s\n", module->backing->path, module->backing->name);
+		return NULL;
+	}
+
+	void * cbs_configs(void * udata, const model_configparam_t * configparam)
+	{
+		printf("Config param: %s (%c) = %s\n", configparam->name, configparam->sig, configparam->value);
+		return NULL;
+	}
+
+	model_analysis_t cbs2 = {
+		.scripts = cbs_scripts,
+		.modules = cbs_modules,
+		.configs = cbs_configs,
+	};
+
+	model_analyse(model, traversal_scripts_modules_configs_linkables_links, &cbs2);
+
+	model_destroy(model);
 
 	return 0;
 }

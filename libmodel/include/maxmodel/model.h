@@ -1,5 +1,5 @@
-#ifndef __MAX_MODEL_H
-#define __MAX_MODEL_H
+#ifndef __MAXMODEL_MODEL_H
+#define __MAXMODEL_MODEL_H
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -7,7 +7,7 @@
 #include <aul/common.h>
 #include <aul/exception.h>
 #include <aul/string.h>
-#include <maxmeta.h>
+#include <maxmodel/meta.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,9 +15,18 @@ extern "C" {
 
 #define MODEL_SIZE_PATH					META_SIZE_PATH
 #define MODEL_SIZE_NAME					MAX(META_SIZE_ANNOTATE, MAX(META_SIZE_FUNCTION, MAX(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME)))
-#define MODEL_SIZE_SHORTDESCRIPTION		META_SIZE_SHORTDESCRIPTION
+#define MODEL_SIZE_DESCRIPTION			META_SIZE_SHORTDESCRIPTION
+#define MODEL_SIZE_VALUE				150
 #define MODEL_SIZE_CONSTRAINT			25
 #define MODEL_SIZE_BLOCKIONAME			(MODEL_SIZE_NAME + 6)	// Support array indexes on end of name (ex. '[25]')
+#define MODEL_SIZE_MAX \
+	(MAX(MODEL_SIZE_PATH,			\
+	 MAX(MODEL_SIZE_NAME,			\
+	 MAX(MODEL_SIZE_DESCRIPTION,	\
+	 MAX(MODEL_SIZE_VALUE,			\
+	 MAX(MODEL_SIZE_CONSTRAINT,		\
+	 MODEL_SIZE_BLOCKIONAME			\
+	 ))))))
 
 #define MODEL_MAX_ARGS					10	// TODO - find a reasonable value for this
 #define MODEL_MAX_SCRIPTS				20							// Maximum number of scripts per model
@@ -84,7 +93,7 @@ typedef struct
 	char name[MODEL_SIZE_NAME];
 	char sig;
 	char constraint[MODEL_SIZE_CONSTRAINT];
-	void * value;
+	char value[MODEL_SIZE_VALUE];
 } model_configparam_t;
 
 typedef struct __model_modulebacking_t
@@ -110,7 +119,7 @@ typedef struct
 typedef struct
 {
 	char name[MODEL_SIZE_NAME];
-	char description[MODEL_SIZE_SHORTDESCRIPTION];
+	char description[MODEL_SIZE_DESCRIPTION];
 } model_syscall_t;
 
 typedef struct
@@ -199,8 +208,8 @@ string_t model_getbase(const char * ioname);
 string_t model_getsubscript(const char * ioname);
 
 model_script_t * model_script_new(model_t * model, const char * path, exception_t ** err);
-model_module_t * model_module_add(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);
-bool model_module_setconfig(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
+model_module_t * model_module_new(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);
+model_configparam_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
 model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err);
 model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script, const char * name, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err);
 model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err);
