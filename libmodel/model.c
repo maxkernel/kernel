@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <regex.h>
 
 #include <maxmodel/model.h>
 
@@ -863,7 +864,7 @@ model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, c
 	return linkable;
 }
 
-model_link_t * model_link_new(model_t * model, model_script_t * script, model_linkable_t * outinst, const char * outname, model_linkable_t * ininst, const char * inname, exception_t ** err)
+model_link_t * model_link_new(model_t * model, model_script_t * script, model_linkable_t * out, const char * outname, model_linkable_t * in, const char * inname, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -872,7 +873,7 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 			return NULL;
 		}
 
-		if (model == NULL || script == NULL || outinst == NULL || ininst == NULL)
+		if (model == NULL || script == NULL || out == NULL || in == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
@@ -891,7 +892,149 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 		}
 	}
 
-	// TODO (IMPORTANT) verify that out_name and in_name are valid!
+	// Verify that out_name and in_name are valid!
+	switch (out->head.type)
+	{
+		case model_blockinst:
+		{
+			model_blockinst_t * blockinst = out->backing.blockinst;
+			model_modulebacking_t * backing = blockinst->module->backing;
+
+			size_t ios_length = 0;
+			if (!meta_getblock(backing->meta, blockinst->name, NULL, &ios_length, NULL))
+			{
+				exception_set(err, EINVAL, "Could not get block instance IO length");
+				return NULL;
+			}
+
+			const char * names[ios_length];
+			metaiotype_t types[ios_length];
+			if (!meta_getblockios(backing->meta, blockinst->name, names, types, NULL, NULL, ios_length))
+			{
+				exception_set(err, EINVAL, "Could not get block instance IOs");
+				return NULL;
+			}
+
+			bool found = false;
+			for (size_t i = 0; i < ios_length; i++)
+			{
+				if (types[i] == meta_output && strcmp(names[i], outname) == 0)
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				exception_set(err, EINVAL, "Block instance has no output named '%s'", outname);
+				return NULL;
+			}
+
+			break;
+		}
+
+		case model_rategroup:
+		{
+			exception_set(err, EINVAL, "Rategroup has not output named '%s'", outname);
+			return NULL;
+		}
+
+		case model_syscall:
+		{
+			regex_t arg_pattern = {0};
+			if (regcomp(&arg_pattern, "^a[0-9]+$", REG_EXTENDED | REG_NOSUB) != 0)
+			{
+				exception_set(err, EFAULT, "Bad model_syscall output regex!");
+				return NULL;
+			}
+
+			if (regexec(&arg_pattern, outname, 0, NULL, 0) != 0)
+			{
+				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a1' ... 'a#')", outname);
+				return NULL;
+			}
+
+			regfree(&arg_pattern);
+			break;
+		}
+
+		default:
+		{
+			exception_set(err, EINVAL, "Not a linkable output given!");
+			return NULL;
+		}
+	}
+
+	switch (in->head.type)
+	{
+		case model_blockinst:
+		{
+			model_blockinst_t * blockinst = in->backing.blockinst;
+			model_modulebacking_t * backing = blockinst->module->backing;
+
+			size_t ios_length = 0;
+			if (!meta_getblock(backing->meta, blockinst->name, NULL, &ios_length, NULL))
+			{
+				exception_set(err, EINVAL, "Could not get block instance IO length");
+				return NULL;
+			}
+
+			const char * names[ios_length];
+			metaiotype_t types[ios_length];
+			if (!meta_getblockios(backing->meta, blockinst->name, names, types, NULL, NULL, ios_length))
+			{
+				exception_set(err, EINVAL, "Could not get block instance IOs");
+				return NULL;
+			}
+
+			bool found = false;
+			for (size_t i = 0; i < ios_length; i++)
+			{
+				if (types[i] == meta_input && strcmp(names[i], inname) == 0)
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				exception_set(err, EINVAL, "Block instance has no input named '%s'", inname);
+				return NULL;
+			}
+
+			break;
+		}
+
+		case model_rategroup:
+		{
+			if (strcmp(inname, "rate") != 0)
+			{
+				exception_set(err, EINVAL, "Rategroup has no input named '%s' (Only options: 'rate')", inname);
+				return NULL;
+			}
+
+			break;
+		}
+
+		case model_syscall:
+		{
+			if (strcmp(inname, "r") != 0)
+			{
+				exception_set(err, EINVAL, "Syscall has no input named '%s' (Only options: 'r')", inname);
+				return NULL;
+			}
+
+			break;
+		}
+
+		default:
+		{
+			exception_set(err, EINVAL, "Not a linkable input given!");
+			return NULL;
+		}
+	}
 
 	// Allocate script memory and add it to model
 	model_link_t ** mem = nextfree(model_link_t, script->links, MODEL_MAX_LINKS);
@@ -909,9 +1052,9 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 	}
 
 	strcpy(link->out_name, outname);
-	link->out = outinst;
+	link->out = out;
 	strcpy(link->in_name, inname);
-	link->in = ininst;
+	link->in = in;
 
 	return link;
 }

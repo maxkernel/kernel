@@ -534,28 +534,9 @@ bool interpret_lua(model_t * model, const char * path, const interpret_callbacks
 	}
 	/*
 	// Register the functions
-	lua_register(L, "log", l_log);
-	lua_register(L, "print", l_log);
-	lua_register(L, "warn", l_warn);
-	lua_register(L, "debug", l_debug);
-	lua_register(L, "setpath", l_setpath);
-	lua_register(L, "appendpath", l_appendpath);
+
 	//lua_register(L, "include", l_include);	// TODO - come up with an alternative to this!
 	//lua_register(L, "dofile", l_include);
-	lua_register(L, "loadmodule", l_loadmodule);
-	lua_register(L, "route", l_route);
-	lua_register(L, "newrategroup", l_newrategroup);
-	lua_register(L, "newsyscall", l_newsyscall);
-
-	LUALOG(LOG_INFO, "Executing lua file %s", path);
-	if (luaL_loadfile(L, path) || lua_pcall(L, 0,0,0))
-	{
-		LUALOG(LOG_ERR, "Lua: %s", lua_tostring(L, -1));
-		ret = false;
-	}
-
-	lua_close(L);
-	return ret;
 	*/
 
 	// Close down
