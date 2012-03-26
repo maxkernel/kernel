@@ -13,6 +13,8 @@
 #define ENV_METATABLE		"MaxModel.env"
 #define ENTRY_METATABLE		"MaxModel.entry"
 
+#define CONFIG_FLAG			"config"
+
 typedef struct
 {
 	const char * path;
@@ -21,7 +23,11 @@ typedef struct
 	model_script_t * script;
 } luaenv_t;
 
-typedef modelhead_t * entry_t;
+typedef struct
+{
+	modelhead_t * head;
+	char name[MODEL_SIZE_MAX];
+} entry_t;
 
 static int l_dolog(lua_State * L, level_t level)
 {
@@ -47,6 +53,36 @@ static int l_error(lua_State * L)
 	return luaL_error(L, "script: %s", lua_tostring(L, 1));
 }
 
+static int l_dopath(lua_State * L, bool (*pathfunc)(const char *, exception_t **))
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
+
+	if (pathfunc == NULL)
+	{
+		return 0;
+	}
+
+	exception_t * e = NULL;
+	if (!pathfunc(lua_tostring(L, 1), &e) || exception_check(&e))
+	{
+		return luaL_error(L, "config path failed: %s", (e == NULL)? "Unknown error!" : e->message);
+	}
+
+	return 0;
+}
+
+static int l_setpath(lua_State * L)
+{
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	return l_dopath(L, env->cbs->setpath);
+}
+
+static int l_appendpath(lua_State * L)
+{
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	return l_dopath(L, env->cbs->appendpath);
+}
+
 static int l_loadmodule(lua_State * L)
 {
 	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
@@ -70,10 +106,11 @@ static int l_loadmodule(lua_State * L)
 		}
 
 		entry = lua_newuserdata(L, sizeof(entry_t));
+		memset(entry, 0, sizeof(entry_t));
 		luaL_getmetatable(L, ENTRY_METATABLE);
 		lua_setmetatable(L, -2);
 
-		*entry = &module->head;
+		entry->head = &module->head;
 	}
 	meta_destroy(meta);
 
@@ -82,30 +119,245 @@ static int l_loadmodule(lua_State * L)
 
 static int l_newblockinst(lua_State * L)
 {
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	entry_t * entry = luaL_checkudata(L, lua_upvalueindex(2), ENTRY_METATABLE);
+	const char * blockname = luaL_checkstring(L, lua_upvalueindex(3));
+
+	modelhead_t * head = entry->head;
+	if (head->type != model_module)
+	{
+		return luaL_error(L, "Not a module! (Could not create block instance)");
+	}
+
+	model_module_t * module = (model_module_t *)head;
+	model_modulebacking_t * backing = module->backing;
+
+	const char * sig = NULL;
+	if (!meta_getblock(backing->meta, blockname, &sig, NULL, NULL))
+	{
+		return luaL_error(L, "Could not find block '%s' in module %s.", blockname, backing->path);
+	}
+
+	size_t args_length = strlen(sig);
+	const char * args[args_length];
+	memset(args, 0, sizeof(const char *) * args_length);
+
+	for (size_t i = 0; i < args_length; i++)
+	{
+		if (lua_type(L, i+1) == LUA_TBOOLEAN)
+		{
+			// Set that item on the stack to an integer
+			bool v = lua_toboolean(L, i+1);
+			lua_pushstring(L, (v)? "true" : "false");
+			lua_replace(L, i+1);
+		}
+
+		args[i] = luaL_checkstring(L, i+1);
+	}
+
+	exception_t * e = NULL;
+	model_linkable_t * blockinst = model_blockinst_new(env->model, module, env->script, blockname, args, args_length, &e);
+	if (blockinst == NULL || exception_check(&e))
+	{
+		return luaL_error(L, "blockinst failed: %s", (e == NULL)? "Unknown error!" : e->message);
+	}
+
+	entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
+	memset(newentry, 0, sizeof(entry_t));
+	luaL_getmetatable(L, ENTRY_METATABLE);
+	lua_setmetatable(L, -2);
+
+	newentry->head = &blockinst->head;
+
+	return 1;
+}
+
+static int l_route(lua_State * L)
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TUSERDATA, 1, "must be userdata");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TUSERDATA, 2, "must be userdata");
+
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	entry_t * out = luaL_checkudata(L, 1, ENTRY_METATABLE);
+	entry_t * in = luaL_checkudata(L, 2, ENTRY_METATABLE);
+
+	if (!model_linkable(out->head->type))
+	{
+		return luaL_error(L, "Output not a valid linkable!");
+	}
+
+	if (!model_linkable(in->head->type))
+	{
+		return luaL_error(L, "Input not a valid linkable!");
+	}
+
+	exception_t * e = NULL;
+	model_link_t * link = model_link_new(env->model, env->script, (model_linkable_t *)out->head, out->name, (model_linkable_t *)in->head, in->name, &e);
+	if (link == NULL || exception_check(&e))
+	{
+		return luaL_error(L, "link failed: %s", (e == NULL)? "Unknown error!" : e->message);
+	}
 
 	return 0;
+}
+
+static int l_newrategroup(lua_State * L)
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be table");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TNUMBER, 3, "must be number");
+
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	const char * name = luaL_checkstring(L, 1);
+	double rate_hz = luaL_checknumber(L, 3);
+
+	size_t index = 0;
+	const model_linkable_t * blockinsts[MODEL_MAX_RATEGROUPELEMS] = { NULL };
+
+	lua_pushnil(L);
+	while (lua_next(L, 2))
+	{
+		if (index >= MODEL_MAX_RATEGROUPELEMS)
+		{
+			return luaL_error(L, "Too many rategroup elements! (MODEL_MAX_RATEGROUPELEMS = %d)", MODEL_MAX_RATEGROUPELEMS);
+		}
+
+		entry_t * entry = luaL_checkudata(L, -1, ENTRY_METATABLE);
+		if (entry->head->type != model_blockinst || strcmp(entry->name, "") != 0)
+		{
+			return luaL_error(L, "Invalid blockinst for item #%d", index+1);
+		}
+
+		blockinsts[index] = (model_linkable_t *)entry->head;
+
+		lua_pop(L, 1);
+		index += 1;
+	}
+
+	exception_t * e = NULL;
+	model_linkable_t * rg = model_rategroup_new(env->model, env->script, name, rate_hz, blockinsts, index, &e);
+	if (rg == NULL || exception_check(&e))
+	{
+		return luaL_error(L, "rategroup failed: %s", (e == NULL)? "Unknown error!" : e->message);
+	}
+
+	entry_t * entry = lua_newuserdata(L, sizeof(entry_t));
+	memset(entry, 0, sizeof(entry_t));
+	luaL_getmetatable(L, ENTRY_METATABLE);
+	lua_setmetatable(L, -2);
+
+	entry->head = &rg->head;
+
+	return 1;
+}
+
+static int l_newsyscall(lua_State * L)
+{
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be table");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TUSERDATA || lua_type(L, 3) == LUA_TNIL, 3, "must be userdata or nil");
+	luaL_argcheck(L, lua_type(L, 4) == LUA_TSTRING, 4, "must be string");
+
+	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
+	const char * name = luaL_checkstring(L, 1);
+	entry_t * retvalue = NULL;
+	const char * desc = luaL_checkstring(L, 4);
+
+	if (!lua_isnil(L, 3))
+	{
+		retvalue = luaL_checkudata(L, 3, ENTRY_METATABLE);
+		if (!model_linkable(retvalue->head->type))
+		{
+			return luaL_error(L, "Invalid linkable for item #r");
+		}
+	}
+
+	exception_t * e = NULL;
+	model_linkable_t * syscall = model_syscall_new(env->model, env->script, name, desc, &e);
+	if (syscall == NULL || exception_check(&e))
+	{
+		return luaL_error(L, "syscall failed: %s", (e == NULL)? "Unknown error!" : e->message);
+	}
+
+	entry_t * entry = lua_newuserdata(L, sizeof(entry_t));
+	memset(entry, 0, sizeof(entry_t));
+	luaL_getmetatable(L, ENTRY_METATABLE);
+	lua_setmetatable(L, -2);
+
+	entry->head = &syscall->head;
+
+	// Link the return value
+	if (retvalue != NULL)
+	{
+		model_link_t * link = model_link_new(env->model, env->script, (model_linkable_t *)retvalue->head, retvalue->name, syscall, "r", &e);
+		if (link == NULL || exception_check(&e))
+		{
+			return luaL_error(L, "link(r) failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		}
+	}
+
+	size_t index = 0;
+
+	// Link all the argument values
+	lua_pushnil(L);
+	while (lua_next(L, 2))
+	{
+		if (!lua_isnil(L, -1))
+		{
+			entry_t * avalue = luaL_checkudata(L, -1, ENTRY_METATABLE);
+			if (!model_linkable(avalue->head->type))
+			{
+				return luaL_error(L, "Invalid linkable for item #a%d", index+1);
+			}
+
+			string_t aname = string_new("a%d", index+1);
+
+			model_link_t * link = model_link_new(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
+			if (link == NULL || exception_check(&e))
+			{
+				return luaL_error(L, "link(a%d) failed: %s", index+1, (e == NULL)? "Unknown error!" : e->message);
+			}
+		}
+
+		lua_pop(L, 1);
+		index += 1;
+	}
+
+	return 1;
 }
 
 
 static int mt_entry_index(lua_State * L)
 {
 	luaL_argcheck(L, lua_type(L, 1) == LUA_TUSERDATA, 1, "must be userdata");
-	luaL_argcheck(L, lua_type(L, 2) == LUA_TSTRING, 2, "must be string");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TSTRING || lua_type(L, 2) == LUA_TNUMBER, 2, "must be string");
+
+	//luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
 	entry_t * entry = luaL_checkudata(L, 1, ENTRY_METATABLE);
 	const char * key = luaL_checkstring(L, 2);
 
-	//luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
-	switch ((*entry)->type)
+	if (strlen(key) >= MODEL_SIZE_MAX)
+	{
+		return luaL_error(L, "Key label too long! (MODEL_SIZE_MAX = %d) '%s'", MODEL_SIZE_MAX, key);
+	}
+
+	switch (entry->head->type)
 	{
 		case model_module:
 		{
-			if (strcmp(key, "config") == 0)
+			if (strcmp(key, CONFIG_FLAG) == 0)
 			{
-				// We are a config value, just return self
-				lua_pushvalue(L, 1);
+				entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
+				memset(newentry, 0, sizeof(entry_t));
+				luaL_getmetatable(L, ENTRY_METATABLE);
+				lua_setmetatable(L, -2);
+
+				newentry->head = entry->head;
+				strcpy(newentry->name, CONFIG_FLAG);
+
 				return 1;
 			}
-			else
+			else if (meta_getblock(((model_module_t *)entry->head)->backing->meta, key, NULL, NULL, NULL))
 			{
 				// We are a block reference, push a closure to create the new instance on the stack
 				lua_pushvalue(L, lua_upvalueindex(1));
@@ -114,15 +366,47 @@ static int mt_entry_index(lua_State * L)
 				lua_pushcclosure(L, l_newblockinst, 3);
 				return 1;
 			}
+			else
+			{
+				model_modulebacking_t * backing = ((model_module_t *)entry->head)->backing;
+				return luaL_error(L, "Unknown module field '%s' in module %s", key, backing->path);
+			}
+		}
+
+		case model_blockinst:
+		{
+			entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
+			memset(newentry, 0, sizeof(entry_t));
+			luaL_getmetatable(L, ENTRY_METATABLE);
+			lua_setmetatable(L, -2);
+
+			newentry->head = entry->head;
+			strcpy(newentry->name, key);
+
+			return 1;
+		}
+
+		case model_rategroup:
+		case model_syscall:
+		{
+			entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
+			memset(newentry, 0, sizeof(entry_t));
+			luaL_getmetatable(L, ENTRY_METATABLE);
+			lua_setmetatable(L, -2);
+
+			newentry->head = entry->head;
+			strcpy(newentry->name, key);
+
+			return 1;
 		}
 
 		default:
 		{
-			return luaL_error(L, "Unknown userdata entry: %X", (*entry)->type);
+			return luaL_error(L, "Unknown userdata entry: %d", entry->head->type);
 		}
 	}
 
-	return 1;
+	return 0;
 }
 
 static int mt_entry_newindex(lua_State * L)
@@ -137,23 +421,29 @@ static int mt_entry_newindex(lua_State * L)
 	exception_t * e = NULL;
 
 	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
-	switch ((*entry)->type)
+	switch (entry->head->type)
 	{
 		case model_module:
 		{
-			//modelhead_t * head = *entry;
-			model_configparam_t * configparam = model_configparam_new(env->model, (model_module_t *)(*entry), key, value, &e);
-			if (configparam == NULL || exception_check(&e))
+			if (strcmp(entry->name, CONFIG_FLAG) == 0)
 			{
-				return luaL_error(L, "configparam failed: %s", (e == NULL)? "Unknown error!" : e->message);
+				model_configparam_t * configparam = model_configparam_new(env->model, (model_module_t *)entry->head, key, value, &e);
+				if (configparam == NULL || exception_check(&e))
+				{
+					return luaL_error(L, "configparam failed: %s", (e == NULL)? "Unknown error!" : e->message);
+				}
 			}
-
+			else
+			{
+				model_modulebacking_t * backing = ((model_module_t *)entry->head)->backing;
+				return luaL_error(L, "Unknown module field '%s' in module %s", key, backing->path);
+			}
 			break;
 		}
 
 		default:
 		{
-			return luaL_error(L, "Unknown userdata entry: %d", (*entry)->type);
+			return luaL_error(L, "Unknown userdata entry: %d", entry->head->type);
 		}
 	}
 
@@ -226,10 +516,13 @@ bool interpret_lua(model_t * model, const char * path, const interpret_callbacks
 		function_register(warn);
 		function_register(error);
 
-		//interpreter_register(setpath);
-		//interpreter_register(appendpath);
+		function_register(setpath);
+		function_register(appendpath);
 
 		function_register(loadmodule);
+		function_register(route);
+		function_register(newrategroup);
+		function_register(newsyscall);
 	}
 	lua_pop(L, 1);
 

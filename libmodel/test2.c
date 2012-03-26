@@ -77,7 +77,7 @@ cal_param(cal_param, 'i', "Cal param desc");
 cal_onmodechange(cal_modechange);
 cal_onpreview(cal_preview);
 
-define_block(test_block, "Test block desc", tblock_new, "v:bid", "Constructor desc");
+define_block(test_block, "Test block desc", tblock_new, "bid", "Constructor desc");
 block_onupdate(test_block, tblock_update);
 block_ondestroy(test_block, tblock_destroy);
 block_input(test_block, tinput1, 'i', "Input 1 desc");

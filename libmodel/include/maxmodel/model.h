@@ -70,6 +70,8 @@ typedef enum
 	model_link			= (0x1 << 8),
 } modeltype_t;
 
+#define model_linkable(x)		((x) & (model_blockinst | model_syscall | model_rategroup))
+
 typedef enum __modeltraversal_t
 {
 	traversal_none = 0,

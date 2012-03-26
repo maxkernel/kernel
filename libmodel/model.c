@@ -563,7 +563,7 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 	else
 	{
 		// Module already exists, check the version and name to verify they are the same
-		if (backing->meta->version != meta->version)
+		if (backing->meta->version->version != meta->version->version)
 		{
 			string_t meta_version = version_tostring(meta->version->version);
 			string_t module_version = version_tostring(backing->meta->version->version);
@@ -713,7 +713,7 @@ model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module,
 		return NULL;
 	}
 
-	model_linkable_t * linkable = *mem = model_malloc(model, model_blockinst, model_linkable_destroy, model_link_analyse, sizeof(model_linkable_t) + sizeof(model_blockinst_t) + args_size);
+	model_linkable_t * linkable = *mem = model_malloc(model, model_blockinst, model_linkable_destroy, model_linkable_analyse, sizeof(model_linkable_t) + sizeof(model_blockinst_t) + args_size);
 	if (linkable == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");

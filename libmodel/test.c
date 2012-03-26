@@ -142,14 +142,54 @@ int main()
 		return NULL;
 	}
 
+	void * cbs_linkables(void * udata, const model_linkable_t * linkable)
+	{
+		printf("Linkable\n");
+		return NULL;
+	}
+
+	void * cbs_blockinsts(void * udata, const model_linkable_t * linkable)
+	{
+		const model_blockinst_t * blockinst = linkable->backing.blockinst;
+		printf("Block inst: %s ->", blockinst->name);
+		for (size_t i = 0; i < MODEL_MAX_ARGS; i++)
+		{
+			if (blockinst->args[i] == NULL)
+			{
+				break;
+			}
+
+			printf(" (%zu) %s,", i, blockinst->args[i]);
+		}
+		printf("\n");
+
+		return NULL;
+	}
+
+	void * cbs_rategroups(void * udata, const model_linkable_t * linkable)
+	{
+		const model_rategroup_t * rategroup = linkable->backing.rategroup;
+		printf("Rategroup: %s (%f)\n", rategroup->name, rategroup->hertz);
+		return NULL;
+	}
+
+	void * cbs_links(void * udata, const model_link_t * link)
+	{
+		printf("Link: %s -> %s\n", link->out_name, link->in_name);
+		return NULL;
+	}
+
 	model_analysis_t cbs2 = {
 		.scripts = cbs_scripts,
 		.modules = cbs_modules,
 		.configs = cbs_configs,
+		.blockinsts = cbs_blockinsts,
+		.rategroups = cbs_rategroups,
+		.linkables = cbs_linkables,
+		.links = cbs_links,
 	};
 
 	model_analyse(model, traversal_scripts_modules_configs_linkables_links, &cbs2);
-
 	model_destroy(model);
 
 	return 0;

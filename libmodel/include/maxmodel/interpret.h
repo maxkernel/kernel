@@ -18,6 +18,9 @@ typedef struct
 {
 	void (*log)(level_t level, const char * message);
 	meta_t * (*metalookup)(const char * modulename, exception_t ** err);
+	bool (*setpath)(const char * newpath, exception_t ** err);
+	bool (*appendpath)(const char * patn, exception_t ** err);
+
 } interpret_callbacks;
 
 #ifdef USE_LUA

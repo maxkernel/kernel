@@ -796,6 +796,11 @@ int main(int argc, char * argv[])
 		{
 			LOGK(LOG_FATAL, "Failed little-endian runtime check!");
 		}
+
+		if (sizeof(bool) != 1)
+		{
+			LOGK(LOG_FATAL, "Failed bool size runtime check!");
+		}
 	}
 
 	// Set up the working directory to the install dir
