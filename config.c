@@ -4,14 +4,14 @@
 #include <kernel.h>
 #include <kernel-priv.h>
 
-cfgentry_t * cfg_getparam(const char * modname, const char * cfgname)
+const cfgentry_t * cfg_getparam(const char * modname, const char * cfgname)
 {
-	list_t * pos;
-	module_t * module = module_get(modname);
+	const list_t * pos;
+	const module_t * module = module_lookup(modname);
 
 	list_foreach(pos, &module->cfgentries)
 	{
-		cfgentry_t * cfg = list_entry(pos, cfgentry_t, module_list);
+		const cfgentry_t * cfg = list_entry(pos, cfgentry_t, module_list);
 		if (strcmp(cfgname, cfg->name) == 0)
 		{
 			return cfg;
@@ -25,7 +25,7 @@ void cfg_setparam(const char * modname, const char * cfgname, const char * value
 {
 	LABELS(err_parse);
 
-	module_t * module = module_get(modname);
+	const module_t * module = module_lookup(modname);
 
 	if (module == NULL)
 	{
@@ -33,7 +33,7 @@ void cfg_setparam(const char * modname, const char * cfgname, const char * value
 		return;
 	}
 
-	cfgentry_t * cfg = cfg_getparam(modname, cfgname);
+	const cfgentry_t * cfg = cfg_getparam(modname, cfgname);
 	if (cfg == NULL)
 	{
 		LOGK(LOG_ERR, "Could not set configuration parameter %s.%s, entry %s does not exist!", modname, cfgname, cfgname);

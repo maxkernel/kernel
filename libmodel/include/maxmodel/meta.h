@@ -7,6 +7,7 @@
 #include <aul/common.h>
 #include <aul/exception.h>
 #include <aul/version.h>
+#include <aul/iterator.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,7 +17,7 @@ extern "C" {
 #define META_SIZE_ANNOTATE				50
 #define META_SIZE_DEPENDENCY			50
 #define META_SIZE_LONGDESCRIPTION		200
-#define META_SIZE_SHORTDESCRIPTION		80
+#define META_SIZE_SHORTDESCRIPTION		120
 #define META_SIZE_BLOCKNAME				50
 #define META_SIZE_BLOCKIONAME			25
 #define META_SIZE_FUNCTION				50
@@ -146,7 +147,7 @@ typedef struct
 	const metahead_t head __meta_a1;
 	const char function_name[META_SIZE_FUNCTION] __meta_a1;
 	const char function_signature[META_SIZE_SIGNATURE] __meta_a1;
-	const char function_description[META_SIZE_SHORTDESCRIPTION] __meta_a1;
+	const char function_description[META_SIZE_LONGDESCRIPTION] __meta_a1;
 } meta_callback_head_t;
 
 typedef struct
@@ -195,7 +196,7 @@ typedef struct
 	const char block_description[META_SIZE_LONGDESCRIPTION] __meta_a1;
 	const char constructor_name[META_SIZE_FUNCTION] __meta_a1;
 	const char constructor_signature[META_SIZE_SIGNATURE] __meta_a1;
-	const char constructor_description[META_SIZE_SHORTDESCRIPTION] __meta_a1;
+	const char constructor_description[META_SIZE_LONGDESCRIPTION] __meta_a1;
 	const meta_callback_f constructor __meta_a1;
 } meta_block_t;
 
@@ -270,9 +271,9 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 
 #define config_param(variable, sig, desc)		__meta_write(meta_variable_t, meta_configparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
 
-#define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, meta_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
-#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calonmodechange, (#function), "v:i", "", (function))
-#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calonpreview, (#function), "b:scpp", "", (function))
+//#define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, meta_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
+//#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calonmodechange, (#function), "v:i", "", (function))
+//#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calonpreview, (#function), "b:scpp", "", (function))
 
 #define define_block(blockname, block_desc, constructor, sig, constructor_desc) \
 												__meta_write(meta_block_t, meta_block, (#blockname), (block_desc), (#constructor), (sig), (constructor_desc), (meta_callback_f)(constructor))
@@ -323,6 +324,9 @@ typedef struct
 	meta_blockio_t * block_ios[META_MAX_BLOCKIOS];
 } meta_t;
 
+typedef meta_callback_bv_f meta_initializer;
+typedef meta_callback_vv_f meta_destroyer;
+typedef meta_callback_vv_f meta_activator;
 
 #define meta_foreach(item, items, maxsize) \
 	for (size_t __i = 0; ((item) = (items)[__i]) != NULL && __i < (maxsize); __i++)
@@ -338,12 +342,18 @@ bool meta_loadmodule(meta_t * meta, exception_t ** err);
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err);
 size_t meta_encodebase64(meta_t * meta, const char * to, size_t length);
 
-meta_t * meta_copy(meta_t * meta);
+meta_t * meta_copy(const meta_t * meta);
 void meta_destroy(meta_t * meta);
+
+void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, const version_t ** version, const char ** author, const char ** desc);
+void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact);
 
 bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc);
 bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
 bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
+iterator_t meta_getdependencyitr(const meta_t * meta);
+const char * meta_dependencynext(iterator_t itr);
+
 
 #ifdef __cplusplus
 }

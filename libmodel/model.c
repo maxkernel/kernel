@@ -93,7 +93,13 @@ static bool model_model_destroy(model_t * model, modelhead_t * self, modelhead_t
 	bool isself = (target == NULL)? true : self->id == target->id;
 
 	model_array_handlefree(model->scripts, MODEL_MAX_SCRIPTS);
-	model_array_handlefree(model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
+
+	meta_t * meta = NULL;
+	model_foreach(meta, model->backings, MODEL_MAX_BACKINGS)
+	{
+		meta_destroy(meta);
+	}
+	memset(model->backings, 0, sizeof(void *) * MODEL_MAX_BACKINGS);
 
 	return isself;
 }
@@ -117,27 +123,7 @@ static bool model_module_destroy(model_t * model, modelhead_t * self, modelhead_
 
 	model_array_handlefree(module->configparams, MODEL_MAX_CONFIGPARAMS);
 
-	if (isself)
-	{
-		module->backing->refs -= 1;
-	}
-
 	return isself;
-}
-
-static bool model_modulebacking_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
-{
-	model_modulebacking_t * backing = (model_modulebacking_t *)self;
-
-	if (backing->refs == 0)
-	{
-		meta_destroy(backing->meta);
-		backing->meta = NULL;
-
-		return true;
-	}
-
-	return false;
 }
 
 static bool model_configparam_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
@@ -195,8 +181,8 @@ static inline void traverse(const model_t * model, modeltraversal_t traversal, c
 	}
 }
 
-#define model_handlecallback(callback, object) \
-	if (callback != NULL) object->head.userdata = callback(object->head.userdata, object)
+#define model_handlecallback(callback, model, object) \
+	if (callback != NULL) object->head.userdata = callback(object->head.userdata, model, object)
 
 static void model_model_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
 {
@@ -220,7 +206,7 @@ static void model_script_analyse(const model_t * model, modeltraversal_t travers
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->scripts, script);
+			model_handlecallback(cbs->scripts, model, script);
 			traverse(model, traversal, cbs, (void **)script->modules, MODEL_MAX_MODULES);
 			traverse(model, traversal, cbs, (void **)script->linkables, MODEL_MAX_LINKABLES);
 			traverse(model, traversal, cbs, (void **)script->links, MODEL_MAX_LINKS);
@@ -239,24 +225,8 @@ static void model_module_analyse(const model_t * model, modeltraversal_t travers
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->modules, module);
+			model_handlecallback(cbs->modules, model, module);
 			traverse(model, traversal, cbs, (void **)module->configparams, MODEL_MAX_CONFIGPARAMS);
-			break;
-		}
-
-		default: break;
-	}
-}
-
-static void model_modulebacking_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
-{
-	//model_modulebacking_t * backing = object;
-
-	switch (traversal)
-	{
-		case traversal_scripts_modules_configs_linkables_links:
-		{
-			// Not analyzing here, this is covered by model_module_analyse
 			break;
 		}
 
@@ -272,7 +242,7 @@ static void model_configparam_analyse(const model_t * model, modeltraversal_t tr
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->configs, configparam);
+			model_handlecallback(cbs->configs, model, configparam);
 			break;
 		}
 
@@ -286,12 +256,12 @@ static void model_linkable_analyse(const model_t * model, modeltraversal_t trave
 
 	void linkable_handlecallbacks()
 	{
-		model_handlecallback(cbs->linkables, linkable);
+		model_handlecallback(cbs->linkables, model, linkable);
 		switch (linkable->head.type)
 		{
-			case model_blockinst:	model_handlecallback(cbs->blockinsts, linkable);		break;
-			case model_syscall:		model_handlecallback(cbs->syscalls, linkable);			break;
-			case model_rategroup:	model_handlecallback(cbs->rategroups, linkable);		break;
+			case model_blockinst:	model_handlecallback(cbs->blockinsts, model, linkable);		break;
+			case model_syscall:		model_handlecallback(cbs->syscalls, model, linkable);		break;
+			case model_rategroup:	model_handlecallback(cbs->rategroups, model, linkable);		break;
 			default: break;
 		}
 	}
@@ -316,7 +286,7 @@ static void model_link_analyse(const model_t * model, modeltraversal_t traversal
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->links, link);
+			model_handlecallback(cbs->links, model, link);
 			break;
 		}
 
@@ -385,10 +355,28 @@ void model_destroy(model_t * model)
 	model_free(model, &model->head, &model->head);
 }
 
+void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
+{
+	meta_t ** mem = nextfree(meta_t, model->backings, MODEL_MAX_BACKINGS);
+	if (mem == NULL)
+	{
+		exception_set(err, ENOMEM, "Out of module backing memory! (MODEL_MAX_BACKINGS = %d)", MODEL_MAX_BACKINGS);
+		return;
+	}
+
+	*mem = meta_copy(meta);
+}
+
 string_t model_getconstraint(const char * desc)
 {
 	// TODO - FINISH ME!
 	return string_blank();
+}
+
+const char * model_getpastconstraint(const char * desc)
+{
+	// TODO - FINISH ME!
+	return NULL;
 }
 
 string_t model_getbase(const char * ioname)
@@ -489,14 +477,14 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 	}
 
 	model_module_t * module = NULL;
-	model_modulebacking_t * backing = NULL;
+	meta_t * backing = NULL;
 	{
 		// See if module exists in script
 		{
 			model_module_t * item = NULL;
 			model_foreach(item, script->modules, MODEL_MAX_MODULES)
 			{
-				if (strcmp(item->backing->meta->path, meta->path) == 0)
+				if (strcmp(item->backing->path, meta->path) == 0)
 				{
 					module = item;
 					backing = item->backing;
@@ -508,10 +496,10 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 		if (module == NULL)
 		{
 			// Module isn't registered with script, see if we can find the backing
-			model_modulebacking_t * item = NULL;
-			model_foreach(item, model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS)
+			meta_t * item = NULL;
+			model_foreach(item, model->backings, MODEL_MAX_BACKINGS)
 			{
-				if (strcmp(item->meta->path, meta->path) == 0)
+				if (strcmp(item->path, meta->path) == 0)
 				{
 					backing = item;
 					break;
@@ -522,24 +510,19 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 
 	if (backing == NULL)
 	{
-		model_modulebacking_t ** mem = nextfree(model_modulebacking_t, model->modulebackings, MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
+		meta_t ** mem = nextfree(meta_t, model->backings, MODEL_MAX_BACKINGS);
 		if (mem == NULL)
 		{
-			exception_set(err, ENOMEM, "Out of model module memory! (MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS = %d)", MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS);
+			exception_set(err, ENOMEM, "Out of module backing memory! (MODEL_MAX_BACKINGS = %d)", MODEL_MAX_BACKINGS);
 			return NULL;
 		}
 
-		backing = *mem = model_malloc(model, model_modulebacking, model_modulebacking_destroy, model_modulebacking_analyse, sizeof(model_modulebacking_t));
+		backing = *mem = meta_copy(meta);
 		if (backing == NULL)
 		{
 			exception_set(err, ENOMEM, "Out of heap memory!");
 			return NULL;
 		}
-
-		backing->meta = meta_copy(meta);
-		strcpy(backing->path, meta->path);
-		strcpy(backing->name, meta->name->name);
-		backing->version = meta->version->version;
 	}
 
 	if (module == NULL)
@@ -559,22 +542,36 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 		}
 
 		module->backing = backing;
-		module->backing->refs += 1;
+
+		// Create static block instance
+		module->staticinst = model_blockinst_new(model, module, script, "static", NULL, 0, err);
+		if (module->staticinst == NULL || exception_check(err))
+		{
+			// An error happened!
+			return NULL;
+		}
 	}
 	else
 	{
 		// Module already exists, check the version and name to verify they are the same
-		if (backing->meta->version->version != meta->version->version)
+		const char * path = NULL;
+		const char * namea = NULL;				const char * nameb = NULL;
+		const version_t * versiona = NULL;		const version_t * versionb = NULL;
+
+		meta_getinfo(backing, &path, &namea, &versiona, NULL, NULL);
+		meta_getinfo(meta, NULL, &nameb, &versionb, NULL, NULL);
+
+		if (versiona != versionb)
 		{
-			string_t meta_version = version_tostring(meta->version->version);
-			string_t module_version = version_tostring(backing->meta->version->version);
-			exception_set(err, EINVAL, "Module version mismatch. Expected %s, got %s for module %s", module_version.string, meta_version.string, backing->meta->path);
+			string_t versiona_str = version_tostring(*versiona);
+			string_t versionb_str = version_tostring(*versionb);
+			exception_set(err, EINVAL, "Module version mismatch. Expected %s, got %s for module %s", versiona_str.string, versionb_str.string, path);
 			return NULL;
 		}
 
-		if (strcmp(backing->meta->name->name, meta->name->name) != 0)
+		if (strcmp(namea, nameb) != 0)
 		{
-			exception_set(err, EINVAL, "Module name mismatch. Expected %s, got %s for module %s", backing->meta->name->name, meta->name->name, backing->meta->path);
+			exception_set(err, EINVAL, "Module name mismatch. Expected %s, got %s for module %s", namea, nameb, path);
 			return NULL;
 		}
 	}
@@ -603,28 +600,29 @@ model_configparam_t * model_configparam_new(model_t * model, model_module_t * mo
 			return NULL;
 		}
 
-		if (module->backing->meta == NULL)
+		if (module->backing == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return NULL;
 		}
 	}
 
-	model_modulebacking_t * backing = module->backing;
+	const char * path = NULL;
+	meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
 
 	char sig;
 	const char * desc;
 
-	if (!meta_getconfigparam(backing->meta, configname, &sig, &desc))
+	if (!meta_getconfigparam(module->backing, configname, &sig, &desc))
 	{
-		exception_set(err, EINVAL, "Module %s does not have config param %s", backing->meta->path, configname);
+		exception_set(err, EINVAL, "Module %s does not have config param %s", path, configname);
 		return NULL;
 	}
 
 	string_t constraint = model_getconstraint(desc);
 	if (constraint.length >= MODEL_SIZE_CONSTRAINT)
 	{
-		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, backing->meta->path);
+		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, path);
 		return NULL;
 	}
 
@@ -672,32 +670,48 @@ model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module,
 			return NULL;
 		}
 
+		if (args_length > 0 && args == NULL)
+		{
+			exception_set(err, EINVAL, "Bad args argument!");
+			return NULL;
+		}
+
 		if (args_length > MODEL_MAX_ARGS)
 		{
 			exception_set(err, ENOMEM, "Block instance argument list too long! (MODEL_MAX_ARGS = %d)", MODEL_MAX_ARGS);
 			return NULL;
 		}
 
-		if (module->backing->meta == NULL)
+		if (strcmp(blockname, "static") == 0 && args_length > 0)
+		{
+			exception_set(err, EINVAL, "Bad args_length argument (static blocks have no arguments)!");
+			return NULL;
+		}
+
+		if (module->backing == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return NULL;
 		}
 	}
 
-	model_modulebacking_t * backing = module->backing;
+	const char * path = NULL;
+	meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
 
-	const char * constructor_sig = NULL;
-	if (!meta_getblock(backing->meta, blockname, &constructor_sig, NULL, NULL))
+	if (strcmp(blockname, "static") != 0)
 	{
-		exception_set(err, EINVAL, "Module %s does not have block %s", backing->meta->path, blockname);
-		return NULL;
-	}
+		const char * constructor_sig = NULL;
+		if (!meta_getblock(module->backing, blockname, &constructor_sig, NULL, NULL))
+		{
+			exception_set(err, EINVAL, "Module %s does not have block %s", path, blockname);
+			return NULL;
+		}
 
-	if (strlen(constructor_sig) != args_length)
-	{
-		exception_set(err, EINVAL, "Block %s constructor argument mismatch. Expected %zu argument(s) for signature %s, got %zu", blockname, strlen(constructor_sig), constructor_sig, args_length);
-		return NULL;
+		if (strlen(constructor_sig) != args_length)
+		{
+			exception_set(err, EINVAL, "Block %s constructor argument mismatch. Expected %zu argument(s) for signature %s, got %zu", blockname, strlen(constructor_sig), constructor_sig, args_length);
+			return NULL;
+		}
 	}
 
 	size_t args_size = 0;
@@ -898,10 +912,10 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 		case model_blockinst:
 		{
 			model_blockinst_t * blockinst = out->backing.blockinst;
-			model_modulebacking_t * backing = blockinst->module->backing;
+			meta_t * backing = blockinst->module->backing;
 
 			size_t ios_length = 0;
-			if (!meta_getblock(backing->meta, blockinst->name, NULL, &ios_length, NULL))
+			if (!meta_getblock(backing, blockinst->name, NULL, &ios_length, NULL))
 			{
 				exception_set(err, EINVAL, "Could not get block instance IO length");
 				return NULL;
@@ -909,7 +923,7 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 
 			const char * names[ios_length];
 			metaiotype_t types[ios_length];
-			if (!meta_getblockios(backing->meta, blockinst->name, names, types, NULL, NULL, ios_length))
+			if (!meta_getblockios(backing, blockinst->name, names, types, NULL, NULL, ios_length))
 			{
 				exception_set(err, EINVAL, "Could not get block instance IOs");
 				return NULL;
@@ -971,10 +985,10 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 		case model_blockinst:
 		{
 			model_blockinst_t * blockinst = in->backing.blockinst;
-			model_modulebacking_t * backing = blockinst->module->backing;
+			meta_t * backing = blockinst->module->backing;
 
 			size_t ios_length = 0;
-			if (!meta_getblock(backing->meta, blockinst->name, NULL, &ios_length, NULL))
+			if (!meta_getblock(backing, blockinst->name, NULL, &ios_length, NULL))
 			{
 				exception_set(err, EINVAL, "Could not get block instance IO length");
 				return NULL;
@@ -982,7 +996,7 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 
 			const char * names[ios_length];
 			metaiotype_t types[ios_length];
-			if (!meta_getblockios(backing->meta, blockinst->name, names, types, NULL, NULL, ios_length))
+			if (!meta_getblockios(backing, blockinst->name, names, types, NULL, NULL, ios_length))
 			{
 				exception_set(err, EINVAL, "Could not get block instance IOs");
 				return NULL;
@@ -1070,4 +1084,52 @@ void model_analyse(model_t * model, modeltraversal_t traversal, const model_anal
 	}
 
 	model->head.analyse(model, traversal, funcs, model);
+}
+
+
+bool model_getmeta(const model_module_t * module, const meta_t ** meta)
+{
+	// Sanity check
+	{
+		if (module == NULL)
+		{
+			return false;
+		}
+	}
+
+	if (meta != NULL)
+	{
+		*meta = module->backing;
+	}
+
+	return true;
+}
+
+bool model_findmeta(const model_t * model, const char * path, const meta_t ** meta)
+{
+	// Sanity check
+	{
+		if (model == NULL || path == NULL)
+		{
+			return false;
+		}
+	}
+
+	if (meta != NULL)
+	{
+		meta_t * testmeta = NULL;
+		model_foreach(testmeta, model->backings, MODEL_MAX_BACKINGS)
+		{
+			const char * testpath = NULL;
+			meta_getinfo(testmeta, &testpath, NULL, NULL, NULL, NULL);
+
+			if (strcmp(path, testpath) == 0)
+			{
+				*meta = testmeta;
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

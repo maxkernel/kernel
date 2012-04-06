@@ -1,11 +1,9 @@
-/*
- * Tests requirements on the compiler.
- */
+// Tests requirements on the compiler.
 
 
 // 1) Make sure int and double are 4 and 8 bytes respectively
 #if __SIZEOF_INT__ != 4
-	#error Size of integer incompatible. Must be 4 bytes!
+	#error Size of int incompatible. Must be 4 bytes!
 #endif
 #if __SIZEOF_DOUBLE__ != 8
 	#error Size of double incompatible. Must be 8 bytes!

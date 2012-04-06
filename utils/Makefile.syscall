@@ -4,7 +4,7 @@ PACKAGES	=
 TARGET		= max-syscall
 LIBS		= $(shell [ -n "$(PACKAGES)" ] && pkg-config --libs $(PACKAGES)) -lmax -L../libmax -laul -L../aul
 DEFINES     = -D_GNU_SOURCE -DUTILS -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\""
-CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -I. -I.. -I../libmax/include -I../aul/include $(shell [ -n "$(PACKAGES)" ] && pkg-config --cflags $(PACKAGES))
+CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -I. -I.. -I../libmax/include -I../aul/include -I../libmodel/include $(shell [ -n "$(PACKAGES)" ] && pkg-config --cflags $(PACKAGES))
 
 OBJS		= $(SRCS:.c=.o)
 

@@ -13,15 +13,17 @@
 extern "C" {
 #endif
 
-
 typedef struct
 {
 	void (*log)(level_t level, const char * message);
 	meta_t * (*metalookup)(const char * modulename, exception_t ** err);
 	bool (*setpath)(const char * newpath, exception_t ** err);
-	bool (*appendpath)(const char * patn, exception_t ** err);
+	bool (*appendpath)(const char * path, exception_t ** err);
 
 } interpret_callbacks;
+
+typedef bool (*interpret_f)(model_t * model, const char * path, const interpret_callbacks * cbs, exception_t ** err);
+
 
 #ifdef USE_LUA
 bool interpret_lua(model_t * model, const char * path, const interpret_callbacks * cbs, exception_t ** err);

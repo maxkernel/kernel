@@ -11,89 +11,31 @@
 #include <aul/log.h>
 #include <aul/list.h>
 
+#include <maxmodel/meta.h>
 #include <kernel-types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define	VERSION			"0.1"
-#define	PROVIDER		"Senseta"
-#define	PROVIDER_URL	"http://www.senseta.com/"
+#define	VERSION			"1.1"
+#define	PROVIDER		"maxkernel.com"
+#define	PROVIDER_URL	"http://www.maxkernel.com/"
 
 #if defined(ALPHA) || defined(BETA)
   #define LOG(level, format, ...) log_write(level, "Module", "[%s in %s at %d]: " format, __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__)
 #else
   #define LOG(level, format, ...) log_write(level, "Module", format, ## __VA_ARGS__)
 #endif
-#define LOG1(level, format, ...)  do { static bool __h = false; if (!__h) { LOG(level, format, ## __VA_ARGS__); __h = true; } } while(0)
+
+#define LOG1(level, format, ...) \
+	({ static bool __h = false; if (!__h) { LOG(level, format, ## __VA_ARGS__); __h = true; } })
 
 #define LOG_FATAL		LEVEL_FATAL
 #define LOG_ERR			LEVEL_ERROR
 #define LOG_WARN		LEVEL_WARNING
 #define LOG_INFO		LEVEL_INFO
 #define LOG_DEBUG		LEVEL_DEBUG
-
-#define ___META_CAT(a,b) _ ## a ## b
-#define __META_CAT(a,b) ___META_CAT(a,b)
-#define __WRITE_META(name, ...) \
-	static const char __META_CAT(__meta_,__LINE__) [] \
-	__attribute__((section(".meta"),unused)) = \
-	name "(" #__VA_ARGS__ ")"
-
-#define M_VERSION		"VERSION"
-#define M_AUTHOR		"AUTHOR"
-#define M_DESC			"DESCRIPTION"
-#define M_DEP			"DEPENDENCY"
-#define M_PREACT		"MODULE.PREACT"
-#define M_POSTACT		"MODULE.POSTACT"
-#define M_INIT			"MODULE.INIT"
-#define M_DESTROY		"MODULE.DESTROY"
-#define M_SYSCALL		"SYSCALL"
-#define M_CFGPARAM		"CONFIG.PARAM"
-#define M_CALPARAM		"CALIBRATION.PARAM"
-#define M_CALUPDATE		"CALIBRATION.UPDATE"
-#define M_CALPREVIEW	"CALIBRATION.PREVIEW"
-#define M_BLOCK			"BLOCK"
-#define M_ONUPDATE		"BLOCK.ONUPDATE"
-#define M_ONDESTROY		"BLOCK.ONDESTROY"
-#define M_INPUT			"BLOCK.INPUT"
-#define M_OUTPUT		"BLOCK.OUTPUT"
-
-#define MOD_KERNEL									"__kernel"
-#define MOD_INIT(func)								__WRITE_META(M_INIT, #func)
-#define MOD_PREACT(func)							__WRITE_META(M_PREACT, #func)
-#define MOD_POSTACT(func)							__WRITE_META(M_POSTACT, #func)
-#define MOD_DESTROY(func)							__WRITE_META(M_DESTROY, #func)
-#define MOD_VERSION(ver)							__WRITE_META(M_VERSION, ver)
-#define MOD_AUTHOR(author)							__WRITE_META(M_AUTHOR, author)
-#define MOD_DESCRIPTION(desc)						__WRITE_META(M_DESC, desc)
-#define MOD_DEPENDENCY(...)							__WRITE_META(M_DEP, __VA_ARGS__)
-
-#define DEF_SYSCALL(name, sig, ...)					__WRITE_META(M_SYSCALL, #name, sig, ## __VA_ARGS__)
-
-#define DEF_BLOCK(blk_name, constructor, sig, ...)	__def_block(blk_name, constructor, sig, ## __VA_ARGS__)
-#define BLK_ONUPDATE(blk_name, func)				__blk_onupdate(blk_name, func)
-#define BLK_ONDESTROY(blk_name, func)				__blk_ondestroy(blk_name, func)
-#define BLK_INPUT(blk_name, name, sig, ...)			__blk_input(blk_name, name, sig, ## __VA_ARGS__)
-#define BLK_OUTPUT(blk_name, name, sig, ...)		__blk_output(blk_name, name, sig, ## __VA_ARGS__)
-
-#define STATIC										__static
-#define STATIC_STR									"__static"
-#define __def_block(blk_name, constructor, sig, ...) __WRITE_META(M_BLOCK, #blk_name, #constructor, sig, __VA_ARGS__)
-#define __blk_onupdate(blk_name, func)				__WRITE_META(M_ONUPDATE, #blk_name, #func)
-#define __blk_ondestroy(blk_name, func)				__WRITE_META(M_ONDESTROY, #blk_name, #func)
-#define __blk_input(blk_name, name, sig, ...)		__WRITE_META(M_INPUT, #blk_name, #name, sig, __VA_ARGS__)
-#define __blk_output(blk_name, name, sig, ...)		__WRITE_META(M_OUTPUT, #blk_name, #name, sig, __VA_ARGS__)
-
-#define CFG_PARAM(name, sig, ...)					__WRITE_META(M_CFGPARAM, #name, sig, ## __VA_ARGS__)
-#define CAL_PARAM(name, sig, desc)					__WRITE_META(M_CALPARAM, #name, sig, desc)
-#define CAL_UPDATE(func)							__WRITE_META(M_CALUPDATE, #func)
-#define CAL_PREVIEW(func)							__WRITE_META(M_CALPREVIEW, #func)
-
-// TODO - delete me
-//#define PARAMS_MAX				64
-
 
 typedef void (*destructor_f)(void * object);
 typedef char * (*info_f)(void * object);
@@ -102,7 +44,7 @@ typedef void (*handler_f)(void * userdata);
 typedef struct __kobject_t
 {
 	const char * class_name;
-	const char * object_name;
+	char * object_name;
 	struct __kobject_t * parent;
 
 	info_f info;
@@ -175,13 +117,32 @@ const char * kernel_datatype(char type);
 const char * kernel_loghistory();
 string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseconds, const char * message);
 
-typedef void (*cal_itr_d)(void * userdata, char * module, char * name, char type, char * desc, double value, double min, double max);
-typedef void (*cal_itr_i)(void * userdata, char * module, char * name, char type, char * desc, int value, int min, int max);
-void cal_iterate(cal_itr_i, cal_itr_d, void * userdata);
-void cal_setparam(const char * module, const char * name, const char * value);
-void cal_merge(const char * comment);
-void cal_revert();
-double math_eval(char * expr);
+//typedef void (*cal_itr_d)(void * userdata, char * module, char * name, char type, char * desc, double value, double min, double max);
+//typedef void (*cal_itr_i)(void * userdata, char * module, char * name, char type, char * desc, int value, int min, int max);
+//void cal_iterate(cal_itr_i, cal_itr_d, void * userdata);
+//void cal_setparam(const char * module, const char * name, const char * value);
+//void cal_merge(const char * comment);
+//void cal_revert();
+
+typedef enum
+{
+	calmode_exit	= 0,
+	calmode_enter	= 1,
+} calmode_t;
+
+typedef enum
+{
+	calstatus_ok		= 0,
+	calstatus_canceled	= 1,
+	//calstatus_autocal	= 3		// TODO - provide auto calibration
+} calstatus_t;
+
+typedef void (*calpreview_f)(void * object, const char * domain, const char * name, const char sig, void * backing);
+typedef bool (*calmodechange_f)(void * object, calmode_t mode, calstatus_t status);
+
+void cal_register(const char * domain, const char * name, const char sig, const char * constraints, void * backing, calpreview_f onpreview, void * onpreview_object)
+void cal_onpreview(const char * domain, calpreview_f callback, void * object);
+void cal_onmodechange(calmodechange_f callback, void * object);
 
 int parse_int(const char * s, exception_t ** err);
 double parse_double(const char * s, exception_t ** err);

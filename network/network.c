@@ -7,15 +7,6 @@
 #include <kernel.h>
 
 
-MOD_VERSION("0.9");
-MOD_AUTHOR("Andrew Klofas - andrew.klofas@senseta.com");
-MOD_DESCRIPTION("Network utility tools module (signal strength, etc.)");
-MOD_INIT(module_init);
-
-BLK_OUTPUT(STATIC, strength, S_DOUBLE);
-BLK_ONUPDATE(STATIC, block_update);
-
-
 #define SIGNAL_DIR			"/sys/class/net"
 #define SIGNAL_LINK			"wireless/link"
 #define SIGNAL_MAX			100.0
@@ -41,7 +32,7 @@ void block_update(void * object)
 	}
 }
 
-void module_init()
+bool module_init()
 {
 	DIR * dirp = opendir(SIGNAL_DIR);
 	if (dirp != NULL)
@@ -50,14 +41,28 @@ void module_init()
 		while ((ent = readdir(dirp)) != NULL)
 		{
 			string_t path = string_new(SIGNAL_DIR "/%s/" SIGNAL_LINK, ent->d_name);
-			struct stat statbuf;
 
-			ZERO(statbuf);
+			struct stat statbuf;
+			memset(&statbuf, 0, sizeof(statbuf));
+
 			if (stat(path.string, &statbuf) == 0 && S_ISREG(statbuf.st_mode))
 			{
 				sigpath = string_copy(&path);
+				break;
 			}
 		}
 	}
 	closedir(dirp);
+
+	return true;
 }
+
+
+module_name("Network Health Monitor");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Network utility tools to measure signal strength, etc.");
+module_oninitialize(module_init);
+
+block_output(	static, 	strength, 		'd', 	"The strength of the wireless link (0-100)");
+block_onupdate(	static, 	block_update);

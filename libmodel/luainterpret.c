@@ -130,12 +130,14 @@ static int l_newblockinst(lua_State * L)
 	}
 
 	model_module_t * module = (model_module_t *)head;
-	model_modulebacking_t * backing = module->backing;
+	meta_t * backing = module->backing;
 
 	const char * sig = NULL;
-	if (!meta_getblock(backing->meta, blockname, &sig, NULL, NULL))
+	if (!meta_getblock(backing, blockname, &sig, NULL, NULL))
 	{
-		return luaL_error(L, "Could not find block '%s' in module %s.", blockname, backing->path);
+		const char * path = NULL;
+		meta_getinfo(backing, &path, NULL, NULL, NULL, NULL);
+		return luaL_error(L, "Could not find block '%s' in module %s.", blockname, path);
 	}
 
 	size_t args_length = strlen(sig);
@@ -357,7 +359,7 @@ static int mt_entry_index(lua_State * L)
 
 				return 1;
 			}
-			else if (meta_getblock(((model_module_t *)entry->head)->backing->meta, key, NULL, NULL, NULL))
+			else if (meta_getblock(((model_module_t *)entry->head)->backing, key, NULL, NULL, NULL))
 			{
 				// We are a block reference, push a closure to create the new instance on the stack
 				lua_pushvalue(L, lua_upvalueindex(1));
@@ -368,8 +370,11 @@ static int mt_entry_index(lua_State * L)
 			}
 			else
 			{
-				model_modulebacking_t * backing = ((model_module_t *)entry->head)->backing;
-				return luaL_error(L, "Unknown module field '%s' in module %s", key, backing->path);
+				meta_t * backing = ((model_module_t *)entry->head)->backing;
+
+				const char * path = NULL;
+				meta_getinfo(backing, &path, NULL, NULL, NULL, NULL);
+				return luaL_error(L, "Unknown module field '%s' in module %s", key, path);
 			}
 		}
 
@@ -435,8 +440,11 @@ static int mt_entry_newindex(lua_State * L)
 			}
 			else
 			{
-				model_modulebacking_t * backing = ((model_module_t *)entry->head)->backing;
-				return luaL_error(L, "Unknown module field '%s' in module %s", key, backing->path);
+				meta_t * backing = ((model_module_t *)entry->head)->backing;
+
+				const char * path = NULL;
+				meta_getinfo(backing, &path, NULL, NULL, NULL, NULL);
+				return luaL_error(L, "Unknown module field '%s' in module %s", key, path);
 			}
 			break;
 		}

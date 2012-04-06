@@ -7,34 +7,6 @@
 #include <aul/mainloop.h>
 #include <kernel.h>
 
-// Module defines
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas <andrew@maxkernel.com>");
-MOD_DESCRIPTION("Communicates to the Propeller Servo Controller USB");
-MOD_INIT(psc_init);
-MOD_DESTROY(psc_destroy);
-
-BLK_INPUT(STATIC, pwm0, "i");
-BLK_INPUT(STATIC, pwm1, "i");
-BLK_INPUT(STATIC, pwm2, "i");
-BLK_INPUT(STATIC, pwm3, "i");
-BLK_INPUT(STATIC, pwm4, "i");
-BLK_INPUT(STATIC, pwm5, "i");
-BLK_INPUT(STATIC, pwm6, "i");
-BLK_INPUT(STATIC, pwm7, "i");
-BLK_INPUT(STATIC, pwm8, "i");
-BLK_INPUT(STATIC, pwm9, "i");
-BLK_INPUT(STATIC, pwm10, "i");
-BLK_INPUT(STATIC, pwm11, "i");
-BLK_INPUT(STATIC, pwm12, "i");
-BLK_INPUT(STATIC, pwm13, "i");
-BLK_INPUT(STATIC, pwm14, "i");
-BLK_INPUT(STATIC, pwm15, "i");
-BLK_ONUPDATE(STATIC, psc_update);
-
-CFG_PARAM(serial_port,		"s");
-CFG_PARAM(servo_ramp,		"i");
-
 
 #define NUM_CHANNELS	16
 #define BUFFER_LENGTH	50
@@ -250,13 +222,13 @@ void psc_update(void * object)
 	if (pwm15 != NULL)	psc_writeio(15, *pwm15);	else	psc_disableio(15);
 }
 
-void psc_init()
+bool psc_init()
 {
 	psc_fd = serial_open(serial_port, B2400);
 	if (psc_fd < 0)
 	{
 		LOG(LOG_ERR, "Could not open Parallax SSC serial port %s", serial_port);
-		return;
+		return false;
 	}
 
 	// Write the set-baud command and wait for a bit
@@ -270,6 +242,8 @@ void psc_init()
 	mainloop_addwatch(NULL, psc_fd, FD_READ, psc_newdata, NULL);
 	psc_disableall();
 	psc_write(PS_VERSION, PCMD_VERSION);
+
+	return true;
 }
 
 void psc_destroy()
@@ -283,3 +257,32 @@ void psc_destroy()
 	}
 }
 
+
+// TODO - make module realtime (not edge-send)
+module_name("Parallax SSC Controller");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Communicates to the Propeller Servo Controller USB");
+module_oninitialize(psc_init);
+module_ondestroy(psc_destroy);
+
+config_param(serial_port,	's',		"The serial port to connect to (eg. /dev/ttyUSB0)");
+config_param(servo_ramp,	'i',		"The ramp speed of the servos");
+
+block_input(	static, 	pwm0, 		'i', 	"Channel 0 PWM");
+block_input(	static, 	pwm1, 		'i', 	"Channel 1 PWM");
+block_input(	static, 	pwm2, 		'i', 	"Channel 2 PWM");
+block_input(	static, 	pwm3, 		'i', 	"Channel 3 PWM");
+block_input(	static, 	pwm4, 		'i', 	"Channel 4 PWM");
+block_input(	static, 	pwm5, 		'i', 	"Channel 5 PWM");
+block_input(	static, 	pwm6, 		'i', 	"Channel 6 PWM");
+block_input(	static, 	pwm7, 		'i', 	"Channel 7 PWM");
+block_input(	static, 	pwm8, 		'i', 	"Channel 8 PWM");
+block_input(	static, 	pwm9, 		'i', 	"Channel 9 PWM");
+block_input(	static, 	pwm10, 		'i', 	"Channel 10 PWM");
+block_input(	static, 	pwm11, 		'i', 	"Channel 11 PWM");
+block_input(	static, 	pwm12, 		'i', 	"Channel 12 PWM");
+block_input(	static, 	pwm13, 		'i', 	"Channel 13 PWM");
+block_input(	static, 	pwm14, 		'i', 	"Channel 14 PWM");
+block_input(	static, 	pwm15, 		'i', 	"Channel 15 PWM");
+block_onupdate(	static, 	psc_update);

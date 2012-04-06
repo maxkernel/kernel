@@ -30,12 +30,13 @@ typedef struct
 	list_t buckets[AUL_HASHTABLE_BUCKETS];
 } hashtable_t;
 
-#define HASHTABLE_INIT(ptr, hashfunc, equalsfunc) do { \
-	(ptr)->hasher = (hashfunc); (ptr)->equals = (equalsfunc); \
-	(ptr)->numbuckets = AUL_HASHTABLE_BUCKETS; \
-	LIST_INIT(&(ptr)->iterator); \
-	for (int i=0; i<AUL_HASHTABLE_BUCKETS; ++i) { LIST_INIT(&(ptr)->buckets[i]); } \
-} while (0)
+#define HASHTABLE_INIT(ptr, hashfunc, equalsfunc) \
+	({ \
+		(ptr)->hasher = (hashfunc); (ptr)->equals = (equalsfunc);						\
+		(ptr)->numbuckets = AUL_HASHTABLE_BUCKETS;										\
+		LIST_INIT(&(ptr)->iterator);													\
+		for (int i=0; i<AUL_HASHTABLE_BUCKETS; ++i) { LIST_INIT(&(ptr)->buckets[i]); }	\
+	})
 
 
 static inline void hashtable_remove(hashentry_t * entry)

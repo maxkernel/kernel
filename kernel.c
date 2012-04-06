@@ -24,20 +24,27 @@
 #include <aul/iterator.h>
 #include <aul/mutex.h>
 
+#include <maxmodel/model.h>
+#include <maxmodel/meta.h>
+#include <maxmodel/interpret.h>
+
 #include <compiler.h>
 #include <buffer.h>
 #include <kernel.h>
 #include <kernel-priv.h>
 
+model_t * model = NULL;
+
 list_t modules;
-list_t calentries;
+//list_t calentries;
 hashtable_t properties;
 hashtable_t syscalls;
-module_t * kernel_module = NULL;
+//module_t * kernel_module = NULL;
 GHashTable * kthreads = NULL;
 
 mutex_t io_lock;
 sqlite3 * database = NULL;
+calibration_t calibration;
 uint64_t starttime = 0;
 
 static list_t objects = {0};
@@ -167,175 +174,6 @@ static struct argp_option arg_opts[] = {
 static struct argp argp = { arg_opts, parse_args, 0, 0 };
 
 
-/*---------------------- CONFUSE ----------------------*/
-static int cfg_setpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc != 1)
-	{
-		cfg_error(cfg, "Invalid argument length for setpath function");
-		return -1;
-	}
-
-	exception_t * e = NULL;
-	if (!path_set(argv[0], &e))
-	{
-		cfg_error(cfg, "Could not set path: Code %d %s", e->code, e->message);
-		exception_free(e);
-		return -1;
-	}
-
-	return 0;
-}
-
-static int cfg_appendpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc < 1)
-	{
-		cfg_error(cfg, "Invalid argument length for appendpath function");
-		return -1;
-	}
-
-	exception_t * e = NULL;
-	for (int i = 0; i < argc; i++)
-	{
-		if (!path_append(argv[i], &e))
-		{
-			cfg_error(cfg, "Could not append path: Code %d %s", e->code, e->message);
-			exception_free(e);
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-static int cfg_loadmodule(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc < 1)
-	{
-		cfg_error(cfg, "Invalid argument length for loadmodule function");
-		return -1;
-	}
-
-	for (int i = 0; i < argc; i++)
-	{
-		if (!module_load(argv[i]))
-		{
-			cfg_error(cfg, "Could not load module: %s!", argv[i]);
-			return -1;
-		}
-	}
-	
-	return 0;
-}
-
-static int cfg_config(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc != 3)
-	{
-		cfg_error(cfg, "Invalid argument length for config function");
-		return -1;
-	}
-
-	cfg_setparam(argv[0], argv[1], argv[2]);
-
-	return 0;
-}
-
-static int cfg_execfile(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc < 1)
-	{
-		cfg_error(cfg, "Invalid argument length for execfile function");
-		return -1;
-	}
-
-	for (int i = 0; i < argc; i++)
-	{
-		const char * file = argv[i];
-		const char * prefix = path_resolve(file, P_FILE);
-
-		if (prefix == NULL)
-		{
-			cfg_error(cfg, "Could not find file in path: %s", file);
-			return -1;
-		}
-
-		string_t path = path_join(prefix, file);
-
-		bool (*execfunc)(const char * path) = NULL;
-		if (strsuffix(path.string, ".lua"))
-		{
-			execfunc = lua_execfile;
-		}
-		else
-		{
-			LOGK(LOG_WARN, "Could not determine how interpret file %s", path.string);
-			continue;
-		}
-
-		if (!execfunc(path.string))
-		{
-			cfg_error(cfg, "Error while executing file %s", path.string);
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-static int cfg_execdir(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
-{
-	if (argc < 1)
-	{
-		cfg_error(cfg, "Invalid argument length for execdirectory function");
-		return -1;
-	}
-
-	for (int i = 0; i < argc; i++)
-	{
-		const char * dir = argv[i];
-		const char * prefix = path_resolve(dir, P_DIRECTORY);
-
-		if (prefix == NULL)
-		{
-			cfg_error(cfg, "Could not find directory in path: %s", dir);
-			return -1;
-		}
-
-		string_t path = path_join(prefix, dir);
-
-		struct dirent * entry;
-		DIR * d = opendir(path.string);
-		while ((entry = readdir(d)) != NULL)
-		{
-			if (entry->d_name[0] == '.')
-			{
-				// Do not execute hidden files (also avoids . and ..)
-				continue;
-			}
-
-			string_t abspath = path_join(path.string, entry->d_name);
-			const char * abspath_str = abspath.string;
-			if (cfg_execfile(cfg, opt, 1, &abspath_str) < 0)
-			{
-				return -1;
-			}
-		}
-		closedir(d);
-	}
-
-	return 0;
-}
-
-static void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
-{
-	string_t str = string_blank();
-	string_vappend(&str, fmt, ap);
-
-	LOGK(LOG_FATAL, "%s", str.string);
-}
-
 
 /*------------- LOGGING ------------------*/
 static void log_appendbuf(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
@@ -381,13 +219,20 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 		//will exit
 	}
 
-	kobject_t * object = malloc0(size);
+	kobject_t * object = malloc(size);
+	memset(object, 0, size);
+
 	object->class_name = class_name;
-	object->object_name = name;
+	object->object_name = strdup(name);
 	object->info = info;
 	object->destructor = destructor;
 
-	kobj_register(object);
+	mutex_lock(&kobj_mutex);
+	{
+		list_add(&objects, &object->objects_list);
+	}
+	mutex_unlock(&kobj_mutex);
+
 	return object;
 }
 
@@ -423,8 +268,8 @@ void kobj_destroy(kobject_t * object)
 
 		list_remove(&object->objects_list);
 
-		FREES(object->object_name);
-		FREE(object);
+		free(object->object_name);
+		free(object);
 	}
 	mutex_unlock(&kobj_mutex);
 }
@@ -691,35 +536,52 @@ const char * kernel_datatype(char type)
 
 static int modules_itr()
 {
-	const void * mods_next(void ** data)
+	const void * mods_next(const void * object, void ** itrobject)
 	{
-		list_t * list = *data = ((list_t *)*data)->next;
-		return (list == &modules)? NULL : list_entry(list, module_t, global_list)->path;
+		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+
+		if (list == &modules)
+		{
+			return NULL;
+		}
+		else
+		{
+			module_t * module = list_entry(list, module_t, global_list);
+
+			if (module->backing != NULL)
+			{
+				const char * path = NULL;
+				meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
+				return path;
+			}
+
+			return NULL;
+		}
 	}
 
-	return iterator_new(mods_next, NULL, &modules);
+	return iterator_new("modules", mods_next, NULL, NULL, &modules);
 }
 
 static const char * modules_next(int itr)
 {
-	const char * r = iterator_next(itr);
+	const char * r = iterator_next(itr, "modules");
 	return (r == NULL)? "" : r;
 }
 
 static int syscalls_itr()
 {
-	const void * scs_next(void ** data)
+	const void * scs_next(const void * object, void ** itrobject)
 	{
-		list_t * list = *data = ((list_t *)*data)->next;
+		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 		return (list == hashtable_itr(&syscalls))? NULL : hashtable_itrentry(list, syscall_t, global_entry)->name;
 	}
 
-	return iterator_new(scs_next, NULL, hashtable_itr(&syscalls));
+	return iterator_new("syscalls", scs_next, NULL, NULL, hashtable_itr(&syscalls));
 }
 
 static const char * syscalls_next(int itr)
 {
-	const char * r = iterator_next(itr);
+	const char * r = iterator_next(itr, "syscalls");
 	return (r == NULL)? "" : r;
 }
 
@@ -747,18 +609,18 @@ static const char * syscall_signature(char * syscall_name)
 
 static int properties_itr()
 {
-	const void * ps_next(void ** data)
+	const void * ps_next(const void * object, void ** itrobject)
 	{
-		list_t * list = *data = ((list_t *)*data)->next;
+		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 		return (list == hashtable_itr(&properties))? NULL : hashtable_itrentry(list, property_t, entry)->name;
 	}
 
-	return iterator_new(ps_next, NULL, hashtable_itr(&properties));
+	return iterator_new("properties", ps_next, NULL, NULL, hashtable_itr(&properties));
 }
 
 static const char * properties_next(int itr)
 {
-	const char * r = iterator_next(itr);
+	const char * r = iterator_next(itr, "properties");
 	return (r == NULL)? "" : r;
 }
 
@@ -767,19 +629,6 @@ static void itr_free(int itr)
 	iterator_free(itr);
 }
 
-
-#define KERN_DEFSYSCALL(syscall, sig, desc) kern_defsyscall((syscall_f)syscall, #syscall, sig, desc);
-static void kern_defsyscall(syscall_f func, char * name, char * sig, char * desc)
-{
-	syscall_t * syscall = malloc0(sizeof(syscall_t));
-	syscall->name = strdup(name);
-	syscall->desc = strdup(desc);
-	syscall->sig = strdup(sig);
-	syscall->func = func;
-
-	list_add(&kernel_module->syscalls, &syscall->module_list);
-	syscall_reg(syscall);
-}
 
 /*-------------------- MAIN -----------------------*/
 int main(int argc, char * argv[])
@@ -835,6 +684,7 @@ int main(int argc, char * argv[])
 	bfd_init();
 
 	// Initialize global variables
+	model = model_new();
 	LIST_INIT(&modules);
 	LIST_INIT(&calentries);
 	LIST_INIT(&objects);
@@ -913,71 +763,454 @@ int main(int argc, char * argv[])
 	mainloop_init();
 	iterator_init();
 
-	// Initialize kernel vars and subsystems
-	module_kernelinit();	//a generic module that points to kernel space
+	// Initialize kernel subsystems
+	cal_init();
+	//module_kernelinit();	//a generic module that points to kernel space
 	
 	// Register syscalls
-	KERN_DEFSYSCALL(	modules_itr,		"i:v",		"Returns an iterator that loops over all loaded modules. Use in conjunction with 'modules_next' and 'itr_free'");
-	KERN_DEFSYSCALL(	modules_next,		"s:i",		"Returns the next name of module in iterator. Use in conjunction with 'modules_itr' and 'itr_free'");
-	KERN_DEFSYSCALL(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
-	KERN_DEFSYSCALL(	syscalls_itr,		"i:v",		"Returns an iterator that loop over all registered syscalls. Use in conjunction with 'syscalls_next' and 'itr_free'");
-	KERN_DEFSYSCALL(	syscalls_next,		"s:i",		"Returns the next name of the syscall in the iterator. Use in conjunction with 'syscalls_itr' and 'itr_free'");
-	KERN_DEFSYSCALL(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
-	KERN_DEFSYSCALL(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
-	KERN_DEFSYSCALL(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
-	KERN_DEFSYSCALL(	max_model,			"s:v",		"Returns the model name of the robot");
-	KERN_DEFSYSCALL(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
-	KERN_DEFSYSCALL(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");
-	KERN_DEFSYSCALL(	properties_itr,		"i:v",		"Returns an iterator that loops over all the property names defined. Use in conjunction with 'properties_next' and 'itr_free'");
-	KERN_DEFSYSCALL(	properties_next,	"s:i",		"Returns the next property name in the iterator. Use in conjunction with 'properties_itr' and 'itr_free'");
-	KERN_DEFSYSCALL(	property_get,		"s:s",		"Returns the string representation of the defined property");
-	KERN_DEFSYSCALL(	property_set,		"v:ss",		"Sets the property name (param 1) to the specified value (param 2)");
-	KERN_DEFSYSCALL(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");
-	KERN_DEFSYSCALL(	property_isset,		"b:s",		"Returns true if the property name (param 1) has been set");
-	KERN_DEFSYSCALL(    itr_free,			"v:i",		"Frees the given iterator. It can no longer be used after it's free'd");
+	#define reg_syscall(f, s, d) \
+		({ \
+			exception_t * e = NULL;												\
+			syscall_t * ts = syscall_new((#f), (s), (syscall_f)(f), (d), &e);	\
+			if (ts == NULL || exception_check(&e)) {							\
+				LOGK(LOG_ERR, "Could not create kernel syscall %s: %s", (#f), (e == NULL)? "Unknown error" : e->message); \
+				exception_free(e);												\
+			}																	\
+		})
+
+	reg_syscall(	modules_itr,		"i:v",		"Returns an iterator that loops over all loaded modules. Use in conjunction with 'modules_next' and 'itr_free'");
+	reg_syscall(	modules_next,		"s:i",		"Returns the next name of module in iterator. Use in conjunction with 'modules_itr' and 'itr_free'");
+	reg_syscall(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
+	reg_syscall(	syscalls_itr,		"i:v",		"Returns an iterator that loop over all registered syscalls. Use in conjunction with 'syscalls_next' and 'itr_free'");
+	reg_syscall(	syscalls_next,		"s:i",		"Returns the next name of the syscall in the iterator. Use in conjunction with 'syscalls_itr' and 'itr_free'");
+	reg_syscall(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
+	reg_syscall(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
+	reg_syscall(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
+	reg_syscall(	max_model,			"s:v",		"Returns the model name of the robot");
+	reg_syscall(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
+	reg_syscall(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");
+	reg_syscall(	properties_itr,		"i:v",		"Returns an iterator that loops over all the property names defined. Use in conjunction with 'properties_next' and 'itr_free'");
+	reg_syscall(	properties_next,	"s:i",		"Returns the next property name in the iterator. Use in conjunction with 'properties_itr' and 'itr_free'");
+	reg_syscall(	property_get,		"s:s",		"Returns the string representation of the defined property");
+	reg_syscall(	property_set,		"v:ss",		"Sets the property name (param 1) to the specified value (param 2)");
+	reg_syscall(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");
+	reg_syscall(	property_isset,		"b:s",		"Returns true if the property name (param 1) has been set");
+	reg_syscall(    itr_free,			"v:i",		"Frees the given iterator. It can no longer be used after it's free'd");
 
 	// Parse configuration file
-	cfg_opt_t opts[] = {
-		CFG_STR(	"id",			"(none)",				CFGF_NONE	),
-		CFG_STR(	"path",			INSTALL "/modules",		CFGF_NONE	),
-		CFG_STR(	"installed",	"0",					CFGF_NONE	),
-		CFG_STR(	"model",		"(unknown)",			CFGF_NONE	),
-		CFG_FUNC(	"setpath",		cfg_setpath				),
-		CFG_FUNC(	"appendpath",	cfg_appendpath			),
-		CFG_FUNC(	"loadmodule",	cfg_loadmodule			),
-		CFG_FUNC(	"config",		cfg_config				),
-		CFG_FUNC(	"execfile",		cfg_execfile			),
-		CFG_FUNC(	"execdirectory",cfg_execdir				),
-		CFG_END()
-	};
-	
-	cfg_t * cfg = cfg_init(opts, 0);
-	cfg_set_error_function(cfg, &cfg_errorfunc);
-	
-	LOGK(LOG_DEBUG, "Parsing configuration script " INSTALL "/" CONFIG);
-	int result = cfg_parse(cfg, INSTALL "/" CONFIG);
-	if (result != CFG_SUCCESS)
 	{
-		switch (result)
-		{
-			case CFG_FILE_ERROR:
-				LOGK(LOG_FATAL, "Could not open configuration file " INSTALL "/" CONFIG);
-			
-			case CFG_PARSE_ERROR:
-				LOGK(LOG_FATAL, "Parse error in configuration file " INSTALL "/" CONFIG);
-			
-			default:
-				LOGK(LOG_FATAL, "Unknown error while opening/parsing configuration file " INSTALL "/" CONFIG);
-		}
-	}
-	
-	//register global properties
-	property_set("id", cfg_getstr(cfg, "id"));
-	property_set("installed", cfg_getstr(cfg, "installed"));
-	property_set("model", cfg_getstr(cfg, "model"));
+		const char * scriptpath = INSTALL "/" CONFIG;
+		model_script_t * script = NULL;
 
-	//now free configuration struct
-	cfg_free(cfg);
+		{
+			exception_t * e = NULL;
+			script = model_script_new(model, scriptpath, &e);
+
+			if (script == NULL || exception_check(&e))
+			{
+				LOGK(LOG_FATAL, "Could not create script '%s' in model: %s", scriptpath, (e == NULL)? "Unknown error" : e->message);
+				// Will exit
+			}
+		}
+
+		// These are the interpreter callback functions
+		void int_log(level_t level, const char * message)
+		{
+			log_write(level, "script", "%s", message);
+		}
+
+		meta_t * int_metalookup(const char * modulename, exception_t ** err)
+		{
+			const char * prefix = path_resolve(modulename, P_MODULE);
+			if (prefix == NULL)
+			{
+				exception_set(err, ENOENT, "Could not resolve path %s", modulename);
+				return NULL;
+			}
+
+			string_t path = path_join(prefix, modulename);
+			if (!strsuffix(path.string, ".mo"))
+			{
+				string_append(&path, ".mo");
+			}
+
+			return meta_parseelf(path.string, err);
+		}
+
+		bool int_setpath(const char * newpath, exception_t ** err)	{	return path_set(newpath, err);		}
+		bool int_appendpath(const char * path, exception_t ** err)	{	return path_append(path, err);		}
+
+
+		// These are the script callback functions
+		int cfg_log(cfg_t * cfg, level_t level, int argc, const char ** argv)
+		{
+			if (argc < 1)
+			{
+				cfg_error(cfg, "Invalid argument length for log function");
+				return -1;
+			}
+
+			for (int i = 0; i < argc; i++)
+			{
+				int_log(level, argv[i]);
+			}
+
+			return 0;
+		}
+
+		int cfg_loginfo(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)		{	return cfg_log(cfg, LOG_INFO, argc, argv);	}
+		int cfg_logwarn(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)		{	return cfg_log(cfg, LOG_WARN, argc, argv);	}
+		int cfg_logerror(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			cfg_log(cfg, LOG_ERR, argc, argv);
+			cfg_error(cfg, "Script aborted.");
+			return -1;
+		}
+
+		int cfg_setpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc != 1)
+			{
+				cfg_error(cfg, "Invalid argument length for setpath function");
+				return -1;
+			}
+
+			exception_t * e = NULL;
+			if (!int_setpath(argv[0], &e))
+			{
+				cfg_error(cfg, "Could not set path: Code %d %s", e->code, e->message);
+				exception_free(e);
+				return -1;
+			}
+
+			return 0;
+		}
+
+		int cfg_appendpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc < 1)
+			{
+				cfg_error(cfg, "Invalid argument length for appendpath function");
+				return -1;
+			}
+
+			exception_t * e = NULL;
+			for (int i = 0; i < argc; i++)
+			{
+				if (!int_appendpath(argv[i], &e))
+				{
+					cfg_error(cfg, "Could not append path: Code %d %s", e->code, e->message);
+					exception_free(e);
+					return -1;
+				}
+			}
+
+			return 0;
+		}
+
+		int cfg_loadmodule(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc < 1)
+			{
+				cfg_error(cfg, "Invalid argument length for loadmodule function");
+				return -1;
+			}
+
+			for (int i = 0; i < argc; i++)
+			{
+				exception_t * e = NULL;
+				meta_t * meta = int_metalookup(argv[i], &e);
+				if (meta == NULL || exception_check(&e))
+				{
+					cfg_error(cfg, "Could not load module %s: %s", argv[i], (e == NULL)? "Unknown error" : e->message);
+					exception_free(e);
+					return -1;
+				}
+
+				model_module_t * module = model_module_new(model, script, meta, &e);
+				if (module == NULL || exception_check(&e))
+				{
+					cfg_error(cfg, "Could not add module %s: %s", argv[i], (e == NULL)? "Unknown error" : e->message);
+					exception_free(e);
+					return -1;
+				}
+
+				meta_destroy(meta);
+			}
+
+			return 0;
+		}
+
+		int cfg_config(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc != 3)
+			{
+				cfg_error(cfg, "Invalid argument length for config function");
+				return -1;
+			}
+
+			cfg_setparam(argv[0], argv[1], argv[2]);
+
+			return 0;
+		}
+
+		int cfg_execfile(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc < 1)
+			{
+				cfg_error(cfg, "Invalid argument length for execfile function");
+				return -1;
+			}
+
+			for (int i = 0; i < argc; i++)
+			{
+				const char * file = argv[i];
+				const char * prefix = path_resolve(file, P_FILE);
+
+				if (prefix == NULL)
+				{
+					cfg_error(cfg, "Could not find file in path: %s", file);
+					return -1;
+				}
+
+				string_t path = path_join(prefix, file);
+
+				interpret_f execfunc = NULL;
+				if (strsuffix(path.string, ".lua"))
+				{
+					execfunc = interpret_lua;
+				}
+				else
+				{
+					LOGK(LOG_WARN, "Could not determine how interpret file %s", path.string);
+					continue;
+				}
+
+				interpret_callbacks cbs = {
+					.log			= int_log,
+					.metalookup		= int_metalookup,
+					.setpath		= int_setpath,
+					.appendpath		= int_appendpath,
+				};
+
+				exception_t * e = NULL;
+				if (!execfunc(model, path.string, &cbs, &e))
+				{
+					// TODO - make less verbose?
+					cfg_error(cfg, "Error while executing file %s: %s", path.string, (e == NULL)? "Unknown error" : e->message);
+					exception_free(e);
+					return -1;
+				}
+			}
+
+			return 0;
+		}
+
+		int cfg_execdir(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			if (argc < 1)
+			{
+				cfg_error(cfg, "Invalid argument length for execdirectory function");
+				return -1;
+			}
+
+			for (int i = 0; i < argc; i++)
+			{
+				const char * dir = argv[i];
+				const char * prefix = path_resolve(dir, P_DIRECTORY);
+
+				if (prefix == NULL)
+				{
+					cfg_error(cfg, "Could not find directory in path: %s", dir);
+					return -1;
+				}
+
+				string_t path = path_join(prefix, dir);
+
+				// TODO - use walkdir?
+				struct dirent * entry;
+				DIR * d = opendir(path.string);
+				while ((entry = readdir(d)) != NULL)
+				{
+					if (entry->d_name[0] == '.')
+					{
+						// Do not execute hidden files (also avoids . and ..)
+						continue;
+					}
+
+					string_t abspath = path_join(path.string, entry->d_name);
+					const char * abspath_str = abspath.string;
+					if (cfg_execfile(cfg, opt, 1, &abspath_str) < 0)
+					{
+						return -1;
+					}
+				}
+				closedir(d);
+			}
+
+			return 0;
+		}
+
+		void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
+		{
+			string_t str = string_blank();
+			string_vset(&str, fmt, ap);
+			LOGK(LOG_FATAL, "%s", str.string);
+		}
+
+		cfg_opt_t opts[] = {
+			CFG_STR(	"id",			"(none)",				CFGF_NONE	),
+			CFG_STR(	"path",			INSTALL "/modules",		CFGF_NONE	),
+			CFG_STR(	"installed",	"0",					CFGF_NONE	),
+			CFG_STR(	"model",		"(unknown)",			CFGF_NONE	),
+			CFG_FUNC(	"log",			cfg_loginfo				),
+			CFG_FUNC(	"print",		cfg_loginfo				),
+			CFG_FUNC(	"warn",			cfg_logwarn				),
+			CFG_FUNC(	"error",		cfg_logerror			),
+			CFG_FUNC(	"setpath",		cfg_setpath				),
+			CFG_FUNC(	"appendpath",	cfg_appendpath			),
+			CFG_FUNC(	"loadmodule",	cfg_loadmodule			),
+			CFG_FUNC(	"config",		cfg_config				),
+			CFG_FUNC(	"execfile",		cfg_execfile			),
+			CFG_FUNC(	"execdirectory",cfg_execdir				),
+			CFG_END()
+		};
+
+		// Create the configuration scruct
+		cfg_t * cfg = cfg_init(opts, 0);
+		cfg_set_error_function(cfg, cfg_errorfunc);
+	
+		// Parse/execute the script
+		LOGK(LOG_DEBUG, "Parsing configuration script %s", scriptpath);
+		int result = cfg_parse(cfg, scriptpath);
+		if (result != CFG_SUCCESS)
+		{
+			switch (result)
+			{
+				case CFG_FILE_ERROR:
+					LOGK(LOG_FATAL, "Could not open configuration file %s", scriptpath);
+
+				case CFG_PARSE_ERROR:
+					LOGK(LOG_FATAL, "Parse error in configuration file %s", scriptpath);
+
+				default:
+					LOGK(LOG_FATAL, "Unknown error while opening/parsing configuration file %s", scriptpath);
+			}
+		}
+
+		// Register global properties
+		property_set("id", cfg_getstr(cfg, "id"));
+		property_set("installed", cfg_getstr(cfg, "installed"));
+		property_set("model", cfg_getstr(cfg, "model"));
+
+		// Free the configuration struct
+		cfg_free(cfg);
+	}
+
+	// Now start building the kernel from the model_t
+	{
+		void * f_load_modules(void * udata, const model_t * model, const model_module_t * module)
+		{
+			// TODO - handle circular dependencies, somehow... (IMPORTANT)
+			void load_module(const meta_t * meta)
+			{
+				// Sanity check
+				{
+					if (meta == NULL)
+					{
+						LOGK(LOG_FATAL, "Attempt to call load_module with NULL meta!");
+						// Will exit
+					}
+				}
+
+				// Print diagnostic info
+				const char * path = NULL;
+				meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
+				LOGK(LOG_DEBUG, "Loading module %s", path);
+
+				// Handle dependencies
+				{
+					iterator_t ditr = meta_getdependencyitr(meta);
+					{
+						const char * depname = NULL;
+						while ((depname = meta_dependencynext(ditr)) != NULL)
+						{
+							LOGK(LOG_DEBUG, "Resolving dependency %s", depname);
+
+							const char * prefix = path_resolve(depname, P_MODULE);
+							if (prefix == NULL)
+							{
+								LOGK(LOG_FATAL, "Could not resolve dependency %s for module %s", depname, path);
+								// Will exit
+							}
+
+							string_t path = path_join(prefix, depname);
+							if (!strsuffix(path.string, ".mo"))
+							{
+								string_append(&path, ".mo");
+							}
+
+							const meta_t * depmeta = NULL;
+							if (!model_findmeta(model, path.string, &depmeta))
+							{
+								// Meta not in model, load it in manually
+								exception_t * e = NULL;
+								meta_t * parsemeta = meta_parseelf(path.string, &e);
+								if (parsemeta == NULL || exception_check(&e))
+								{
+									LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+									// Will exit
+								}
+
+								model_addmeta((model_t *)model, parsemeta, &e);
+								if (exception_check(&e))
+								{
+									LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+									// Will exit
+								}
+
+								meta_destroy(parsemeta);
+
+								if (!model_findmeta(model, path.string, &depmeta))
+								{
+									LOGK(LOG_FATAL, "Could not find meta just added to model!");
+									// Will exit
+								}
+							}
+
+							load_module(depmeta);
+						}
+					}
+					iterator_free(ditr);
+				}
+
+				// Loading the module *will* change the underlying struct (ptrs will resolve),
+				// so we must cast to get rid of const qualifier
+				module_t * rmodule = module_load((meta_t *)meta);
+				if (rmodule == NULL)
+				{
+					LOGK(LOG_FATAL, "Module loading failed.");
+					// Will exit
+				}
+			}
+
+			const meta_t * meta = NULL;
+			if (!model_getmeta(module, &meta))
+			{
+				LOGK(LOG_FATAL, "Could not get module meta from model");
+				// Will exit
+			}
+
+			load_module(meta);
+			return udata;
+		}
+
+		model_analysis_t f_load = {
+			.modules = f_load_modules,
+		};
+
+		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_load);
+	}
 
 
 	//mainloop = g_main_loop_new(NULL, false);
@@ -1081,13 +1314,27 @@ int main(int argc, char * argv[])
 
 	// Call post functions
 	{
-		list_t * pos;
+		// Sort compare functions
+		int cal_compare(list_t * a, list_t * b)
+		{
+			calentry_t * ca = list_entry(a, calentry_t, global_list);
+			calentry_t * cb = list_entry(b, calentry_t, global_list);
+			return strcmp(ca->name, cb->name);
+		}
+
+		int module_compare(list_t * a, list_t * b)
+		{
+			module_t * ma = list_entry(a, module_t, global_list);
+			module_t * mb = list_entry(b, module_t, global_list);
+			return strcmp(ma->kobject.object_name, mb->kobject.object_name);
+		}
 
 		// Sort the calentries list
 		list_sort(&calentries, cal_compare);
 		list_sort(&modules, module_compare);
 
 		// Call init function on all modules
+		list_t * pos;
 		list_foreach(pos, &modules)
 		{
 			module_t * module = list_entry(pos, module_t, global_list);

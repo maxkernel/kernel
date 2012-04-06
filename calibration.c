@@ -10,10 +10,283 @@
 #include "kernel.h"
 #include "kernel-priv.h"
 
-extern list_t calentries;
 extern sqlite3 * database;
+extern calibration_t calibration;
 
-static GRegex * bounds_regex = NULL;
+static bool cal_getentry(const char * domain, const char * name, const char sig, char * tovalue, size_t tovalue_size)
+{
+	LABELS(done);
+
+	bool success = false;
+	sqlite3_stmt * stmt;
+	const char * value = NULL;
+
+	string_t domain_query = (domain == NULL)? string_new("domain='%s' AND ", domain) : string_blank();
+	string_t query = string_new("SELECT value FROM calibration WHERE %sname='%s' AND sig='%c' AND updated=(SELECT MAX(updated) FROM calibration WHERE %sname='%s' AND sig='%c');", domain_query.string, name, sig, domain_query.string, name, sig);
+
+	if (sqlite3_prepare_v2(database, query.string, -1, &stmt, NULL) != SQLITE_OK)
+	{
+		LOGK(LOG_ERR, "Could not compile SQL calibration query");
+		goto done;
+	}
+
+	if (sqlite3_step(stmt) != SQLITE_ROW)
+	{
+		LOGK(LOG_DEBUG, "No calibration entry in database for %s", name);
+		goto done;
+	}
+
+	value = (const char *)sqlite3_column_text(stmt, 0);
+	if (strlen(value) >= tovalue_size)
+	{
+		LOGK(LOG_WARN, "Saved calibration size too big for entry %s in domain %s", name, domain);
+		goto done;
+	}
+
+	strcpy(tovalue, value);
+	success = true;
+
+done:
+	sqlite3_finalize(stmt);
+	return success;
+}
+
+static bool cal_setentry(const char * domain, const char * name, const char sig, const char * value, const char * comment)
+{
+	string_t domain_query = (domain == NULL)? string_new("NULL") : string_new("'%s'", domain);
+	string_t comment_query = (comment == NULL)? string_new("NULL") : string_new("'%s'", comment);
+	string_t query = string_append(&query, "INSERT INTO calibration VALUES (%s, '%s', '%c', '%s', DATETIME('NOW'), %s);", domain_query.string, name, sig, value, comment_query.string);
+
+	char * sql_err = NULL;
+	if (sqlite3_exec(database, query.string, NULL, NULL, &sql_err) != SQLITE_OK)
+	{
+		LOGK(LOG_ERR, "Could not execute SQL calibration insert query: %s", sql_err);
+		return false;
+	}
+
+	return true;
+}
+
+static bool cal_setcache(calentry_t * entry, void * value)
+{
+	size_t wrote = 0;
+	char cache[CAL_SIZE_CACHE] = {0};
+
+	switch (entry->sig)
+	{
+		case T_INTEGER:
+		{
+
+			wrote = snprintf(cache, CAL_SIZE_CACHE, "%d", *(int *)value);
+			break;
+		}
+
+		case T_DOUBLE:
+		{
+			wrote = snprintf(entry->cache, CAL_SIZE_CACHE, "%f", *(double *)value);
+			break;
+		}
+
+		default:
+		{
+			return false;
+		}
+	}
+
+	if (wrote >= (CAL_SIZE_CACHE - 1))
+	{
+		// Truncated!
+		return false;
+	}
+
+	memcpy(entry->cache, cache, CAL_SIZE_CACHE);
+	return true;
+}
+
+void cal_init()
+{
+	memset(&calibration, 0, sizeof(calibration_t));
+	LIST_INIT(&calibration->entries);
+	LIST_INIT(&calibration->previews);
+	LIST_INIT(&calibration->modechanges);
+}
+
+void cal_register(const char * domain, const char * name, const char sig, const char * constraints, void * backing, calpreview_f onpreview, void * onpreview_object)
+{
+	// Sanity check
+	{
+		if (name == NULL || backing == NULL)
+		{
+			LOGK(LOG_ERR, "Bad arguments to cal_register!");
+			return;
+		}
+
+		switch (sig)
+		{
+			case T_DOUBLE:
+			case T_INTEGER:
+			case T_BOOLEAN:
+				break;
+
+			default:
+			{
+				LOGK(LOG_ERR, "Invalid calibration type '%c' to entry %s in domain %s", sig, name, (domain == NULL)? "(none)" : domain);
+				return;
+			}
+		}
+	}
+
+	calentry_t * entry = malloc(sizeof(calentry_t));
+	memset(entry, 0, sizeof(calentry_t));
+	entry->domain = (domain == NULL)? NULL : strdup(domain);
+	entry->name = strdup(name);
+	entry->sig = sig;
+	entry->constraints = (constraints == NULL)? NULL : strdup(constraints);
+	entry->backing = backing;
+	entry->onpreview.callback = onpreview;
+	entry->onpreview.object = onpreview_object;
+
+	list_add(&calibration.entries, &entry->calibration_list);
+
+	// Read entry from database, put it in cache
+	if (!cal_getentry(domain, name, sig, entry->cache, CAL_SIZE_CACHE))
+	{
+		// Value not in database, read it from backing
+		if (!cal_setcache(entry, backing))
+		{
+			LOGK(LOG_ERR, "Could not read calibration entry name %d with sig %c!", name, sig);
+			return;
+		}
+	}
+
+	// Write the calibration value back
+	{
+		exception_t * e = NULL;
+
+		switch (entry->sig)
+		{
+			case T_INTEGER:
+			{
+				int value = parse_int(entry->cache, &e);
+				if (!exception_check(&e))	*(int *)entry->backing = value;
+				break;
+			}
+
+			case T_DOUBLE:
+			{
+				double value = parse_double(entry->cache, &e);
+				if (!exception_check(&e))	*(double *)entry->backing = value;
+				break;
+			}
+
+			default:
+			{
+				LOGK(LOG_ERR, "Unknown calibration entry type %s with sig %c", name, sig);
+				return;
+			}
+		}
+
+		if (exception_check(&e))
+		{
+			LOGK(LOG_ERR, "Could not set calibration entry %s: %s", name, e->message);
+			exception_free(e);
+		}
+	}
+}
+
+void cal_onpreview(const char * domain, calpreview_f callback, void * object)
+{
+	// Sanity check
+	{
+		if (callback == NULL)
+		{
+			return;
+		}
+	}
+
+	calpreview_t * onpreview = malloc(sizeof(calpreview_t));
+	if (onpreview == NULL)
+	{
+		LOGK(LOG_ERR, "Out of heap memory!");
+		return;
+	}
+
+	memset(onpreview, 0, sizeof(calpreview_t));
+	onpreview->domain = (domain == NULL)? NULL : strdup(domain);
+	onpreview->callback = callback;
+	onpreview->object = object;
+
+	list_add(&calibration.previews, &onpreview->calibration_list);
+}
+
+void cal_onmodechange(calmodechange_f callback, void * object)
+{
+	// Sanity check
+	{
+		if (callback == NULL)
+		{
+			return;
+		}
+	}
+
+	calmodechange_t * onmodechange = malloc(sizeof(calmodechange_t));
+	if (onmodechange == NULL)
+	{
+		LOGK(LOG_ERR, "Out of heap memory!");
+		return;
+	}
+
+	memset(onmodechange, 0, sizeof(calmodechange_t));
+	onmodechange->callback = callback;
+	onmodechange->object = object;
+
+	list_add(&calibration.modechanges, &onmodechange->calibration_list);
+}
+
+void cal_startcalibration()
+{
+	if (calibration.mode == calmode_enter)
+	{
+		LOGK(LOG_WARN, "Already in calibration mode!");
+		return;
+	}
+
+	// Backup all existing calibration
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &calibration.entries)
+		{
+			calentry_t * entry = list_entry(pos, calentry_t, calibration_list);
+
+			if (entry->edit_backup != NULL)
+			{
+				LOGK(LOG_WARN, "Calibration backup has already been performed for calibration %s in domain %s!", entry->name, entry->domain);
+				continue;
+			}
+
+			entry->edit_backup = strdup(entry->cache);
+		}
+	}
+
+	// Set the mode
+	calibration.mode = calmode_enter;
+
+	// Notify the callbacks
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &calibration.modechanges)
+		{
+			calmodechange_t * change = list_entry(pos, calmodechange_t, calibration_list);
+			if (change->callback != NULL)
+			{
+				change->callback(change->object, calibration.mode, calstatus_ok);
+			}
+		}
+	}
+}
+
+#if 0
+//static GRegex * bounds_regex = NULL;
 
 static calparam_t * cal_make(const char type, const char * value)
 {
@@ -62,20 +335,22 @@ done:
 	return c;
 }
 
-void cal_setparam(const char * module, const char * name, const char * value)
+void cal_setparam(const char * modname, const char * name, const char * value)
 {
-	module_t * mod = module_get(module);
-	if (mod == NULL)
+	// TODO - DO CALIBRATION PROCEDURE!
+	/*
+	const module_t * module = module_lookup(modname);
+	if (module == NULL)
 	{
-		LOGK(LOG_WARN, "Could not set calibration parameter. Module %s doesn't exist", module);
+		LOGK(LOG_WARN, "Could not set calibration parameter. Module %s doesn't exist", modname);
 		return;
 	}
 
 	list_t * pos;
-	calentry_t * cal = NULL;
-	list_foreach(pos, &mod->calentries)
+	const calentry_t * cal = NULL;
+	list_foreach(pos, &module->calentries)
 	{
-		calentry_t * test = list_entry(pos, calentry_t, module_list);
+		const calentry_t * test = list_entry(pos, calentry_t, module_list);
 		if (strcmp(name, test->name) == 0)
 		{
 			// found the entry
@@ -86,7 +361,7 @@ void cal_setparam(const char * module, const char * name, const char * value)
 
 	if (cal == NULL)
 	{
-		LOGK(LOG_WARN, "Could not set calibration parameter. Entry %s in module %s doesn't exist", name, module);
+		LOGK(LOG_WARN, "Could not set calibration parameter. Entry %s in module %s doesn't exist", name, modname);
 		return;
 	}
 
@@ -104,7 +379,7 @@ void cal_setparam(const char * module, const char * name, const char * value)
 
 		default:
 		{
-			LOGK(LOG_WARN, "Could not set calibration parameter %s in module %s. Unknown signature '%c'", name, module, cal->sig[0]);
+			LOGK(LOG_WARN, "Could not set calibration parameter %s in module %s. Unknown signature '%c'", name, modname, cal->sig[0]);
 			return;
 		}
 	}
@@ -116,14 +391,16 @@ void cal_setparam(const char * module, const char * name, const char * value)
 	}
 	cal->preview = pvalue;
 
-	if (mod->calupdate != NULL)
+	if (module->calupdate != NULL)
 	{
-		mod->calpreview(name, cal->sig[0], pvalue, cal->active);
+		module->calpreview(name, cal->sig[0], pvalue, cal->active);
 	}
+	*/
 }
 
 void cal_merge(const char * comment)
 {
+	/*
 	if (comment == NULL || strlen(comment) == 0)
 	{
 		comment = "(none)";
@@ -185,6 +462,7 @@ void cal_merge(const char * comment)
 			cal->preview = NULL;
 		}
 	}
+	*/
 }
 
 void cal_revert()
@@ -197,6 +475,7 @@ void cal_revert()
 	}
 }
 
+/*
 static void cal_bounds(calentry_t * entry, char type, double * min_ptr, double * max_ptr)
 {
 	if (bounds_regex == NULL)
@@ -251,9 +530,11 @@ done:
 	*min_ptr = min;
 	*max_ptr = max;
 }
+*/
 
 void cal_iterate(cal_itr_i itri, cal_itr_d itrd, void * userdata)
 {
+	/*
 	list_t * pos;
 	list_foreach(pos, &calentries)
 	{
@@ -282,16 +563,11 @@ void cal_iterate(cal_itr_i itri, cal_itr_d itrd, void * userdata)
 			}
 		}
 	}
-}
-
-int cal_compare(list_t * a, list_t * b)
-{
-	calentry_t * ca = list_entry(a, calentry_t, global_list);
-	calentry_t * cb = list_entry(b, calentry_t, global_list);
-	return strcmp(ca->name, cb->name);
+	*/
 }
 
 void cal_freeparam(calparam_t * val)
 {
 	g_free(val);
 }
+#endif

@@ -5,33 +5,10 @@
 #include <map.h>
 #include <kernel.h>
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas - <andrew@maxkernel.com>");
-MOD_DESCRIPTION("Helper module for use in applications where the robot has a camera turret.");
-MOD_DEPENDENCY("map");
-MOD_INIT(model_init);
-MOD_DESTROY(model_destroy);
-
-BLK_INPUT(STATIC, pan, "d", "Rotates the head by given value (param 1) radians between -3pi/2 to pi/2 (-270 degrees to +90 degrees)");
-BLK_INPUT(STATIC, tilt, "d", "Tilts the head by given value (param 1) radians between -pi/4 ... pi/2 (-45 degrees to +90 degrees)");
-BLK_OUTPUT(STATIC, pan_pwm, "i");
-BLK_OUTPUT(STATIC, tilt_pwm, "i");
-BLK_ONUPDATE(STATIC, model_update);
-
 
 // Default calibration settings
 int pan_min		= 5000,		pan_forward		= 8000,		pan_backward	= 6000,			pan_max		= 9000;
 int tilt_min	= 5000,		tilt_center		= 7000,		tilt_max		= 9000;
-
-CAL_UPDATE(model_updatecal);
-CAL_PREVIEW(model_previewcal);
-CAL_PARAM(	pan_min,		"i0:15000",		"Head Pan Minimum (left -270 deg)"		);
-CAL_PARAM(	pan_forward,	"i0:15000",		"Head Pan Center Forward"				);
-CAL_PARAM(	pan_backward,	"i0:15000",		"Head Pan Center Backward"				);
-CAL_PARAM(	pan_max,		"i0:15000",		"Head Pan Maximum (right +90 deg)"		);
-CAL_PARAM(	tilt_min,		"i0:15000",		"Head Tilt Minimum (down -45 deg)"		);
-CAL_PARAM(	tilt_center,	"i0:15000",		"Head Tilt Center (level forward)"		);
-CAL_PARAM(	tilt_max,		"i0:15000",		"Head Tilt Maximum (up +90 deg)"		);
 
 
 static bool mode_calibration = false;
@@ -101,12 +78,13 @@ void model_update(void * obj)
 	OUTPUT(tilt_pwm, &pwm_tilt);
 }
 
-void model_init()
+bool model_init()
 {
 	pwm_pan = pan_forward;
 	pwm_tilt = tilt_center;
 
 	setmaps();
+	return true;
 }
 
 void model_destroy()
@@ -114,3 +92,29 @@ void model_destroy()
 	map_destroy(map_pan);
 	map_destroy(map_tilt);
 }
+
+
+module_name("Look Model");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Helper module for use in applications where the robot has a camera turret.");
+module_dependency("map");
+module_oninitialize(model_init);
+module_ondestroy(model_destroy);
+
+cal_param(	pan_min,		'i',		"[0:15000] Head Pan Minimum (left -270 deg)");
+cal_param(	pan_forward,	'i',		"[0:15000] Head Pan Center Forward");
+cal_param(	pan_backward,	'i',		"[0:15000] Head Pan Center Backward");
+cal_param(	pan_max,		'i',		"[0:15000] Head Pan Maximum (right +90 deg)");
+cal_param(	tilt_min,		'i',		"[0:15000] Head Tilt Minimum (down -45 deg)");
+cal_param(	tilt_center,	'i',		"[0:15000] Head Tilt Center (level forward)");
+cal_param(	tilt_max,		'i',		"[0:15000] Head Tilt Maximum (up +90 deg)");
+// TODO - finish me!
+//cal_onmodechange(model_modechange); CAL_UPDATE(model_updatecal);
+cal_onpreview(model_previewcal);
+
+block_input(	static, 	pan, 		'd', 	"Rotates the head by given value (param 1) radians between -3pi/2 to pi/2 (-270 degrees to +90 degrees)");
+block_input(	static, 	tilt, 		'd', 	"Tilts the head by given value (param 1) radians between -pi/4 ... pi/2 (-45 degrees to +90 degrees)");
+block_output(	static, 	pan_pwm, 	'i', 	"The output pwm for the pan servo (pwm measured in microseconds)");
+block_output(	static, 	tilt_pwm, 	'i',	"The output pwm for the tilt servo (pwm measured in microseconds)");
+block_onupdate(	static, 	model_update);

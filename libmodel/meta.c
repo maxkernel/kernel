@@ -352,8 +352,6 @@ end_init:
 		__meta_init = NULL;
 	}
 
-	// TODO (IMPORTANT) handle dependencies before loading
-
 	__meta_init = __do_meta_init;
 	meta->dlobject = dlopen(meta->path, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
@@ -367,7 +365,7 @@ end_init:
 	char * error = dlerror();
 	if (error != NULL)
 	{
-		exception_set(err, EFAULT, "Could not load module %s. DL error: %s", meta->path, error);
+		exception_set(err, EFAULT, "Could not load module. DL error: %s", error);
 		return false;
 	}
 
@@ -399,7 +397,7 @@ size_t meta_encodebase64(meta_t * meta, const char * to, size_t length)
 }
 
 
-meta_t * meta_copy(meta_t * meta)
+meta_t * meta_copy(const meta_t * meta)
 {
 	meta_t * newmeta = malloc(sizeof(meta_t));
 	memcpy(newmeta, meta, sizeof(meta_t));
@@ -472,6 +470,73 @@ void meta_destroy(meta_t * meta)
 	free(meta);
 }
 
+
+void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, const version_t ** version, const char ** author, const char ** desc)
+{
+	// Sanity check
+	{
+		if (meta == NULL)
+		{
+			return;
+		}
+	}
+
+	if (path != NULL)
+	{
+		*path = meta->path;
+	}
+
+	if (name != NULL && meta->name != NULL)
+	{
+		*name = meta->name->name;
+	}
+
+	if (version != NULL && meta->version != NULL)
+	{
+		*version = &meta->version->version;
+	}
+
+	if (author != NULL && meta->author != NULL)
+	{
+		*author = meta->author->name;
+	}
+
+	if (desc != NULL && meta->description != NULL)
+	{
+		*desc = meta->description->description;
+	}
+}
+
+void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact)
+{
+	// Sanity check
+	{
+		if (meta == NULL)
+		{
+			return;
+		}
+	}
+
+	if (init != NULL && meta->init != NULL)
+	{
+		*init = meta->init->function;
+	}
+
+	if (destroy != NULL && meta->destroy != NULL)
+	{
+		*destroy = meta->destroy->function;
+	}
+
+	if (preact != NULL && meta->preact != NULL)
+	{
+		*preact = meta->preact->function;
+	}
+
+	if (postact != NULL && meta->postact != NULL)
+	{
+		*postact = meta->postact->function;
+	}
+}
 
 bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc)
 {
@@ -618,4 +683,25 @@ bool meta_getblockios(const meta_t * meta, const char * blockname, char const **
 	}
 
 	return true;
+}
+
+iterator_t meta_getdependencyitr(const meta_t * meta)
+{
+	const void * ditr_next(const void * object, void ** itrobject)
+	{
+		const meta_t * meta = object;
+		meta_dependency_t ** dep = (meta_dependency_t **)*itrobject;
+
+		const void * r = (*dep == NULL)? NULL : (*dep)->dependency;
+		*itrobject = (*dep == NULL)? (void *)&meta->dependencies[0] : (void *)&dep[1];
+
+		return r;
+	}
+
+	return iterator_new("meta_dependency", ditr_next, NULL, meta, (void *)&meta->dependencies[0]);
+}
+
+const char * meta_dependencynext(iterator_t itr)
+{
+	return iterator_next(itr, "meta_dependency");
 }

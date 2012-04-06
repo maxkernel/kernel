@@ -7,15 +7,6 @@
 #include "internal.h"
 
 
-MOD_VERSION("0.5");
-MOD_AUTHOR("Andrew Klofas <andrew.klofas@senseta.com>");
-MOD_DESCRIPTION("Provides the Service API to help modules automatically stream sensors/other stuff to the ground station");
-MOD_PREACT(module_preactivate);
-MOD_INIT(module_init);
-
-DEF_SYSCALL(service_getstreamconfig, "s:v", "Get the new-line seperated key=value string of stream configuration options");
-
-
 mutex_t service_lock;
 mainloop_t * serviceloop = NULL;
 char streamconfig_cache[200];
@@ -254,7 +245,7 @@ void module_preactivate()
 	stream_table = g_hash_table_new(g_str_hash, g_str_equal);
 }
 
-void module_init()
+bool module_init()
 {
 	LOG(LOG_DEBUG, "Initializing Service subsystem");
 
@@ -277,4 +268,17 @@ void module_init()
 
 	tcp_init();
 	udp_init();
+
+	return true;
 }
+
+
+module_name("Service API Server");
+module_version(0,6,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Provides a publish/subscribe API to help modules stream sensors/status/other stuff to external clients");
+module_onpreactivate(module_preactivate);
+module_oninitialize(module_init);
+
+// TODO - better protocol?
+define_syscall(service_getstreamconfig, "s:v", "Get a new-line seperated key=value string of stream configuration options");

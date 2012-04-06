@@ -2,12 +2,16 @@
 
 #include "template.h"
 
-MOD_VERSION("0.0000.00001");
-MOD_AUTHOR("Shmorry Shmippolito");
-MOD_DESCRIPTION("The description of this module");
-MOD_INIT(module_init);
-// Any other module directives go here (see doc)
 
-void module_init() {
-	// module init function
+bool module_init() {
+	// Module init function
+
+	return true;	// Return true on success. False will abort.
 }
+
+module_name("Template Module")
+module_version(1,2,123);
+module_author("Shmorry Shmippolito");
+module_description("The description of this module");
+module_oninitialize(module_init);
+// Any other module directives go here (see doc)

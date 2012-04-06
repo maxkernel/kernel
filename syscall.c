@@ -1,4 +1,5 @@
 #include <string.h>
+#include <errno.h>
 
 #include <array.h>
 #include <serialize.h>
@@ -25,27 +26,46 @@ void syscall_destroy(void * syscall)
 	hashtable_remove(&sys->global_entry);
 
 	function_free(sys->ffi);
-	FREES(sys->sig);
-	FREES(sys->desc);
+	free(sys->name);
+	free(sys->sig);
+
+	if (sys->desc != NULL)
+	{
+		free(sys->desc);
+	}
 }
 
-void syscall_reg(syscall_t * syscall)
+syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, const char * desc, exception_t ** err)
 {
-	syscall->kobject.class_name = "Syscall";
-	syscall->kobject.object_name = syscall->name;
-	syscall->kobject.info = syscall_info;
-	syscall->kobject.destructor = syscall_destroy;
-	kobj_register(&syscall->kobject);
-
-	exception_t * err = NULL;
-	syscall->ffi = function_build(syscall->func, syscall->sig, &err);
-	if (exception_check(&err))
+	// Sanity check
 	{
-		LOGK(LOG_FATAL, "Could not create syscall %s: Code %d %s", syscall->name, err->code, err->message);
-		// Will exit
+		if (exception_check(err))
+		{
+			return NULL;
+		}
+
+		if (name == NULL || sig == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+	}
+
+	syscall_t * syscall = kobj_new("Syscall", name, syscall_info, syscall_destroy, sizeof(syscall_t));
+
+	syscall->name = strdup(name);
+	syscall->sig = strdup(sig);
+	syscall->func = func;
+	syscall->desc = (desc == NULL)? NULL : strdup(desc);
+
+	syscall->ffi = function_build(syscall->func, syscall->sig, err);
+	if (syscall->ffi == NULL || exception_check(err))
+	{
+		return NULL;
 	}
 
 	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
+	return syscall;
 }
 
 bool asyscall_exec(const char * name, exception_t ** err, void * ret, void ** args)

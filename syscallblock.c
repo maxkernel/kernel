@@ -12,7 +12,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 {
 	syscallblock_t * sb = userdata;
 
-	io_beforeblock(sb->block_inst);
+	io_beforeblock(sb->blockinst);
 	{
 		const char * param;
 		size_t index = 0;
@@ -22,13 +22,13 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 			if (*param != T_VOID)
 			{
 				string_t pname = string_new("p%zu", index);
-				io_dooutput(sb->block_inst, pname.string, args[index++]);
+				io_dooutput(sb->blockinst, pname.string, args[index++]);
 			}
 		}
 
 		if (method_returntype(sb->syscall->sig) != T_VOID)
 		{
-			const void * r = io_doinput(sb->block_inst, "r");
+			const void * r = io_doinput(sb->blockinst, "r");
 			if (r != NULL)
 			{
 				switch (method_returntype(sb->syscall->sig))
@@ -53,7 +53,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 			}
 		}
 	}
-	io_afterblock(sb->block_inst);
+	io_afterblock(sb->blockinst);
 }
 
 char * syscallblock_info(void * object)
@@ -68,9 +68,9 @@ void syscallblock_free(void * object)
 	closure_free(sb->closure);
 }
 
-block_inst_t * syscallblock_getblockinst(syscallblock_t * sb)
+blockinst_t * syscallblock_getblockinst(syscallblock_t * sb)
 {
-	return sb->block_inst;
+	return sb->blockinst;
 }
 
 syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc)
@@ -101,38 +101,37 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 		}
 	}
 
-	syscallblock_t * sb = kobj_new("SyscallBlock", strdup(name), syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
-
-	// Build syscall
+	syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
+	syscall_f func = NULL;
+	string_t sig = string_new("%c:", (ret == NULL)? 'v' : ret->output->sig);
+	for (size_t i = 0; i < numparams; i++)
 	{
-		sb->syscall = malloc0(sizeof(syscall_t));
-		sb->syscall->name = strdup(name);
-		sb->syscall->desc = STRDUP(desc);
-
-		string_t sig = string_new("%c:", ret == NULL? 'v' : ret->output->sig);
-		int i=0;
-		for (; i<numparams; i++)
-		{
-			string_append(&sig, "%c", params[i]->input->sig);
-		}
-		sb->syscall->sig = string_copy(&sig);
+		string_append(&sig, "%c", params[i]->input->sig);
 	}
 
 	// Build the closure
 	{
 		exception_t * e = NULL;
-		sb->closure = closure_build(&sb->syscall->func, syscallblock_dosyscall, sb->syscall->sig, sb, &e);
-
-		if (sb->closure == NULL)
+		sb->closure = closure_build(&func, syscallblock_dosyscall, sig.string, sb, &e);
+		if (sb->closure == NULL || exception_check(&e))
 		{
-			LOGK(LOG_ERR, "Could not create syscall block closure %s: %s", name, e->message);
+			LOGK(LOG_ERR, "Could not create syscall block closure %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+			exception_free(e);
 			return NULL;
 		}
 	}
 
-	// Register the syscall
+	// Build syscall
 	{
-		syscall_reg(sb->syscall);
+		exception_t * e = NULL;
+		sb->syscall = syscall_new(name, sig.string, func, desc, &e);
+		if (sb->syscall == NULL || exception_check(&e))
+		{
+			LOGK(LOG_ERR, "Could not create syscall %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+			exception_free(e);
+			return NULL;
+		}
+
 	}
 
 	// Build block
@@ -145,7 +144,6 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 
 		blk->name = string_copy(&blkname);
 		blk->desc = string_copy(&blkdesc);
-		blk->module = kernel_module;
 		LIST_INIT(&blk->inputs);
 		LIST_INIT(&blk->outputs);
 
@@ -173,19 +171,18 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 			list_add(&blk->inputs, &in->block_list);
 		}
 
-		list_add(&kernel_module->blocks, &blk->module_list);
 		sb->block = blk;
 	}
 
 	// Create block instance
-	sb->block_inst = io_newblockinst(sb->block, NULL);
+	sb->blockinst = io_newblockinst(sb->block, NULL);
 
 	// Route the data
 	{
 		for (size_t index = 0; index < numparams; index++)
 		{
 			string_t pname = string_new("p%zu", index);
-			boutput_inst_t * out = io_getboutput(sb->block_inst, pname.string);
+			boutput_inst_t * out = io_getboutput(sb->blockinst, pname.string);
 			if (out != NULL)
 			{
 				io_route(out, params[index]);
@@ -200,7 +197,7 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 		if (ret != NULL)
 		{
 			string_t rname = string_new("r");
-			binput_inst_t * in = io_getbinput(sb->block_inst, rname.string);
+			binput_inst_t * in = io_getbinput(sb->blockinst, rname.string);
 			if (in != NULL)
 			{
 				io_route(ret, in);

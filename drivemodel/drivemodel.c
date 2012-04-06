@@ -5,40 +5,11 @@
 #include <map.h>
 #include <kernel.h>
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas - <andrew@maxkernel.com>");
-MOD_DESCRIPTION("Helper module for use in applications where the robot has four wheeled steering.");
-MOD_DEPENDENCY("map");
-MOD_INIT(model_init);
-MOD_DESTROY(model_destroy);
-
-BLK_INPUT(STATIC, throttle, "d", "Energizes the motor. Value must be between -1.0 to 1.0");
-BLK_INPUT(STATIC, front, "d", "Turns the front wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");
-BLK_INPUT(STATIC, rear, "d", "Turns the rear wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");
-BLK_OUTPUT(STATIC, motor_front_pwm, "i");
-BLK_OUTPUT(STATIC, motor_rear_pwm, "i");
-BLK_OUTPUT(STATIC, front_pwm, "i");
-BLK_OUTPUT(STATIC, rear_pwm, "i");
-BLK_ONUPDATE(STATIC, model_update);
-
-
 // Default calibration settings
 #define MOTOR_CALIBRATION_TIMEOUT	(2 * MICROS_PER_SECOND)
 int motor_min	= 5500,		motor_center	= 6750,		motor_max		= 8000;
 int front_min	= 9900,		front_center	= 7200,		front_max		= 4500;
 int rear_min	= 4500,		rear_center		= 7200,		rear_max		= 9900;
-
-CAL_UPDATE(model_updatecal);
-CAL_PREVIEW(model_previewcal);
-CAL_PARAM(	motor_min,		"i0:15000",		"Motor Minimum (full reverse). Calibrate front motor only."	);
-CAL_PARAM(	motor_center,	"i0:15000",		"Motor Center (neutral). Calibrate front motor only."		);
-CAL_PARAM(	motor_max,		"i0:15000",		"Motor Maximum (full forward). Calibrate front motor only."	);
-CAL_PARAM(	front_min,		"i0:15000",		"Front Wheel Minimum (left -25 deg)"	);
-CAL_PARAM(	front_center,	"i0:15000",		"Front Wheel Centered"					);
-CAL_PARAM(	front_max,		"i0:15000",		"Front Wheel Maximum (right +25 deg)"	);
-CAL_PARAM(	rear_min,		"i0:15000",		"Rear Wheel Minimum (right +25 deg)"	);
-CAL_PARAM(	rear_center,	"i0:15000",		"Rear Wheel Centered"					);
-CAL_PARAM(	rear_max,		"i0:15000",		"Rear Wheel Maximum (left -25 deg)"		);
 
 
 static bool mode_calibration = false;
@@ -132,13 +103,14 @@ void model_update(void * obj)
 	OUTPUT(rear_pwm, &pwm_rear);
 }
 
-void model_init()
+bool model_init()
 {
 	pwm_motor_front = pwm_motor_rear = motor_center;
 	pwm_front = front_center;
 	pwm_rear = rear_center;
 
 	setmaps();
+	return true;
 }
 
 void model_destroy()
@@ -148,3 +120,36 @@ void model_destroy()
 	map_destroy(map_front);
 	map_destroy(map_rear);
 }
+
+
+module_name("Drive Model");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Helper module for use in applications where the robot has four wheeled steering.");
+module_dependency("map");
+module_oninitialize(model_init);
+module_ondestroy(model_destroy);
+
+block_input(	static, 	throttle, 			'd', 	"Energizes the motor. Value must be between -1.0 to 1.0");
+block_input(	static, 	front, 				'd', 	"Turns the front wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");
+block_input(	static, 	rear, 				'd', 	"Turns the rear wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");
+block_output(	static, 	motor_front_pwm, 	'i', 	"The output pwm for the front motor (pwm measured in microseconds)");
+block_output(	static, 	motor_rear_pwm, 	'i', 	"The output pwm for the rear motor (pwm measured in microseconds)");
+block_output(	static, 	front_pwm, 			'i', 	"The output pwm for the front stearing servo (pwm measured in microseconds)");
+block_output(	static, 	rear_pwm, 			'i', 	"The output pwm for the rear stearing servo (pwm measured in microseconds)");
+block_onupdate(	static, 	model_update);
+
+//CAL_UPDATE(model_updatecal);
+//CAL_PREVIEW(model_previewcal);
+cal_param(	motor_min,		'i',		"[0:15000] Motor Minimum (full reverse). Calibrate front motor only.");
+cal_param(	motor_center,	'i',		"[0:15000] Motor Center (neutral). Calibrate front motor only.");
+cal_param(	motor_max,		'i',		"[0:15000] Motor Maximum (full forward). Calibrate front motor only.");
+cal_param(	front_min,		'i',		"[0:15000] Front Wheel Minimum (left -25 deg)");
+cal_param(	front_center,	'i',		"[0:15000] Front Wheel Centered");
+cal_param(	front_max,		'i',		"[0:15000] Front Wheel Maximum (right +25 deg)");
+cal_param(	rear_min,		'i',		"[0:15000] Rear Wheel Minimum (right +25 deg)");
+cal_param(	rear_center,	'i',		"[0:15000] Rear Wheel Centered");
+cal_param(	rear_max,		'i',		"[0:15000] Rear Wheel Maximum (left -25 deg)");
+// TODO - finish these!!
+//cal_onmodechange(model_modechange);
+cal_onpreview(model_previewcal);

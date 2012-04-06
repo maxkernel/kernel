@@ -4,10 +4,6 @@
 #include <kernel.h>
 #include <map.h>
 
-MOD_VERSION("0.9");
-MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
-MOD_DESCRIPTION("A helper module that allows you to map linear values to a nonlinear curve. Useful for calibration maps");
-
 
 #define MAX_MATCHES		50
 
@@ -185,3 +181,8 @@ double map_tovalue(map_t * map, const double tomap)
 	return map->dest_array[map->array_size - 1];
 }
 
+
+module_name("Map");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Provides functions to enable mapping linear values to a nonlinear curve. Useful for calibration maps. Intended to be used by other modules (not included directly)");

@@ -1,2 +1,2 @@
-CREATE TABLE IF NOT EXISTS calibration ( name VARCHAR(25), type VARCHAR(1), value VARCHAR(25), updated TIMESTAMP, comment VARCHAR(100) );
+CREATE TABLE IF NOT EXISTS calibration ( domain VARCHAR(35), name VARCHAR(25) NOT NULL, sig VARCHAR(1) NOT NULL, value VARCHAR(25) NOT NULL, updated TIMESTAMP NOT NULL, comment VARCHAR(100) );
 

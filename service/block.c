@@ -1,5 +1,3 @@
-
-
 #include <kernel.h>
 #include <buffer.h>
 #include "service.h"
@@ -9,10 +7,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-
-DEF_BLOCK(bufferstream, s_bufstream_new, "ssss", "Create a new buffer stream service");
-BLK_INPUT(bufferstream, buffer, "x", "Input buffer to stream to service clients");
-BLK_ONUPDATE(bufferstream, s_bufstream_update);
 
 void * s_bufstream_new(const char * id, const char * name, const char * format, const char * desc)
 {
@@ -33,3 +27,8 @@ void s_bufstream_update(void * userdata)
 
 	service_writedata(handle, kernel_timestamp(), *buffer);
 }
+
+
+define_block(bufferstream, "Create a new buffer stream service", s_bufstream_new, "ssss", "(1) ID (2) Name (3) Format (4) Description");
+block_input(bufferstream, buffer, 'x', "Input buffer to stream to service clients");
+block_onupdate(bufferstream, s_bufstream_update);

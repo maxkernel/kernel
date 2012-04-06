@@ -27,7 +27,7 @@ typedef enum
 const char * http_getheader(http_context * ctx, const char * name);
 const char * http_getparam(http_context * ctx, const char * name);
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** error);
+http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err);
 void http_adduri(http_context * ctx, const char * uri, http_match match, http_callback cb, void * userdata);
 
 void http_printf(http_connection * conn, const char * fmt, ...) CHECK_PRINTF(2, 3);

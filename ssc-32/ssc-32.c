@@ -7,48 +7,6 @@
 #include <kernel.h>
 
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas <andrew@maxkernel.com>");
-MOD_DESCRIPTION("Connects to the SSC-32 Servo Controller");
-MOD_INIT(ssc32_init);
-MOD_DESTROY(ssc32_destroy);
-
-BLK_INPUT(STATIC, pwm0, "i");
-BLK_INPUT(STATIC, pwm1, "i");
-BLK_INPUT(STATIC, pwm2, "i");
-BLK_INPUT(STATIC, pwm3, "i");
-BLK_INPUT(STATIC, pwm4, "i");
-BLK_INPUT(STATIC, pwm5, "i");
-BLK_INPUT(STATIC, pwm6, "i");
-BLK_INPUT(STATIC, pwm7, "i");
-BLK_INPUT(STATIC, pwm8, "i");
-BLK_INPUT(STATIC, pwm9, "i");
-BLK_INPUT(STATIC, pwm10, "i");
-BLK_INPUT(STATIC, pwm11, "i");
-BLK_INPUT(STATIC, pwm12, "i");
-BLK_INPUT(STATIC, pwm13, "i");
-BLK_INPUT(STATIC, pwm14, "i");
-BLK_INPUT(STATIC, pwm15, "i");
-BLK_INPUT(STATIC, pwm16, "i");
-BLK_INPUT(STATIC, pwm17, "i");
-BLK_INPUT(STATIC, pwm18, "i");
-BLK_INPUT(STATIC, pwm19, "i");
-BLK_INPUT(STATIC, pwm20, "i");
-BLK_INPUT(STATIC, pwm21, "i");
-BLK_INPUT(STATIC, pwm22, "i");
-BLK_INPUT(STATIC, pwm23, "i");
-BLK_INPUT(STATIC, pwm24, "i");
-BLK_INPUT(STATIC, pwm25, "i");
-BLK_INPUT(STATIC, pwm26, "i");
-BLK_INPUT(STATIC, pwm27, "i");
-BLK_INPUT(STATIC, pwm28, "i");
-BLK_INPUT(STATIC, pwm29, "i");
-BLK_INPUT(STATIC, pwm30, "i");
-BLK_INPUT(STATIC, pwm31, "i");
-BLK_ONUPDATE(STATIC, ssc32_update);
-
-CFG_PARAM(serial_port, "s");
-
 static int ssc_fd = -1;
 char * serial_port = "/dev/ttyUSB0";
 
@@ -148,13 +106,16 @@ void ssc32_update(void * obj)
 	if (pwm31 != NULL)	ssc32_writeio(31, *pwm31);
 }
 
-void ssc32_init()
+bool ssc32_init()
 {
 	ssc_fd = serial_open(serial_port, B115200);
 	if (ssc_fd == -1)
 	{
-		LOG(LOG_WARN, "Could not open ssc32 serial port");
+		LOG(LOG_ERR, "Could not open ssc32 on serial port %s", serial_port);
+		return false;
 	}
+
+	return true;
 }
 
 void ssc32_destroy()
@@ -165,3 +126,47 @@ void ssc32_destroy()
 		ssc_fd = -1;
 	}
 }
+
+
+module_name("SSC-32 Controller");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Connects to the SSC-32 Servo Controller");
+module_oninitialize(ssc32_init);
+module_ondestroy(ssc32_destroy);
+
+config_param(	serial_port, 	's', 	"The serial port to connect to (eg. /dev/ttyUSB0)");
+
+block_input(	static, 	pwm0, 		'i', 	"Channel 0 PWM");
+block_input(	static, 	pwm1, 		'i', 	"Channel 1 PWM");
+block_input(	static, 	pwm2, 		'i', 	"Channel 2 PWM");
+block_input(	static, 	pwm3, 		'i', 	"Channel 3 PWM");
+block_input(	static, 	pwm4, 		'i', 	"Channel 4 PWM");
+block_input(	static, 	pwm5, 		'i', 	"Channel 5 PWM");
+block_input(	static, 	pwm6, 		'i', 	"Channel 6 PWM");
+block_input(	static, 	pwm7, 		'i', 	"Channel 7 PWM");
+block_input(	static, 	pwm8, 		'i', 	"Channel 8 PWM");
+block_input(	static, 	pwm9, 		'i', 	"Channel 9 PWM");
+block_input(	static, 	pwm10, 		'i', 	"Channel 10 PWM");
+block_input(	static, 	pwm11, 		'i', 	"Channel 11 PWM");
+block_input(	static, 	pwm12, 		'i', 	"Channel 12 PWM");
+block_input(	static, 	pwm13, 		'i', 	"Channel 13 PWM");
+block_input(	static, 	pwm14, 		'i', 	"Channel 14 PWM");
+block_input(	static, 	pwm15, 		'i', 	"Channel 15 PWM");
+block_input(	static, 	pwm16, 		'i', 	"Channel 16 PWM");
+block_input(	static, 	pwm17, 		'i', 	"Channel 17 PWM");
+block_input(	static, 	pwm18, 		'i', 	"Channel 18 PWM");
+block_input(	static, 	pwm19, 		'i', 	"Channel 19 PWM");
+block_input(	static, 	pwm20, 		'i', 	"Channel 20 PWM");
+block_input(	static, 	pwm21, 		'i', 	"Channel 21 PWM");
+block_input(	static, 	pwm22, 		'i', 	"Channel 22 PWM");
+block_input(	static, 	pwm23, 		'i', 	"Channel 23 PWM");
+block_input(	static, 	pwm24, 		'i', 	"Channel 24 PWM");
+block_input(	static, 	pwm25, 		'i', 	"Channel 25 PWM");
+block_input(	static, 	pwm26, 		'i', 	"Channel 26 PWM");
+block_input(	static, 	pwm27, 		'i', 	"Channel 27 PWM");
+block_input(	static, 	pwm28, 		'i', 	"Channel 28 PWM");
+block_input(	static, 	pwm29, 		'i', 	"Channel 29 PWM");
+block_input(	static, 	pwm30, 		'i', 	"Channel 30 PWM");
+block_input(	static, 	pwm31, 		'i', 	"Channel 31 PWM");
+block_onupdate(	static, 	ssc32_update);

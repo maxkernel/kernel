@@ -8,12 +8,6 @@
 #include <kernel.h>
 #include <discovery.h>
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas - andrew.klofas@senseta.com");
-MOD_DESCRIPTION("Provides auto-discovery of rovers on the network.");
-MOD_INIT(module_init);
-CFG_PARAM(enable_discovery, "b", "Enables other computers to discover this robot automatically");
-
 
 #define PACKET_LEN		25
 
@@ -53,19 +47,28 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 	return true;
 }
 
-void module_init()
+bool module_init()
 {
 	gethostname(hostname, sizeof(hostname));
 
-	exception_t * err = NULL;
-	int sock = udp_server(DISCOVERY_PORT, &err);
+	exception_t * e = NULL;
+	int sock = udp_server(DISCOVERY_PORT, &e);
 
-	if (err != NULL)
+	if (sock == -1 || exception_check(&e))
 	{
-		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, err->message);
-		exception_free(err);
-		return;
+		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, (e == NULL)? "Unknown error" : e->message);
+		exception_free(e);
+		return false;
 	}
 
 	mainloop_addwatch(NULL, sock, FD_READ, discovery_newclient, NULL);
+	return true;
 }
+
+module_name("Discovery");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Provides discovery/auto-discovery of rovers on the network.");
+module_oninitialize(module_init);
+
+config_param(enable_discovery, 'b', "Enables other computers to auto-discover this robot automatically (setting to false hides robot on network)");

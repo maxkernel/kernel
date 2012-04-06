@@ -14,11 +14,12 @@ typedef struct
 	void * buffer;
 } queue_t;
 
-#define QUEUE_INIT(q, b, s)	do { \
-	PZERO((q), sizeof(queue_t));				\
-	(q)->buffer = (b);  (q)->bufsize = (s);		\
-	(q)->head = NULL; (q)->tail = (q)->buffer;	\
-} while (0)
+#define QUEUE_INIT(q, b, s)	\
+	({ \
+		memset((q), 0, sizeof(queue_t));			\
+		(q)->buffer = (b);  (q)->bufsize = (s);		\
+		(q)->head = NULL; (q)->tail = (q)->buffer;	\
+	})
 
 
 static inline void __queue_unwrap(queue_t * queue, void * head, void * target, size_t size)

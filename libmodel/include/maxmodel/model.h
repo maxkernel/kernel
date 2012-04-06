@@ -31,6 +31,7 @@ extern "C" {
 #define MODEL_MAX_ARGS					10	// TODO - find a reasonable value for this
 #define MODEL_MAX_SCRIPTS				20							// Maximum number of scripts per model
 #define MODEL_MAX_MODULES				10							// Maximum number of modules per script
+#define MODEL_MAX_BACKINGS				((MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS) + 10)			// Maximum number of meta_t backings
 #define MODEL_MAX_DEPENDENCIES			META_MAX_DEPENDENCIES		// Maximum number of dependencies per module
 #define MODEL_MAX_CONFIGPARAMS			META_MAX_CONFIGPARAMS		// Maximum number of set config params per module
 #define MODEL_MAX_LINKABLES				(25 /* Blockinsts */ + 25 /* Syscalls */ + 10 /* Rategroups */ )		// Maximum number of block instances per script
@@ -46,7 +47,7 @@ extern "C" {
 
 
 struct __modelhead_t;
-struct __model_modulebacking_t;
+//struct __model_modulebacking_t;
 struct __model_linkable_t;
 struct __model_t;
 struct __model_analysis_t;
@@ -62,7 +63,7 @@ typedef enum
 	model_model			= (0x1 << 0),
 	model_script		= (0x1 << 1),
 	model_module		= (0x1 << 2),
-	model_modulebacking	= (0x1 << 3),
+	//model_modulebacking	= (0x1 << 3),
 	model_configparam	= (0x1 << 4),
 	model_blockinst		= (0x1 << 5),
 	model_syscall		= (0x1 << 6),
@@ -70,6 +71,7 @@ typedef enum
 	model_link			= (0x1 << 8),
 } modeltype_t;
 
+// TODO - figure out if we should delete this!
 #define model_linkable(x)		((x) & (model_blockinst | model_syscall | model_rategroup))
 
 typedef enum __modeltraversal_t
@@ -98,23 +100,13 @@ typedef struct
 	char value[MODEL_SIZE_VALUE];
 } model_configparam_t;
 
-typedef struct __model_modulebacking_t
-{
-	modelhead_t head;
-
-	meta_t * meta;
-	unsigned int refs;
-
-	char path[MODEL_SIZE_PATH];
-	char name[MODEL_SIZE_NAME];
-	version_t version;
-} model_modulebacking_t;
-
 typedef struct
 {
 	modelhead_t head;
 
-	model_modulebacking_t * backing;
+	//model_modulebacking_t * backing;
+	meta_t * backing;
+	struct __model_linkable_t * staticinst;
 	model_configparam_t * configparams[MODEL_MAX_CONFIGPARAMS];
 } model_module_t;
 
@@ -179,7 +171,7 @@ typedef struct __model_t
 	modelhead_t * id[MODEL_MAX_IDS];
 
 	model_script_t * scripts[MODEL_MAX_SCRIPTS];
-	model_modulebacking_t * modulebackings[MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS];
+	meta_t * backings[MODEL_MAX_BACKINGS];
 
 	// House keeping things
 	size_t malloc_size;
@@ -187,15 +179,17 @@ typedef struct __model_t
 
 typedef struct __model_analysis_t
 {
-	void * (*scripts)(void * udata, const model_script_t * script);
-	void * (*modules)(void * udata, const model_module_t * module);
-	void * (*configs)(void * udata, const model_configparam_t * config);
-	void * (*linkables)(void * udata, const model_linkable_t * linkable);
-	void * (*blockinsts)(void * udata, const model_linkable_t * blockinst);
-	void * (*syscalls)(void * udata, const model_linkable_t * syscall);
-	void * (*rategroups)(void * udata, const model_linkable_t * rategroup);
-	void * (*links)(void * udata, const model_link_t * link);
+	void * (*scripts)(void * udata, const model_t * model, const model_script_t * script);
+	void * (*modules)(void * udata, const model_t * model, const model_module_t * module);
+	void * (*configs)(void * udata, const model_t * model, const model_configparam_t * config);
+	void * (*linkables)(void * udata, const model_t * model, const model_linkable_t * linkable);
+	void * (*blockinsts)(void * udata, const model_t * model, const model_linkable_t * blockinst);
+	void * (*syscalls)(void * udata, const model_t * model, const model_linkable_t * syscall);
+	void * (*rategroups)(void * udata, const model_t * model, const model_linkable_t * rategroup);
+	void * (*links)(void * udata, const model_t * model, const model_link_t * link);
 } model_analysis_t;
+
+//#define model_object(o)		((modelhead_t *)(o))
 
 #define model_foreach(item, items, maxsize) \
 	for (size_t __i = 0; ((item) = (items)[__i]) != NULL && __i < (maxsize); __i++)
@@ -204,8 +198,10 @@ model_t * model_new();
 void * model_setuserdata(modelhead_t * head, void * newuserdata);
 void model_clearalluserdata(model_t * model);
 void model_destroy(model_t * model);
+void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err);
 
 string_t model_getconstraint(const char * desc);
+const char * model_getpastconstraint(const char * desc);
 string_t model_getbase(const char * ioname);
 string_t model_getsubscript(const char * ioname);
 
@@ -218,6 +214,10 @@ model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, c
 model_link_t * model_link_new(model_t * model, model_script_t * script, model_linkable_t * outinst, const char * outname, model_linkable_t * ininst, const char * inname, exception_t ** err);
 
 void model_analyse(model_t * model, modeltraversal_t traversal, const model_analysis_t * funcs);
+
+bool model_getmeta(const model_module_t * module, const meta_t ** meta);
+
+bool model_findmeta(const model_t * model, const char * path, const meta_t ** meta);
 
 
 #ifdef __cplusplus

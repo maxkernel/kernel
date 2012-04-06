@@ -7,13 +7,14 @@
 #include <service.h>
 #include "internal.h"
 
-CFG_PARAM(udp_port, "i", "UDP port to listen for service requests and send service data on");
-
 
 extern mainloop_t * serviceloop;
 
 int udp_port = DEFAULT_UDP_PORT;
 static udpstream_t udpstreams[SERVICE_CLIENTS_MAX];
+
+config_param(udp_port, 'i', "UDP port to listen for service requests and send service data on");
+
 
 static void udp_free(stream_t * data)
 {

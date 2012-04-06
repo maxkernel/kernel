@@ -11,6 +11,9 @@
 #include <aul/list.h>
 #include <aul/mainloop.h>
 
+#include <maxmodel/meta.h>
+#include <maxmodel/model.h>
+
 #include <kernel.h>
 
 #ifdef __cplusplus
@@ -23,6 +26,10 @@ extern "C" {
   #define LOGK(level, format, ...) log_write(level, "KERNEL", format, ## __VA_ARGS__)
 #endif
 
+
+#define CAL_SIZE_CACHE		AUL_STRING_MAXLEN
+
+// TODO - make these typedefs!
 struct __block_t;
 struct __block_inst_t;
 struct __boutput_inst_t;
@@ -33,7 +40,7 @@ typedef void (*blind_f)();
 typedef void (*closure_f)(void * ret, const void * args[], void * userdata);
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
-typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
+//typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
 typedef bool (*trigger_f)(void * object);
 typedef void * (*blk_constructor_f)();
 typedef void (*blk_onupdate_f)(void * userdata);
@@ -72,25 +79,28 @@ typedef struct
 	kobject_t kobject;
 	list_t global_list;
 
-	char * path;				//the path of the module, also the inst_id
-	char * version;				//the version string
-	char * author;				//the author string
-	char * description;			//a description of the module
-	void * module;				//the dlfcn.h dlopen'd module object
-	blind_f preactivate;		//the function to call during preactivation phase
-	blind_f postactivate;		//the function to call during postactivation phase
-	blind_f initialize;			//the function to call during initialization phase
-	blind_f destroy;			//the destroy function to call when exiting
+	const meta_t * backing;
+
+	//char * path;				//the path of the module, also the inst_id
+	//char * version;				//the version string
+	//char * author;				//the author string
+	//char * description;			//a description of the module
+	//void * module;				//the dlfcn.h dlopen'd module object
+	//blind_f preactivate;		//the function to call during preactivation phase
+	//blind_f postactivate;		//the function to call during postactivation phase
+	//blind_f initialize;			//the function to call during initialization phase
+	//blind_f destroy;			//the destroy function to call when exiting
 	list_t syscalls;			//a list of syscall_t syscalls
+	//list_t dependencies;		//a list of dependency_t dependency objects
 	list_t cfgentries;			//a list of cfgentry_t config entries
-	list_t dependencies;		//a list of dependency_t dependency objects
 	list_t calentries;			//a list of calentry_t calibration entries (name -> calentry_t)
-	calibration_f calupdate;	//the function to call when the calibration has been updated
-	calibration_f calpreview;	//the function to call when a calibration item should be previewed
+	//calibration_f calupdate;	//the function to call when the calibration has been updated
+	//calibration_f calpreview;	//the function to call when a calibration item should be previewed
 	list_t blocks;				//a list of all blocks defined in this module
-	list_t block_inst;			//a list of all block_inst_t block instances created
+	list_t blockinsts;			//a list of all block_inst_t block instances created
 } module_t;
 
+#if 0
 typedef struct
 {
 	char * version;
@@ -108,13 +118,16 @@ typedef struct
 	char * calpreview;
 	list_t blocks;
 } meta_t;
+#endif
 
+#if 0
 typedef struct
 {
 	char * modname;
 	module_t * module;
 	list_t module_list;
 } dependency_t;
+#endif
 
 typedef struct
 {
@@ -122,10 +135,10 @@ typedef struct
 	list_t module_list;
 	hashentry_t global_entry;
 
-	const char * name;
+	char * name;
 	module_t * module;
-	const char * desc;
-	const char * sig;
+	char * desc;
+	char * sig;
 
 	syscall_f func;
 	ffi_function_t * ffi;
@@ -138,9 +151,10 @@ typedef struct
 	syscall_t * syscall;
 	ffi_closure_t * closure;
 	struct __block_t * block;
-	struct __block_inst_t * block_inst;
+	struct __block_inst_t * blockinst;
 } syscallblock_t;
 
+/*
 typedef struct {
 	module_t * module;
 	list_t module_list;
@@ -149,7 +163,9 @@ typedef struct {
 	char type;
 	variable_t variable;
 } cfgentry_t;
+*/
 
+/*
 typedef struct {
 	module_t * module;
 	list_t module_list;
@@ -166,6 +182,52 @@ typedef struct {
 	char type;
 	char value[25];
 } calparam_t;
+*/
+
+typedef struct
+{
+	list_t calibration_list;
+	char * domain;
+
+	calpreview_f callback;
+	void * object;
+} calpreview_t;
+
+typedef struct
+{
+	list_t calibration_list;
+	calmodechange_f callback;
+	void * object;
+} calmodechange_t;
+
+typedef struct
+{
+	list_t calibration_list;
+
+	char * domain;
+	char * name;
+	char sig;
+	char * constraints;
+
+	char * edit_backup;
+	char cache[CAL_SIZE_CACHE];
+	void * backing;
+
+	struct
+	{
+		calpreview_f callback;
+		void * object;
+	} onpreview;
+} calentry_t;
+
+typedef struct
+{
+	calmode_t mode;
+
+	list_t entries;
+	list_t previews;
+	list_t modechanges;
+} calibration_t;
 
 typedef struct
 {
@@ -192,7 +254,7 @@ typedef struct
 
 	struct timespec last_trigger;
 	uint64_t interval_nsec;
-	struct __block_inst_t * block_inst;
+	struct __block_inst_t * blockinst;
 } trigger_varclock_t;
 
 typedef struct __block_t
@@ -267,12 +329,12 @@ typedef struct __block_inst_t
 	void * userdata;
 	list_t inputs_inst;
 	list_t outputs_inst;
-} block_inst_t;
+} blockinst_t;
 
 typedef struct __boutput_inst_t
 {
-	block_inst_t * block_inst;
-	list_t block_inst_list;
+	blockinst_t * blockinst;
+	list_t blockinst_list;
 
 	bio_t * output;
 
@@ -286,8 +348,8 @@ typedef struct __boutput_inst_t
 
 typedef struct __binput_inst_t
 {
-	block_inst_t * block_inst;
-	list_t block_inst_list;
+	blockinst_t * blockinst;
+	list_t blockinst_list;
 
 	bio_t * input;
 	boutput_inst_t * src_inst;
@@ -321,15 +383,15 @@ typedef struct
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 
-meta_t * meta_parse(const char * path);
-module_t * module_get(const char * name);
+//meta_t * meta_parse(const char * path);
+//module_t * module_get(const char * name);
+const module_t * module_lookup(const char * name);
 const block_t * module_getblock(const module_t * module, const char * blockname);
-const block_inst_t * module_getstaticblockinst(const module_t * module);
+//const blockinst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
-int module_compare(list_t * a, list_t * b);
-module_t * module_load(const char * name);
-void module_kernelinit();
+module_t * module_load(meta_t * meta);
+//void module_kernelinit();
 
 // Memfs functions
 // TODO - clean these up and determine which ones to keep
@@ -346,14 +408,12 @@ void memfs_setseekfd(int fd, off_t position);
 off_t memfs_getseekfd(int fd);
 void memfs_rewindfd(int fd);
 
-bool lua_execfile(const char * name);
-
-void syscall_reg(syscall_t * syscall);
+syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, const char * desc, exception_t ** err);
 syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
 syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc);
-block_inst_t * syscallblock_getblockinst(syscallblock_t * sb);
+blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #define KTHREAD_SCHED		SCHED_RR
 kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * runnable, int priority);
@@ -366,7 +426,7 @@ void * trigger_new(const char * name, info_f info, destructor_f destructor, trig
 trigger_t * trigger_newclock(const char * name, double freq_hz);
 trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz);
 trigger_t * trigger_newtrue(const char * name);
-block_inst_t * trigger_varclock_getblockinst(trigger_t * trigger);
+blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger);
 binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger);
 
 void * exec_new(const char * name, info_f info, destructor_f destructor, handler_f runfunc, handler_f stopfunc, size_t malloc_size);
@@ -382,23 +442,23 @@ void closure_free(ffi_closure_t * ci);
 
 char * io_blockinfo(void * obj);
 void io_blockfree(void * obj);
-block_inst_t * io_newblockinst(block_t * blk, void ** args);
-void io_beforeblock(block_inst_t * block);
-void io_afterblock(block_inst_t * block);
-const void * io_doinput(block_inst_t * blk, const char * name);
-void io_dooutput(block_inst_t * blk, const char * name, const void * value);
-binput_inst_t * io_getbinput(const block_inst_t * block_inst, const char * name);
-boutput_inst_t * io_getboutput(const block_inst_t * block_inst, const char * name);
+blockinst_t * io_newblockinst(block_t * blk, void ** args);
+void io_beforeblock(blockinst_t * block);
+void io_afterblock(blockinst_t * block);
+const void * io_doinput(blockinst_t * blk, const char * name);
+void io_dooutput(blockinst_t * blk, const char * name, const void * value);
+binput_inst_t * io_getbinput(const blockinst_t * blockinst, const char * name);
+boutput_inst_t * io_getboutput(const blockinst_t * blockinst, const char * name);
 
-void io_newcomplete(block_inst_t * inst);
+void io_newcomplete(blockinst_t * inst);
 bool io_route(boutput_inst_t * out, binput_inst_t * in);
 
-cfgentry_t * cfg_getparam(const char * modname, const char * cfgname);
-void cfg_setparam(const char * modname, const char * cfgname, const char * value);
+const cfgentry_t * cfg_getparam(const char * path, const char * cfgname);
+void cfg_setparam(const char * path, const char * cfgname, const char * value);
 
-calparam_t * cal_getparam(const char * name, const char * sig);
-int cal_compare(list_t * a, list_t * b);
-void cal_freeparam(calparam_t * val);
+//calparam_t * cal_getparam(const char * name, const char * sig);
+//void cal_freeparam(calparam_t * val);
+void cal_init();
 
 #ifdef __cplusplus
 }

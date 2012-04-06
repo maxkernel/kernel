@@ -10,14 +10,11 @@
 #include <kernel.h>
 #include <httpserver.h>
 
-int port = 80;
-
-CFG_PARAM(port, "i", "Specifies the http port to connect over");
-MOD_INIT(module_init);
-MOD_DESTROY(module_destroy);
-MOD_DEPENDENCY("httpserver");
 
 #define ROOT		"netui/www"
+
+
+int port = 80;
 
 static http_context * ctx;
 
@@ -98,16 +95,16 @@ static void handle_compressed(http_connection * conn, http_context * ctx, const 
 	reply_file(conn, path.string, reply_mimetype(uri), "Content-Encoding: gzip\r\n");
 }
 
-void module_init()
+bool module_init()
 {
-	exception_t * err = NULL;
+	exception_t * e = NULL;
 
-	ctx = http_new(port, NULL, &err);
-	if (err != NULL)
+	ctx = http_new(port, NULL, &e);
+	if (ctx == NULL || exception_check(&e))
 	{
-		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, err->message);
-		exception_free(err);
-		return;
+		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, (e == NULL)? "Unknown error" : e->message);
+		exception_free(e);
+		return false;
 	}
 
 	http_adduri(ctx, "/get/", MATCH_PREFIX, handle_get, NULL);
@@ -116,6 +113,8 @@ void module_init()
 	http_adduri(ctx, "/extjs/ext-all-debug.js", MATCH_ALL, handle_compressed, NULL);
 	http_adduri(ctx, "/extjs/resources/css/ext-all.css", MATCH_ALL, handle_compressed, NULL);
 	http_adduri(ctx, "/", MATCH_PREFIX, handle_root, NULL);
+
+	return true;
 }
 
 void module_destroy()
@@ -125,3 +124,14 @@ void module_destroy()
 		http_destroy(ctx);
 	}
 }
+
+
+module_name("NetUI");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("A helpful HTTP server to introspect kernel configuration and calibration");
+module_dependency("httpserver");
+module_oninitialize(module_init);
+module_ondestroy(module_destroy);
+
+config_param(port, 'i', "The HTTP port to allow connections over");

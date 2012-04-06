@@ -10,8 +10,6 @@
 #include <aul/list.h>
 #include <kernel.h>
 
-MOD_PREACT(module_preact);
-
 #define NUM_BUFFERS		10
 #define NUM_KEYVALUES	30
 #define BUFFER_LEN		1000
@@ -279,28 +277,22 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	return true;
 }
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** error)
+http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err)
 {
-	if (exception_check(error))
+	if (exception_check(err))
 	{
-		LOG(LOG_ERR, "Error already set in function http_new");
 		return NULL;
 	}
 
-	http_context * ctx = malloc0(sizeof(http_context));
+	http_context * ctx = malloc(sizeof(http_context));
+	memset(ctx, 0, sizeof(http_context));
+
 	ctx->mainloop = mainloop;
 	LIST_INIT(&ctx->filters);
 
-	exception_t * err = NULL;
-
-	ctx->socket = tcp_server(port, &err);
-	if (err != NULL)
+	ctx->socket = tcp_server(port, err);
+	if (ctx->socket == -1 || exception_check(err))
 	{
-		if (error != NULL)
-			*error = err;
-		else
-			exception_free(err);
-
 		free(ctx);
 		return NULL;
 	}
@@ -382,3 +374,10 @@ void module_preact()
 		LOG(LOG_FATAL, "Could not compile regular expression to match HTTP headers!!");
 	}
 }
+
+
+module_name("HTTP Server");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Provides a simple (GET only) HTTP server. Intended to be used by other modules (not included directly)");
+module_onpreactivate(module_preact);

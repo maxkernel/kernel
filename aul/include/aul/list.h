@@ -12,9 +12,8 @@ typedef struct __list_t
 typedef int (*list_compare_f)(list_t * a, list_t * b);
 
 
-#define LIST_INIT(ptr) do { \
-	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
-} while (0)
+#define LIST_INIT(ptr) \
+	({ (ptr)->next = (ptr); (ptr)->prev = (ptr); })
 
 
 /*

@@ -8,28 +8,6 @@
 #include <aul/mainloop.h>
 
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
-MOD_DESCRIPTION("Reads from a serial GPS module outputting NMEA format");
-MOD_INIT(module_init);
-
-
-DEF_BLOCK(device, gps_new, "si");
-BLK_ONUPDATE(device, gps_update);
-BLK_ONDESTROY(device, gps_destroy);
-
-BLK_OUTPUT(device, lastupdate, "i");
-BLK_OUTPUT(device, lock, "b");
-//BLK_OUTPUT(device, time, "s"); // TODO - add UTC time as string
-BLK_OUTPUT(device, latitude, "d");
-BLK_OUTPUT(device, longitude, "d");
-BLK_OUTPUT(device, heading, "d");
-BLK_OUTPUT(device, speed, "d");
-BLK_OUTPUT(device, elevation, "d");
-BLK_OUTPUT(device, satellites, "i");
-BLK_OUTPUT(device, hdop, "d");
-
-
 #define GPS_RETRY_TIMEOUT		(5 * NANOS_PER_SECOND)		// Retry opening port if haven't received GPS data after this long
 #define GPS_BUFFER_SIZE			200
 
@@ -60,7 +38,7 @@ typedef struct
 
 // static local vars
 static regex_t gpgga_match;
-static regex_t gprms_match;
+static regex_t gprmc_match;
 static regex_t latlong_match;
 
 static double mtod(char * start, regmatch_t * m)
@@ -148,7 +126,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 			}
 			mutex_unlock(&gps->update_mutex);
 		}
-		else if (regexec(&gprms_match, gps->buffer, 6, match, 0) == 0)
+		else if (regexec(&gprmc_match, gps->buffer, 6, match, 0) == 0)
 		{
 			mutex_lock(&gps->update_mutex);
 			{
@@ -287,15 +265,41 @@ void gps_destroy(void * object)
 	close(gps->fd);
 }
 
-void module_init() {
+bool module_init() {
 	// Set up $GPGGA regex (NMEA protocol)
 	if (regcomp(&gpgga_match, "^\\$GPGGA,\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\.[[:digit:]]\\{3\\},\\([[:digit:].]\\+\\),"
 					"\\([NS]\\),\\([[:digit:].]\\+\\),\\([EW]\\),[12],\\([[:digit:]]\\+\\),\\(\[[:digit:].]\\+\\),\\(\[[:digit:].\\\\-]\\+\\),"
 					"M,[[:digit:].\\\\-]\\+,M,,.*$", 0) != 0 ||
-	    regcomp(&gprms_match, "^\\$GPRMC,[[:digit:].]\\+,A,[[:digit:].]\\+,[NS],[[:digit:].]\\+,[EW],\\([[:digit:].]\\+\\),\\([[:digit:].]\\+\\),"
+	    regcomp(&gprmc_match, "^\\$GPRMC,[[:digit:].]\\+,A,[[:digit:].]\\+,[NS],[[:digit:].]\\+,[EW],\\([[:digit:].]\\+\\),\\([[:digit:].]\\+\\),"
 	    				"\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\),.*$", 0) != 0 ||
 	    regcomp(&latlong_match, "^\\([[:digit:]]\\{2,3\\}\\)\\([[:digit:]]\\{2\\}\\.[[:digit:]]\\{4\\}\\)$", 0) != 0)
 	{
-		LOG(LOG_FATAL, "Could not compile regular expression to match GPS stream!!");
+		LOG(LOG_ERR, "Could not compile regular expression to match GPS stream!!");
+		return false;
 	}
+
+	return true;
 }
+
+
+module_name("GPS");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Reads from any serial GPS module outputting NMEA format");
+module_oninitialize(module_init);
+
+define_block(device, "GPS device", gps_new, "si", "(1) Serial port [eg. /dev/ttyUSB0], (2) Baud rate of the GPS device [eg. 4800]");
+
+block_onupdate(device, gps_update);
+block_ondestroy(deivce, gps_destroy);
+
+block_output(device, lastupdate, 'i', "The millisecond timestamp for the last GPS reading (default is 0)s");
+block_output(device, lock, 'b', "True if the device has a GPS lock (default is false)");
+//block_output(device, time, 's'); // TODO - add UTC time as string
+block_output(device, latitude, 'd', "The latitude reading (default is 0)");
+block_output(device, longitude, 'd', "The longitude reading (default is 0)");
+block_output(device, heading, 'd', "The estimated heading angle in degrees true (default is 0)");
+block_output(device, speed, 'd', "The estimated speed in knots (default is 0)");
+block_output(device, elevation, 'd', "Altitide in meters above sea level (default is 0)");
+block_output(device, satellites, 'i', "Number of satellites being tracked (default is 0)");
+block_output(device, hdop, 'd', "Horizontal dilution of position");

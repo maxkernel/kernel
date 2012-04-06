@@ -25,29 +25,44 @@ static void module_destroy(void * object)
 {
 	module_t * module = object;
 
+	// Sanity check
+	{
+		if (module == NULL)
+		{
+			LOGK(LOG_ERR, "Module is NULL (module_destroy)");
+			return;
+		}
+	}
+
 	//remove from modules list
 	list_remove(&module->global_list);
 
-	if (module->destroy != NULL)
+	// Call destroyer
 	{
-		LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.object_name);
-		module->destroy();
+		const meta_t * meta = module->backing;
+		meta_destroyer destroyer = NULL;
+		meta_getactivators(meta, NULL, &destroyer, NULL, NULL);
+
+		if (destroyer != NULL)
+		{
+			LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.object_name);
+			destroyer();
+		}
 	}
 
-	FREE(module->path);
-	FREE(module->version);
-	FREE(module->author);
-	FREE(module->description);
-
 	//do not dlclose module because that address space might still be in use
+	// TODO - we can check that and unload if not in use!
 }
 
+/*
 static bool module_symbol(void * module, const char * name, void ** function_ptr)
 {
 	void * fcn = *function_ptr = dlsym(module, name);
 	return fcn != NULL;
 }
+*/
 
+/*
 module_t * module_get(const char * name)
 {
 	const char * prefix = path_resolve(name, P_MODULE);
@@ -76,6 +91,39 @@ module_t * module_get(const char * name)
 
 	return module;
 }
+*/
+
+// TODO - see if this const qualifier is needed
+const module_t * module_lookup(const char * name)
+{
+	const char * prefix = path_resolve(name, P_MODULE);
+	if (prefix == NULL)
+	{
+		return NULL;
+	}
+
+	string_t path = path_join(prefix, name);
+	if (!strsuffix(path.string, ".mo"))
+	{
+		string_append(&path, ".mo");
+	}
+
+	list_t * pos;
+	list_foreach(pos, &modules)
+	{
+		module_t * tester = list_entry(pos, module_t, global_list);
+
+		const char * testerpath = NULL;
+		meta_getinfo(tester->backing, &testerpath, NULL, NULL, NULL, NULL);
+
+		if (testerpath != NULL && strcmp(testerpath, path.string) == 0)
+		{
+			return tester;
+		}
+	}
+
+	return NULL;
+}
 
 const block_t * module_getblock(const module_t * module, const char * blockname)
 {
@@ -92,10 +140,11 @@ const block_t * module_getblock(const module_t * module, const char * blockname)
 	return NULL;
 }
 
+/*
 const block_inst_t * module_getstaticblockinst(const module_t * module)
 {
 	list_t * pos;
-	list_foreach(pos, &module->block_inst)
+	list_foreach(pos, &module->blockinst)
 	{
 		block_inst_t * inst = list_entry(pos, block_inst_t, module_list);
 		if (strcmp(STATIC_STR, inst->block->name) == 0)
@@ -106,14 +155,56 @@ const block_inst_t * module_getstaticblockinst(const module_t * module)
 
 	return NULL;
 }
+*/
 
 bool module_exists(const char * name)
 {
-	return module_get(name) != NULL;
+	return module_lookup(name) != NULL;
 }
 
-module_t * module_load(const char * name)
+module_t * module_load(meta_t * meta)
 {
+	const char * path = NULL;
+	const char * name = NULL;
+	const version_t * version = NULL;
+	meta_getinfo(meta, &path, &name, &version, NULL, NULL);
+
+	// Check to see if module has already been loaded
+	{
+		const module_t * existing = module_lookup(path);
+		if (existing != NULL)
+		{
+			// Remove const qualifier
+			return (module_t *)existing;
+		}
+	}
+
+	// Print diagnostic message
+	{
+		string_t version_str = version_tostring(*version);
+		LOGK(LOG_DEBUG, "Loading module %s v%s", path, version_str.string);
+	}
+
+	// Try loading it
+	exception_t * e = NULL;
+	if (!meta_loadmodule(meta, &e))
+	{
+		LOGK(LOG_FATAL, "%s", (e == NULL)? "Unknown error" : e->message);
+		// Will exit
+	}
+
+	module_t * module = kobj_new("Module", name, module_info, module_destroy, sizeof(module_t));
+	module->backing = meta;
+	LIST_INIT(&module->syscalls);
+	LIST_INIT(&module->cfgentries);
+	LIST_INIT(&module->calentries);
+	LIST_INIT(&module->blocks);
+	LIST_INIT(&module->blockinsts);
+
+
+	list_add(&modules, &module->global_list);
+	return module;
+	/*
 	const char * prefix = path_resolve(name, P_MODULE);
 	if (prefix == NULL)
 	{
@@ -438,8 +529,10 @@ end:
 		g_free(meta);
 
 	return module;
+	*/
 }
 
+/*
 void module_kernelinit()
 {
 	module_t * module = kobj_new("Module", strdup(MOD_KERNEL), module_info, module_destroy, sizeof(module_t));
@@ -457,21 +550,29 @@ void module_kernelinit()
 	kernel_module = module;
 	list_add(&modules, &module->global_list);
 }
+*/
 
 void module_init(const module_t * module)
 {
-	if (module->initialize == NULL)
-		return;
+	// Sanity check
+	{
+		if (module == NULL)
+		{
+			LOGK(LOG_ERR, "Module is NULL (module_init)");
+			return;
+		}
+	}
 
-	//now call it
-	LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.object_name);
-	module->initialize();
+	// Call initializer function
+	{
+		const meta_t * meta = module->backing;
+		meta_initializer initializer = NULL;
+		meta_getactivators(meta, &initializer, NULL, NULL, NULL);
+
+		if (initializer != NULL)
+		{
+			LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.object_name);
+			initializer();
+		}
+	}
 }
-
-int module_compare(list_t * a, list_t * b)
-{
-	module_t * ma = list_entry(a, module_t, global_list);
-	module_t * mb = list_entry(b, module_t, global_list);
-	return strcmp(ma->kobject.object_name, mb->kobject.object_name);
-}
-

@@ -8,15 +8,13 @@
 #include <service.h>
 #include "internal.h"
 
-CFG_PARAM(tcp_port, "i", "TCP port to listen for service requests and send service data on");
-
 
 extern mainloop_t * serviceloop;
 
 int tcp_port = DEFAULT_TCP_PORT;
 static tcpstream_t tcpstreams[SERVICE_CLIENTS_MAX];
 
-
+config_param(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
 
 
 static void tcp_free(stream_t * data)

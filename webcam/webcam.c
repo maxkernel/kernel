@@ -13,21 +13,6 @@
 #include <kernel.h>
 #include <buffer.h>
 
-MOD_VERSION("1.0");
-MOD_AUTHOR("Andrew Klofas <andrew@maxkernel.com>");
-MOD_DESCRIPTION("Captures Webcams (video4linux2) and outputs YUV format");
-
-DEF_BLOCK(device, webcam_new, "ssii");
-BLK_ONUPDATE(device, webcam_update);
-BLK_ONDESTROY(device, webcam_destroy);
-BLK_INPUT(device, width, "i");
-BLK_INPUT(device, height, "i");
-BLK_OUTPUT(device, width, "i");
-BLK_OUTPUT(device, height, "i");
-BLK_OUTPUT(device, frame, "x");
-
-
-#define ZERO(x) memset(&(x), 0, sizeof(x))
 
 #define NUM_BUFFERS		1
 
@@ -101,7 +86,7 @@ static int webcam_open(char * path)
 static bool webcam_init(webcam_t * webcam)
 {
 	struct v4l2_capability cap;
-	struct v4l2_format fmt;
+	memset(&cap, 0, sizeof(struct v4l2_capability));
 
 	if (ioctl(webcam->fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
@@ -124,7 +109,8 @@ static bool webcam_init(webcam_t * webcam)
 	}
 
 
-	ZERO(fmt);
+	struct v4l2_format fmt;
+	memset(&fmt, 0, sizeof(struct v4l2_format));
 	fmt.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width       = webcam->width;
 	fmt.fmt.pix.height      = webcam->height;
@@ -142,8 +128,6 @@ static bool webcam_init(webcam_t * webcam)
 	webcam->format = fmt.fmt.pix.pixelformat;
 
 
-
-
 	return true;
 }
 
@@ -151,7 +135,7 @@ static bool webcam_start(webcam_t * webcam)
 {
 	//Initialize memmap
 	struct v4l2_requestbuffers req;
-	ZERO(req);
+	memset(&req, 0, sizeof(struct v4l2_requestbuffers));
 	req.count               = NUM_BUFFERS;
 	req.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory              = V4L2_MEMORY_MMAP;
@@ -177,10 +161,10 @@ static bool webcam_start(webcam_t * webcam)
 		return false;
 	}
 
-	for (webcam->n_buffers = 0; webcam->n_buffers < req.count; webcam->n_buffers++) {
+	for (webcam->n_buffers = 0; webcam->n_buffers < req.count; webcam->n_buffers++)
+	{
 		struct v4l2_buffer buf;
-
-		ZERO(buf);
+		memset(&buf, 0, sizeof(struct v4l2_buffer));
 		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = webcam->n_buffers;
@@ -202,12 +186,10 @@ static bool webcam_start(webcam_t * webcam)
 		}
 	}
 
-	size_t i = 0;
-	for (; i<webcam->n_buffers; i++)
+	for (size_t i = 0; i<webcam->n_buffers; i++)
 	{
 		struct v4l2_buffer buf;
-
-		ZERO(buf);
+		memset(&buf, 0, sizeof(struct v4l2_buffer));
 		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = i;
@@ -258,8 +240,7 @@ static bool webcam_stop(webcam_t * webcam)
 static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 {
 	struct v4l2_buffer buf;
-
-	ZERO(buf);
+	memset(&buf, 0, sizeof(struct v4l2_buffer));
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
 
@@ -386,6 +367,7 @@ void webcam_update(void * object)
 	FD_ZERO(&fds);
 	FD_SET(webcam->fd, &fds);
 
+	// TODO - WTF, don't select here!
 	if ((r = select(webcam->fd+1, &fds, NULL, NULL, &tv)) > 0)
 	{
 		buffer_t frame = buffer_new();
@@ -410,3 +392,19 @@ void webcam_update(void * object)
 		//LOG(LOG_INFO, "NO FRAME");
 	}
 }
+
+
+module_name("Webcam");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Captures webcam frames (video4linux2) and outputs YUV format");
+
+define_block(device, "A webcam block", webcam_new, "ssii", "(1) The device file [eg. /dev/video0] (2) The output format [eg. yuv422] (3) The initial capture width (4) The initial capture height");
+block_input(		device, 	width, 		'i', 	"Requested frame capture width. Changing this may cause momentary image artifacts");
+block_input(		device, 	height, 	'i', 	"Requested frame capture height. Changing this may cause momentary image artifacts");
+block_output(		device, 	width, 		'i', 	"Actual frame capture width");
+block_output(		device, 	height, 	'i', 	"Actual frame capture height");
+block_output(		device, 	frame, 		'x', 	"The captured frame");
+// TODO - add timestamp output
+block_onupdate(		device, 	webcam_update);
+block_ondestroy(	device, 	webcam_destroy);

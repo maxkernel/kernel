@@ -10,18 +10,6 @@
 #include <kernel.h>
 #include <buffer.h>
 
-MOD_VERSION("0.9");
-MOD_AUTHOR("Andrew Klofas <aklofas@gmail.com>");
-MOD_DESCRIPTION("Jpeg compression module");
-
-DEF_BLOCK(compressor, jpeg_new, "si");
-BLK_ONUPDATE(compressor, jpeg_update);
-BLK_ONDESTROY(compressor, jpeg_free);
-BLK_INPUT(compressor, width, "i");
-BLK_INPUT(compressor, height, "i");
-BLK_INPUT(compressor, frame, "x");
-BLK_OUTPUT(compressor, frame, "x");
-
 
 #define MAX_ROWSIZE			1600
 #define BUFFER_SIZE			(20 * 1024)		// 20 KB
@@ -298,3 +286,17 @@ void jpeg_update(void * object)
 		jpeg->out = -1;
 	}
 }
+
+
+module_name("JPEG Compressor");
+module_version(1,0,0);
+module_author("Andrew Klofas - andrew@maxkernel.com");
+module_description("Compresses an input buffer to a JPEG image");
+
+define_block(compressor, "JPEG compressor block", jpeg_new, "si", "(1) The input format [currently only YUV422 is supported] (2) The lossy compress quality [1-100]");
+block_input(compressor, width, 'i', "The width in pixels of the raw input image");
+block_input(compressor, height, 'i', "The hight in pixels of the raw input image");
+block_input(compressor, frame, 'x', "The raw frame to compress");
+block_output(compressor, frame, 'x', "The compressed JPEG image frame");
+block_onupdate(compressor, jpeg_update);
+block_ondestroy(compressor, jpeg_free);

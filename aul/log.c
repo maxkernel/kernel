@@ -15,14 +15,14 @@
 
 #define ZLIB_BUFSIZE		16384
 #define FILEOPEN(p)			open(p, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-#define FILEOPENHEADER(fd)														\
-	do {																		\
+#define FILEOPENHEADER(fd) \
+	({ \
 		char _timebuf[50];														\
 		time_t _now = time(NULL);												\
 		strftime(_timebuf, sizeof(_timebuf), "%F.%H.%M.%S", localtime(&_now));	\
 		string_t _str = string_new("\n[%s] Log file opened\n", _timebuf);		\
 		write(fd, _str.string, _str.length);									\
-	} while (0)
+	})
 
 
 static inline const char * level2string(level_t level)

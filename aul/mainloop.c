@@ -36,13 +36,11 @@ static mutex_t mainloop_lock;
 static mainloop_t * root = NULL;
 
 
-#define check_init() do { \
-	if (root == NULL) { log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Mainloop subsystem not been initialized!"); return; } \
-} while (0)
+#define check_init() \
+	({ if (root == NULL) { log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Mainloop subsystem not been initialized!"); return; } })
 
-#define resolve_loop() do { \
-	if (loop == NULL) { loop = root; } \
-} while (0)
+#define resolve_loop() \
+	({ if (loop == NULL) { loop = root; } })
 
 
 static bool mainloop_timerdispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)

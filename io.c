@@ -33,7 +33,7 @@ static char * io_instinfo(void * obj)
 static void io_instdestroy(void * obj)
 {
 	//TODO - finish this
-	block_inst_t * inst = obj;
+	blockinst_t * inst = obj;
 
 	if (inst->ondestroy != NULL)
 	{
@@ -154,7 +154,10 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 	ffi_function_t * ffi = function_build(blk->new, fsig.string, &err);
 	if (ffi == NULL)
 	{
-		LOGK(LOG_FATAL, "Could not call constructor on block %s.%s: Code %d %s", blk->module->path, blk->name, err->code, err->message);
+		const char * path = NULL;
+		meta_getinfo(blk->module->backing, &path, NULL, NULL, NULL, NULL);
+
+		LOGK(LOG_FATAL, "Could not call constructor on block %s.%s: Code %d %s", path, blk->name, err->code, err->message);
 		// Will exit
 	}
 
@@ -162,12 +165,12 @@ static void io_constructor(block_t * blk, void * data, void ** args)
 	function_free(ffi);
 }
 
-static block_inst_t * io_currentblockinst()
+static blockinst_t * io_currentblockinst()
 {
 	runnable_t * run = exec_getcurrent();
 	if (strsuffix(run->kobject.object_name, IO_BLOCK_NAME))
 	{
-		return (block_inst_t *)run;
+		return (blockinst_t *)run;
 	}
 
 	return NULL;
@@ -175,13 +178,13 @@ static block_inst_t * io_currentblockinst()
 
 static void io_doinst(void * object)
 {
-	block_inst_t * blk_inst = object;
+	blockinst_t * blockinst = object;
 
-	if (blk_inst != NULL)
+	if (blockinst != NULL)
 	{
-		io_beforeblock(blk_inst);
-		blk_inst->block->onupdate(blk_inst->userdata);
-		io_afterblock(blk_inst);
+		io_beforeblock(blockinst);
+		blockinst->block->onupdate(blockinst->userdata);
+		io_afterblock(blockinst);
 	}
 }
 
@@ -208,75 +211,79 @@ void io_blockfree(void * obj)
 	//TODO - finish me (free inputs/outputs/links)
 }
 
-block_inst_t * io_newblockinst(block_t * blk, void ** args)
+blockinst_t * io_newblockinst(block_t * blk, void ** args)
 {
 	LOGK(LOG_DEBUG, "Creating new block instance %s in module %s", blk->name, blk->module->kobject.object_name);
 
 	string_t str = string_new("%s:%s " IO_BLOCK_NAME, blk->module->kobject.object_name, blk->name);
-	block_inst_t * blk_inst = exec_new(string_copy(&str), io_instinfo, io_instdestroy, io_doinst, NULL, sizeof(block_inst_t));
-	list_add(&blk->module->block_inst, &blk_inst->module_list);
+	blockinst_t * blockinst = exec_new(string_copy(&str), io_instinfo, io_instdestroy, io_doinst, NULL, sizeof(blockinst_t));
+	list_add(&blk->module->blockinsts, &blockinst->module_list);
 
-	blk_inst->block = blk;
-	blk_inst->ondestroy = blk->ondestroy;
-	LIST_INIT(&blk_inst->inputs_inst);
-	LIST_INIT(&blk_inst->outputs_inst);
+	blockinst->block = blk;
+	blockinst->ondestroy = blk->ondestroy;
+	LIST_INIT(&blockinst->inputs_inst);
+	LIST_INIT(&blockinst->outputs_inst);
 
 	list_t * pos;
 
 	list_foreach(pos, &blk->inputs)
 	{
 		bio_t * in = list_entry(pos, bio_t, block_list);
-		binput_inst_t * in_inst = malloc0(sizeof(binput_inst_t));
-		in_inst->block_inst = blk_inst;
-		in_inst->input = in;
-		in_inst->stage3 = io_malloc(in);
-		in_inst->stage3_isnull = true;
+		binput_inst_t * ininst = malloc0(sizeof(binput_inst_t));
+		ininst->blockinst = blockinst;
+		ininst->input = in;
+		ininst->stage3 = io_malloc(in);
+		ininst->stage3_isnull = true;
 
-		list_add(&blk_inst->inputs_inst, &in_inst->block_inst_list);
+		list_add(&blockinst->inputs_inst, &ininst->blockinst_list);
 	}
 
 	list_foreach(pos, &blk->outputs)
 	{
 		bio_t * out = list_entry(pos, bio_t, block_list);
-		boutput_inst_t * out_inst = malloc0(sizeof(boutput_inst_t));
-		out_inst->block_inst = blk_inst;
-		out_inst->output = out;
-		out_inst->stage1 = io_malloc(out);
-		out_inst->stage1_isnull = true;
-		out_inst->stage2 = io_malloc(out);
-		out_inst->stage2_isnull = true;
-		LIST_INIT(&out_inst->links);
+		boutput_inst_t * outinst = malloc0(sizeof(boutput_inst_t));
+		outinst->blockinst = blockinst;
+		outinst->output = out;
+		outinst->stage1 = io_malloc(out);
+		outinst->stage1_isnull = true;
+		outinst->stage2 = io_malloc(out);
+		outinst->stage2_isnull = true;
+		LIST_INIT(&outinst->links);
 
-		list_add(&blk_inst->outputs_inst, &out_inst->block_inst_list);
+		list_add(&blockinst->outputs_inst, &outinst->blockinst_list);
 	}
 
-	io_constructor(blk, &blk_inst->userdata, args);
+	io_constructor(blk, &blockinst->userdata, args);
 
-	return blk_inst;
+	return blockinst;
 }
 
-void io_newcomplete(block_inst_t * inst)
+void io_newcomplete(blockinst_t * blockinst)
 {
 	//check to make sure block has been properly created and routed
 	list_t * pos;
 
 	//check inputs
-	list_foreach(pos, &inst->inputs_inst)
+	list_foreach(pos, &blockinst->inputs_inst)
 	{
-		binput_inst_t * in = list_entry(pos, binput_inst_t, block_inst_list);
+		binput_inst_t * in = list_entry(pos, binput_inst_t, blockinst_list);
 		if (in->src_inst == NULL)
 		{
-			LOGK(LOG_WARN, "Unconnected input %s in block %s in module %s", in->input->name, in->block_inst->block->name, in->block_inst->block->module->path);
+			const char * path = NULL;
+			meta_getinfo(in->blockinst->block->module->backing, &path, NULL, NULL, NULL, NULL);
+			LOGK(LOG_WARN, "Unconnected input %s in block %s in module %s", in->input->name, in->blockinst->block->name, path);
 		}
 	}
 
 	//check outputs
-	list_foreach(pos, &inst->outputs_inst)
+	list_foreach(pos, &blockinst->outputs_inst)
 	{
-		boutput_inst_t * out = list_entry(pos, boutput_inst_t, block_inst_list);
+		boutput_inst_t * out = list_entry(pos, boutput_inst_t, blockinst_list);
 		if (list_isempty(&out->links))
 		{
-			LOGK(LOG_WARN, "Unconnected output %s in block %s in module %s", out->output->name, out->block_inst->block->name, out->block_inst->block->module->path);
+			const char * path = NULL;
+			meta_getinfo(out->blockinst->block->module->backing, &path, NULL, NULL, NULL, NULL);
+			LOGK(LOG_WARN, "Unconnected output %s in block %s in module %s", out->output->name, out->blockinst->block->name, path);
 		}
 	}
 }
@@ -289,11 +296,13 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 		return false;
 	}
 
-	LOGK(LOG_DEBUG, "Routing %s:%s.%s -> %s:%s.%s", out->block_inst->block->module->kobject.object_name, out->block_inst->block->name, out->output->name, in->block_inst->block->module->kobject.object_name, in->block_inst->block->name, in->input->name);
+	LOGK(LOG_DEBUG, "Routing %s:%s.%s -> %s:%s.%s", out->blockinst->block->module->kobject.object_name, out->blockinst->block->name, out->output->name, in->blockinst->block->module->kobject.object_name, in->blockinst->block->name, in->input->name);
 
 	if (in->src_inst != NULL)
 	{
-		LOGK(LOG_ERR, "Input %s in block %s in module %s has been double targeted (two outputs to one input)", in->input->name, in->block_inst->block->name, in->block_inst->block->module->path);
+		const char * path = NULL;
+		meta_getinfo(in->blockinst->block->module->backing, &path, NULL, NULL, NULL, NULL);
+		LOGK(LOG_ERR, "Input %s in block %s in module %s has been double targeted (two outputs to one input)", in->input->name, in->blockinst->block->name, path);
 		return false;
 	}
 
@@ -304,56 +313,56 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 	return true;
 }
 
-void io_beforeblock(block_inst_t * block)
+void io_beforeblock(blockinst_t * blockinst)
 {
 	mutex_lock(&io_lock);
 	{
 		list_t * pos;
-		list_foreach(pos, &block->inputs_inst)
+		list_foreach(pos, &blockinst->inputs_inst)
 		{
-			binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
-			if (in_inst->src_inst == NULL)
+			binput_inst_t * ininst = list_entry(pos, binput_inst_t, blockinst_list);
+			if (ininst->src_inst == NULL)
 			{
 				// Nothing to be done for this input (it's unconnected)
 				continue;
 			}
 
 			// Copy stage2 to stage3
-			io_linkfunc(in_inst->src_inst->output, in_inst->input)(in_inst->src_inst->stage2, in_inst->src_inst->stage2_isnull, io_size(in_inst->src_inst->output), in_inst->stage3, in_inst->stage3_isnull, io_size(in_inst->input));
+			io_linkfunc(ininst->src_inst->output, ininst->input)(ininst->src_inst->stage2, ininst->src_inst->stage2_isnull, io_size(ininst->src_inst->output), ininst->stage3, ininst->stage3_isnull, io_size(ininst->input));
 
 			// Update the isnull flags
-			in_inst->stage3_isnull = in_inst->src_inst->stage2_isnull;
+			ininst->stage3_isnull = ininst->src_inst->stage2_isnull;
 		}
 	}
 	mutex_unlock(&io_lock);
 }
 
-void io_afterblock(block_inst_t * block)
+void io_afterblock(blockinst_t * blockinst)
 {
 	mutex_lock(&io_lock);
 	{
 		list_t * pos;
-		list_foreach(pos, &block->outputs_inst)
+		list_foreach(pos, &blockinst->outputs_inst)
 		{
-			boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
+			boutput_inst_t * outinst = list_entry(pos, boutput_inst_t, blockinst_list);
 
 			// Copy stage1 to stage2
-			io_linkfunc(out_inst->output, out_inst->output)(out_inst->stage1, out_inst->stage1_isnull, io_size(out_inst->output), out_inst->stage2, out_inst->stage2_isnull, io_size(out_inst->output));
+			io_linkfunc(outinst->output, outinst->output)(outinst->stage1, outinst->stage1_isnull, io_size(outinst->output), outinst->stage2, outinst->stage2_isnull, io_size(outinst->output));
 
 			// Update the isnull flags
-			out_inst->stage2_isnull = out_inst->stage1_isnull;
+			outinst->stage2_isnull = outinst->stage1_isnull;
 		}
 	}
 	mutex_unlock(&io_lock);
 }
 
-const void * io_doinput(block_inst_t * blk, const char * name)
+const void * io_doinput(blockinst_t * blockinst, const char * name)
 {
 	list_t * pos;
 	binput_inst_t * in = NULL;
-	list_foreach(pos, &blk->inputs_inst)
+	list_foreach(pos, &blockinst->inputs_inst)
 	{
-		binput_inst_t * test = list_entry(pos, binput_inst_t, block_inst_list);
+		binput_inst_t * test = list_entry(pos, binput_inst_t, blockinst_list);
 		if (strcmp(name, test->input->name) == 0)
 		{
 			in = test;
@@ -363,7 +372,7 @@ const void * io_doinput(block_inst_t * blk, const char * name)
 
 	if (in == NULL)
 	{
-		LOGK(LOG_WARN, "Input '%s' in block %s does not exist!", name, blk->block->name);
+		LOGK(LOG_WARN, "Input '%s' in block %s does not exist!", name, blockinst->block->name);
 		return NULL;
 	}
 
@@ -389,23 +398,23 @@ const void * io_doinput(block_inst_t * blk, const char * name)
 
 const void * io_input(const char * name)
 {
-	block_inst_t * blk = io_currentblockinst();
-	if (blk == NULL)
+	blockinst_t * blockinst = io_currentblockinst();
+	if (blockinst == NULL)
 	{
 		LOGK(LOG_WARN, "Could not get block instance input, invalid operating context!");
 		return NULL;
 	}
 
-	return io_doinput(blk, name);
+	return io_doinput(blockinst, name);
 }
 
-void io_dooutput(block_inst_t * blk, const char * name, const void * value)
+void io_dooutput(blockinst_t * blockinst, const char * name, const void * value)
 {
 	list_t * pos;
 	boutput_inst_t * out = NULL;
-	list_foreach(pos, &blk->outputs_inst)
+	list_foreach(pos, &blockinst->outputs_inst)
 	{
-		boutput_inst_t * test = list_entry(pos, boutput_inst_t, block_inst_list);
+		boutput_inst_t * test = list_entry(pos, boutput_inst_t, blockinst_list);
 		if (strcmp(name, test->output->name) == 0)
 		{
 			out = test;
@@ -415,7 +424,7 @@ void io_dooutput(block_inst_t * blk, const char * name, const void * value)
 
 	if (out == NULL)
 	{
-		LOGK(LOG_WARN, "Output %s in block %s does not exist!", name, blk->block->name);
+		LOGK(LOG_WARN, "Output %s in block %s does not exist!", name, blockinst->block->name);
 		return;
 	}
 
@@ -439,41 +448,41 @@ void io_dooutput(block_inst_t * blk, const char * name, const void * value)
 
 void io_output(const char * name, const void * value)
 {
-	block_inst_t * blk = io_currentblockinst();
-	if (blk == NULL)
+	blockinst_t * blockinst = io_currentblockinst();
+	if (blockinst == NULL)
 	{
 		LOGK(LOG_WARN, "Could not set block instance output, invalid operating context!");
 		return;
 	}
 
-	io_dooutput(blk, name, value);
+	io_dooutput(blockinst, name, value);
 }
 
 
-binput_inst_t * io_getbinput(const block_inst_t * block_inst, const char * name)
+binput_inst_t * io_getbinput(const blockinst_t * blockinst, const char * name)
 {
 	list_t * pos;
-	list_foreach(pos, &block_inst->inputs_inst)
+	list_foreach(pos, &blockinst->inputs_inst)
 	{
-		binput_inst_t * in_inst = list_entry(pos, binput_inst_t, block_inst_list);
-		if (strcmp(name, in_inst->input->name) == 0)
+		binput_inst_t * ininst = list_entry(pos, binput_inst_t, blockinst_list);
+		if (strcmp(name, ininst->input->name) == 0)
 		{
-			return in_inst;
+			return ininst;
 		}
 	}
 
 	return NULL;
 }
 
-boutput_inst_t * io_getboutput(const block_inst_t * block_inst, const char * name)
+boutput_inst_t * io_getboutput(const blockinst_t * blockinst, const char * name)
 {
 	list_t * pos;
-	list_foreach(pos, &block_inst->outputs_inst)
+	list_foreach(pos, &blockinst->outputs_inst)
 	{
-		boutput_inst_t * out_inst = list_entry(pos, boutput_inst_t, block_inst_list);
-		if (strcmp(name, out_inst->output->name) == 0)
+		boutput_inst_t * outinst = list_entry(pos, boutput_inst_t, blockinst_list);
+		if (strcmp(name, outinst->output->name) == 0)
 		{
-			return out_inst;
+			return outinst;
 		}
 	}
 
