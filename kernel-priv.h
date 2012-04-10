@@ -154,16 +154,16 @@ typedef struct
 	struct __block_inst_t * blockinst;
 } syscallblock_t;
 
-/*
 typedef struct {
-	module_t * module;
 	list_t module_list;
+
 	char * name;
 	char * desc;
 	char type;
+
 	variable_t variable;
+	module_t * module;
 } cfgentry_t;
-*/
 
 /*
 typedef struct {
@@ -189,7 +189,7 @@ typedef struct
 	list_t calibration_list;
 	char * domain;
 
-	calpreview_f callback;
+	calgpreview_f callback;
 	void * object;
 } calpreview_t;
 
@@ -203,13 +203,15 @@ typedef struct
 typedef struct
 {
 	list_t calibration_list;
+	list_t module_list;
 
 	char * domain;
 	char * name;
 	char sig;
-	char * constraints;
+	constraint_t constraints;
+	char * desc;
 
-	char * edit_backup;
+	char * checkpoint;
 	char cache[CAL_SIZE_CACHE];
 	void * backing;
 
@@ -383,6 +385,11 @@ typedef struct
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 
+typedef enum
+{
+	act_preact		= 1,
+	act_postact		= 2,
+} moduleact_t;
 //meta_t * meta_parse(const char * path);
 //module_t * module_get(const char * name);
 const module_t * module_lookup(const char * name);
@@ -390,6 +397,7 @@ const block_t * module_getblock(const module_t * module, const char * blockname)
 //const blockinst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
+void module_act(const module_t * module, moduleact_t act);
 module_t * module_load(meta_t * meta);
 //void module_kernelinit();
 
@@ -456,9 +464,8 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in);
 const cfgentry_t * cfg_getparam(const char * path, const char * cfgname);
 void cfg_setparam(const char * path, const char * cfgname, const char * value);
 
-//calparam_t * cal_getparam(const char * name, const char * sig);
-//void cal_freeparam(calparam_t * val);
 void cal_init();
+void cal_sort();
 
 #ifdef __cplusplus
 }

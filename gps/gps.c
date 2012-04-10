@@ -4,6 +4,7 @@
 
 #include <kernel.h>
 #include <buffer.h>
+#include <aul/parse.h>
 #include <aul/serial.h>
 #include <aul/mainloop.h>
 
@@ -41,6 +42,8 @@ static regex_t gpgga_match;
 static regex_t gprmc_match;
 static regex_t latlong_match;
 
+
+// TODO - add security around these pbuf[25] vars!
 static double mtod(char * start, regmatch_t * m)
 {
 	char pbuf[25] = {0};
@@ -267,6 +270,7 @@ void gps_destroy(void * object)
 
 bool module_init() {
 	// Set up $GPGGA regex (NMEA protocol)
+	// TODO - make this extended REGEX
 	if (regcomp(&gpgga_match, "^\\$GPGGA,\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\.[[:digit:]]\\{3\\},\\([[:digit:].]\\+\\),"
 					"\\([NS]\\),\\([[:digit:].]\\+\\),\\([EW]\\),[12],\\([[:digit:]]\\+\\),\\(\[[:digit:].]\\+\\),\\(\[[:digit:].\\\\-]\\+\\),"
 					"M,[[:digit:].\\\\-]\\+,M,,.*$", 0) != 0 ||

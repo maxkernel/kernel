@@ -6,11 +6,6 @@
 #include <max.h>
 #include <serialize.h>
 
-// Private defines
-int parse_int(const char * s, exception_t ** err);
-double parse_double(const char * s, exception_t ** err);
-bool parse_bool(const char * s, exception_t ** err);
-
 static struct
 {
 	char * host;

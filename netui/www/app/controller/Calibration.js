@@ -13,15 +13,73 @@ Ext.define('Max.controller.Calibration', {
     ],
 
     init: function() {
-        this.getViewer().showTab({title: 'Calibration', xtype: 'calibrationlist'});
-        
         this.control({
+	        'calibrationlist *[action=start]': { click: this.start },
             'calibrationlist *[action=commit]': { click: this.commit },
             'calibrationlist *[action=revert]': { click: this.revert },
-            'calibrationlist': { preview: this.preview }
+            'calibrationlist': { preview: this.preview, init: this.initview }
         });
     },
     
+    setmode: function(incal) {
+    	this.getViewer().getTab('Calibration').down('[name=start]').setDisabled(incal);
+    	this.getViewer().getTab('Calibration').down('[name=revert]').setDisabled(!incal);
+    	this.getViewer().getTab('Calibration').down('[name=comment]').setDisabled(!incal);
+    	this.getViewer().getTab('Calibration').down('[name=commit]').setDisabled(!incal);
+    },
+    initview: function(evt) {
+        var self = this;
+		this.getViewer().setLoading(true);
+        Ext.Ajax.request({
+		    url: '/get/calibration/mode',
+		    method: 'GET',
+		    success: function(response) {
+		        self.getViewer().setLoading(false);
+		        var lines = response.responseText.split("\n");
+		        if (response.responseText.toLowerCase().indexOf("ok") != 0)
+		        {
+		            self.showError('Server failure.<br />'+response.responseText);
+		        }
+		        else if (lines[1].toLowerCase() == "calibrating")
+		        {
+		        	self.getViewer().getTab('Calibration').fireEvent("start");
+				    self.getViewer().getTab('Calibration').loadStore();
+					self.setmode(true);
+    			}
+		    },
+		    failure: function(response) {
+		        self.getViewer().setLoading(false);
+		        self.showError('Could not connect to server.');
+		    }
+		});
+    },
+    start: function(evt) {
+		var self = this;
+		this.getViewer().setLoading(true);
+		this.getViewer().getTab('Calibration').fireEvent("start");
+		
+		Ext.Ajax.request({
+		    url: '/set/calibration/start',
+		    method: 'GET',
+		    params: {
+		        
+		    },
+		    success: function(response) {
+		        self.getViewer().setLoading(false);
+		        if (response.responseText.toLowerCase() != "ok")
+		        {
+		            self.showError('Server failure.<br />'+response.responseText);
+		        }
+		        
+		        self.getViewer().getTab('Calibration').loadStore();
+    			self.setmode(true);
+		    },
+		    failure: function(response) {
+		        self.getViewer().setLoading(false);
+		        self.showError('Could not connect to server.');
+		    }
+		});
+    },
     preview: function(evt) {
         var self = this;
         
@@ -29,14 +87,30 @@ Ext.define('Max.controller.Calibration', {
             url: '/set/calibration/preview',
             method: 'GET',
             params: {
-                module: evt.record.data.module,
+            	domain: evt.record.data.domain,
                 name: evt.record.data.name,
                 value: evt.value
             },
             success: function(response) {
-                if (response.responseText.toLowerCase() != "ok")
+            	var lines = response.responseText.split("\n");
+                if (response.responseText.toLowerCase().indexOf("ok") != 0)
                 {
                     self.showError('Server failure.<br />'+response.responseText);
+                }
+                else
+                {
+                	Ext.getCmp(evt.id).setRawValue(lines[1]);
+                	
+                	if (lines[2] != "")
+                	{
+		            	evt.tip.enable();
+		            	evt.tip.show();
+		                evt.tip.update(lines[2]);
+		            }
+		            else
+		            {
+		            	evt.tip.disable();
+		            }
                 }
             },
             failure: function(response) {
@@ -66,6 +140,9 @@ Ext.define('Max.controller.Calibration', {
                 {
                     self.showMessage('Successful commit with comment:<br />'+comment);
                 }
+                
+                self.getViewer().getTab('Calibration').clearStore();
+                self.setmode(false);
             },
             failure: function(response) {
                 self.getViewer().setLoading(false);
@@ -81,19 +158,15 @@ Ext.define('Max.controller.Calibration', {
         Ext.Ajax.request({
             url: '/set/calibration/revert',
             method: 'GET',
-            params: {
-                
-            },
             success: function(response) {
                 self.getViewer().setLoading(false);
                 if (response.responseText.toLowerCase() != "ok")
                 {
                     self.showError('Server failure.<br />'+response.responseText);
                 }
-                else
-                {
-                    self.showMessage('Reverted calibration.');
-                }
+                
+                self.getViewer().getTab('Calibration').clearStore();
+                self.setmode(false);
             },
             failure: function(response) {
                 self.getViewer().setLoading(false);

@@ -1,4 +1,4 @@
-SRCS 		= syscall.c parse.c
+SRCS 		= syscall.c
 PACKAGES	= 
 
 TARGET		= max-syscall

@@ -6,6 +6,7 @@ Ext.define('Max.controller.Menu', {
     
     refs: [
         {ref: 'menuData', selector: 'menu dataview'},
+        {ref: 'viewer', selector: 'viewer'}
     ],
 
     init: function() {
@@ -25,6 +26,13 @@ Ext.define('Max.controller.Menu', {
     },
     
     loadItem: function(selModel, selected) {
+	    var item = selected[0];
+	    
+	    if (item) {
+	    	this.getController(item.get('path'));
+	    	this.getViewer().showTab({title: item.get('name'), xtype: item.get('view')});
+	    }
+    /*
         var item = selected[0];
 
         if (item) {
@@ -33,5 +41,6 @@ Ext.define('Max.controller.Menu', {
                 c.init(this);
             }, this);          
         }
+    */
     }
 });

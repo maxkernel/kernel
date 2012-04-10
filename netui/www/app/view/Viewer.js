@@ -18,6 +18,7 @@ Ext.define('Max.view.Viewer', {
     
     showTab: function(tabConfig) {
         if (this.tabs[tabConfig.title] !== undefined) {
+	        this.tabs[tabConfig.title].show();
             this.setActiveTab(this.tabs[tabConfig.title]);
             return;
         }

@@ -6,6 +6,7 @@
 
 #include <aul/common.h>
 #include <aul/exception.h>
+#include <aul/constraint.h>
 #include <aul/string.h>
 #include <maxmodel/meta.h>
 
@@ -17,16 +18,14 @@ extern "C" {
 #define MODEL_SIZE_NAME					MAX(META_SIZE_ANNOTATE, MAX(META_SIZE_FUNCTION, MAX(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME)))
 #define MODEL_SIZE_DESCRIPTION			META_SIZE_SHORTDESCRIPTION
 #define MODEL_SIZE_VALUE				150
-#define MODEL_SIZE_CONSTRAINT			25
 #define MODEL_SIZE_BLOCKIONAME			(MODEL_SIZE_NAME + 6)	// Support array indexes on end of name (ex. '[25]')
 #define MODEL_SIZE_MAX \
 	(MAX(MODEL_SIZE_PATH,			\
 	 MAX(MODEL_SIZE_NAME,			\
 	 MAX(MODEL_SIZE_DESCRIPTION,	\
 	 MAX(MODEL_SIZE_VALUE,			\
-	 MAX(MODEL_SIZE_CONSTRAINT,		\
 	 MODEL_SIZE_BLOCKIONAME			\
-	 ))))))
+	 )))))
 
 #define MODEL_MAX_ARGS					10	// TODO - find a reasonable value for this
 #define MODEL_MAX_SCRIPTS				20							// Maximum number of scripts per model
@@ -96,7 +95,7 @@ typedef struct
 
 	char name[MODEL_SIZE_NAME];
 	char sig;
-	char constraint[MODEL_SIZE_CONSTRAINT];
+	constraint_t constraints;
 	char value[MODEL_SIZE_VALUE];
 } model_configparam_t;
 

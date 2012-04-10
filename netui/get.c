@@ -1,33 +1,29 @@
+#include <aul/constraint.h>
 #include <aul/string.h>
 
 #include <kernel.h>
 #include <httpserver.h>
 
 
-static void calget__itri(void * udata, char * module, char * name, char type, char * desc, int value, int min, int max)
+static void get_calibration_mode(http_connection * conn, http_context * ctx)
 {
-	http_connection * conn = udata;
+	http_printf(conn, "HTTP/1.1 200 OK\r\n");
+	http_printf(conn, "Content-Type: application/json\r\n");
+	http_printf(conn, "\r\n");
 
-	char * group = strrchr(module, '/');
-	if (group == NULL)
+	const char * mode = NULL;
+	switch (cal_getmode())
 	{
-		group = module;
+		case calmode_runtime:
+			mode = "runtime";
+			break;
+
+		case calmode_calibrating:
+			mode = "calibrating";
+			break;
 	}
 
-	http_printf(conn, "{'module':'%s','group':'%s','name':'%s','type':'%c','value':'%d','min':'%d','max':'%d','desc':'%s'},", module, group, name, T_INTEGER, value, min, max, desc);
-}
-
-static void calget__itrd(void * udata, char * module, char * name, char type, char * desc, double value, double min, double max)
-{
-	http_connection * conn = udata;
-
-	char * group = strrchr(module, '/');
-	if (group == NULL)
-	{
-		group = module;
-	}
-
-	http_printf(conn, "{'module':'%s','group':'%s','name':'%s','type':'%c','value':'%f','min':'%f','max':'%f','desc':'%s'},", module, group, name, T_DOUBLE, value, min, max, desc);
+	http_printf(conn, "OK\n%s", mode);
 }
 
 static void get_calibration(http_connection * conn, http_context * ctx)
@@ -37,14 +33,31 @@ static void get_calibration(http_connection * conn, http_context * ctx)
 	http_printf(conn, "\r\n");
 
 	http_printf(conn, "{'result':[");
-	cal_iterate(calget__itri, calget__itrd, conn);
+	{
+		iterator_t itr = cal_iterator();
+
+		const char * domain = NULL, * name = NULL, *desc = NULL, * value = NULL;
+		char sig = 0;
+		const constraint_t * constraint = NULL;
+		while (cal_next(itr, &domain, &name, &sig, &constraint, &desc, &value))
+		{
+			double step = 1.0;
+			constraint_getstep(constraint, &step);
+
+			http_printf(conn, "{'domain':'%s','name':'%s','sig':'%c','value':'%s','step':%f,'desc':'%s'},", (domain == NULL)? "" : domain, name, sig, value, step, desc);
+		}
+	}
 	http_printf(conn, "]}");
 }
 
 
 void handle_get(http_connection * conn, http_context * ctx, const char * uri)
 {
-	if (strsuffix(uri, "/calibration.json"))
+	if (strsuffix(uri, "/calibration/mode"))
+	{
+		get_calibration_mode(conn, ctx);
+	}
+	else if (strsuffix(uri, "/calibration.json"))
 	{
 		get_calibration(conn, ctx);
 	}

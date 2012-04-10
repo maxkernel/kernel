@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <aul/parse.h>
+
 #include <kernel.h>
 #include <kernel-priv.h>
 

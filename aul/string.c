@@ -52,6 +52,11 @@ void string_vappend(string_t * str, const char * fmt, va_list args)
 	str->length += vsnprintf(str->string + str->length, AUL_STRING_MAXLEN - str->length, fmt, args);
 }
 
+size_t string_available(const string_t * str)
+{
+	return AUL_STRING_MAXLEN - str->length;
+}
+
 string_t string_clone(const string_t * str)
 {
 	string_t cpy;
@@ -62,11 +67,7 @@ string_t string_clone(const string_t * str)
 
 char * string_copy(const string_t * str)
 {
-	size_t length = str->length + 1;
-	char * cpy = malloc(length);
-	memcpy(cpy, str->string, length);
-
-	return cpy;
+	return strdup(str->string);
 }
 
 void string_clear(string_t * str)

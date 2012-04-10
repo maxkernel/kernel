@@ -3,8 +3,7 @@
 #include <ctype.h>
 
 #include <aul/string.h>
-#include <kernel.h>
-
+#include <aul/parse.h>
 
 int parse_int(const char * s, exception_t ** err)
 {

@@ -34,23 +34,44 @@ Ext.define('Max.view.calibration.List', {
 				dock: 'top',
 				xtype: 'toolbar',
 				items: [{
-				    xtype: 'textfield',
-                    name: 'comment',
-                    emptyText: 'enter calibration comment...',
-                    width: 300
-				}, {
-					text: 'Commit',
-					icon: 'images/save.png',
-					action: 'commit'
+				    text: 'Start',
+				    name: 'start',
+				    icon: 'images/cal-start.png',
+				    action: 'start'
 				},{
 					text: 'Revert',
+					name: 'revert',
+					disabled: true,
 					icon: 'images/cancel.png',
 					action: 'revert'
+				},{
+					xtype: 'tbspacer',
+					flex: 1
+				},{
+				    xtype: 'textfield',
+                    name: 'comment',
+                    disabled: true,
+                    emptyText: 'enter calibration comment...',
+                    width: 300
+				},{
+					text: 'Commit',
+					name: 'commit',
+					disabled: true,
+					icon: 'images/save.png',
+					action: 'commit'
 				}]
 			}]
 		});
 
 		this.callParent(arguments);
+		this.fireEvent("init", null);
+	},
+	
+	loadStore: function() {
+		this.getStore().load();
+	},
+	clearStore: function() {
+		this.getStore().removeAll();
 	},
 	
 	formatValue: function(value, metaData, record) {
@@ -62,39 +83,31 @@ Ext.define('Max.view.calibration.List', {
 	            renderTo: id,
 	            height: 17,
 	            value: value,
-	            minValue: record.data.min,
-	            maxValue: record.data.max,
-	            step: self.getStep(Math.abs(record.data.max - record.data.min)),
-	            defaultValue: value,
+	            step: record.data.step,
 	            action: 'preview',
+	            tip: Ext.widget('tooltip', {
+                    target: id,
+                    title: 'Constraints',
+                    disabled: true,
+                    autoHide: false,
+                    anchor: 'right',
+                    constrainPosition: false,
+                    width: 150
+                }),
 	            
 	            listeners: {
-	                change: function(evt) { self.fireChange(evt, record); }
+	                change: function(evt) { self.fireChange(evt, c.tip, record); }
 	            }
-	        });
-	        
-	        self.addListener("revert", function() {
-	            c.setValue(c.defaultValue);
-	        });
-	        self.addListener("commit", function() {
-	            c.defaultValue = c.getValue();
 	        });
 	    }, 50);
 	    
 	    return Ext.String.format('<div id="{0}"></div>', id);
 	},
 	
-	fireChange: function(evt, record) {
+	fireChange: function(evt, tip, record) {
 	    evt['record'] = record;
+	    evt['tip'] = tip;
 	    this.fireEvent("preview", evt);
 	},
-	
-	getStep: function(stride) {
-	    if (stride <= 10.0)             return 0.1;
-	    else if (stride <= 100.0)		return 1.0;
-	    else if (stride <= 1000.0)		return 10.0;
-	    else if (stride <= 10000.0)		return 100.0;
-	    else							return 1000.0;
-	}
 });
 

@@ -58,8 +58,9 @@ void model_updatecal(const char * name, const char type, void * newvalue, void *
 	mode_calibration = false;
 }
 
-void model_previewcal(const char * name, const char type, void * newvalue, void * target)
+void model_calpreview(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length)
 {
+	/*
 	mode_calibration = true;
 
 	if (strprefix(name, "motor"))
@@ -70,6 +71,12 @@ void model_previewcal(const char * name, const char type, void * newvalue, void 
 	}
 	else if	(strprefix(name, "front"))		pwm_front	= *(int *)newvalue;
 	else if	(strprefix(name, "rear"))		pwm_rear	= *(int *)newvalue;
+	*/
+}
+
+void model_calmodechange(void * object, calmode_t mode, calstatus_t status)
+{
+
 }
 
 void model_update(void * obj)
@@ -105,6 +112,17 @@ void model_update(void * obj)
 
 bool model_init()
 {
+	cal_register(	NULL,	motor_min,		'i',		"[0:25:15000] Motor Minimum (full reverse). Calibrate front motor only.",	model_calpreview,	NULL);
+	cal_register(	NULL,	motor_center,	'i',		"[0:25:15000] Motor Center (neutral). Calibrate front motor only.",			model_calpreview,	NULL);
+	cal_register(	NULL,	motor_max,		'i',		"[0:25:15000] Motor Maximum (full forward). Calibrate front motor only.",	model_calpreview,	NULL);
+	cal_register(	NULL,	front_min,		'i',		"[0:25:15000] Front Wheel Minimum (left -25 deg)",							model_calpreview,	NULL);
+	cal_register(	NULL,	front_center,	'i',		"[0:25:15000] Front Wheel Centered",										model_calpreview,	NULL);
+	cal_register(	NULL,	front_max,		'i',		"[0:25:15000] Front Wheel Maximum (right +25 deg)",							model_calpreview,	NULL);
+	cal_register(	NULL,	rear_min,		'i',		"[0:25:15000] Rear Wheel Minimum (right +25 deg)",							model_calpreview,	NULL);
+	cal_register(	NULL,	rear_center,	'i',		"[0:25:15000] Rear Wheel Centered",											model_calpreview,	NULL);
+	cal_register(	NULL,	rear_max,		'i',		"[0:25:15000] Rear Wheel Maximum (left -25 deg)",							model_calpreview,	NULL);
+	cal_onmodechange(model_calmodechange,	NULL);
+
 	pwm_motor_front = pwm_motor_rear = motor_center;
 	pwm_front = front_center;
 	pwm_rear = rear_center;
@@ -138,18 +156,3 @@ block_output(	static, 	motor_rear_pwm, 	'i', 	"The output pwm for the rear motor
 block_output(	static, 	front_pwm, 			'i', 	"The output pwm for the front stearing servo (pwm measured in microseconds)");
 block_output(	static, 	rear_pwm, 			'i', 	"The output pwm for the rear stearing servo (pwm measured in microseconds)");
 block_onupdate(	static, 	model_update);
-
-//CAL_UPDATE(model_updatecal);
-//CAL_PREVIEW(model_previewcal);
-cal_param(	motor_min,		'i',		"[0:15000] Motor Minimum (full reverse). Calibrate front motor only.");
-cal_param(	motor_center,	'i',		"[0:15000] Motor Center (neutral). Calibrate front motor only.");
-cal_param(	motor_max,		'i',		"[0:15000] Motor Maximum (full forward). Calibrate front motor only.");
-cal_param(	front_min,		'i',		"[0:15000] Front Wheel Minimum (left -25 deg)");
-cal_param(	front_center,	'i',		"[0:15000] Front Wheel Centered");
-cal_param(	front_max,		'i',		"[0:15000] Front Wheel Maximum (right +25 deg)");
-cal_param(	rear_min,		'i',		"[0:15000] Rear Wheel Minimum (right +25 deg)");
-cal_param(	rear_center,	'i',		"[0:15000] Rear Wheel Centered");
-cal_param(	rear_max,		'i',		"[0:15000] Rear Wheel Maximum (left -25 deg)");
-// TODO - finish these!!
-//cal_onmodechange(model_modechange);
-cal_onpreview(model_previewcal);

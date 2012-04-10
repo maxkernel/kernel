@@ -1,6 +1,8 @@
 #include <glib.h>
 #include <string.h>
 
+#include <aul/parse.h>
+
 #include <kernel.h>
 #include <map.h>
 

@@ -2,6 +2,7 @@
 #define __AUL_STRING_H
 
 #include <stdarg.h>
+#include <inttypes.h>
 #include <string.h>
 #include <aul/common.h>
 
@@ -26,6 +27,7 @@ void string_vset(string_t * str, const char * fmt, va_list args);
 void string_append(string_t * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
 void string_vappend(string_t * str, const char * fmt, va_list args);
 
+size_t string_available(const string_t * str);
 string_t string_clone(const string_t * str);
 char * string_copy(const string_t * str);
 void string_clear(string_t * str);

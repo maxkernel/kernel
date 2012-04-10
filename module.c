@@ -572,7 +572,52 @@ void module_init(const module_t * module)
 		if (initializer != NULL)
 		{
 			LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.object_name);
-			initializer();
+
+			if (!initializer())
+			{
+				LOGK(LOG_FATAL, "Module initialization failed (%s).", module->kobject.object_name);
+				// Will exit
+			}
 		}
 	}
 }
+
+void module_act(const module_t * module, moduleact_t act)
+{
+	// Sanity check
+	{
+		if (module == NULL)
+		{
+			LOGK(LOG_ERR, "Module is NULL (module_act)");
+			return;
+		}
+	}
+
+	// Call initializer function
+	{
+		const meta_t * meta = module->backing;
+
+		meta_activator activator = NULL;
+		const char * activator_name = "";
+
+		switch (act)
+		{
+			case act_preact:
+				meta_getactivators(meta, NULL, NULL, &activator, NULL);
+				activator_name = "preactivator";
+				break;
+
+			case act_postact:
+				meta_getactivators(meta, NULL, NULL, NULL, &activator);
+				activator_name = "postactivator";
+				break;
+		}
+
+		if (activator != NULL)
+		{
+			LOGK(LOG_DEBUG, "Calling %s function for module %s", activator_name, module->kobject.object_name);
+			activator();
+		}
+	}
+}
+

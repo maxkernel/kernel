@@ -21,6 +21,7 @@
 #include <aul/list.h>
 #include <aul/hashtable.h>
 #include <aul/mainloop.h>
+#include <aul/parse.h>
 #include <aul/iterator.h>
 #include <aul/mutex.h>
 
@@ -686,7 +687,6 @@ int main(int argc, char * argv[])
 	// Initialize global variables
 	model = model_new();
 	LIST_INIT(&modules);
-	LIST_INIT(&calentries);
 	LIST_INIT(&objects);
 	LIST_INIT(&kthread_tasks);
 	HASHTABLE_INIT(&properties, hash_str, hash_streq);
@@ -816,7 +816,7 @@ int main(int argc, char * argv[])
 		// These are the interpreter callback functions
 		void int_log(level_t level, const char * message)
 		{
-			log_write(level, "script", "%s", message);
+			log_write(level, "Script", "%s", message);
 		}
 
 		meta_t * int_metalookup(const char * modulename, exception_t ** err)
@@ -1126,7 +1126,6 @@ int main(int argc, char * argv[])
 				// Print diagnostic info
 				const char * path = NULL;
 				meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
-				LOGK(LOG_DEBUG, "Loading module %s", path);
 
 				// Handle dependencies
 				{
@@ -1314,13 +1313,6 @@ int main(int argc, char * argv[])
 
 	// Call post functions
 	{
-		// Sort compare functions
-		int cal_compare(list_t * a, list_t * b)
-		{
-			calentry_t * ca = list_entry(a, calentry_t, global_list);
-			calentry_t * cb = list_entry(b, calentry_t, global_list);
-			return strcmp(ca->name, cb->name);
-		}
 
 		int module_compare(list_t * a, list_t * b)
 		{
@@ -1329,17 +1321,42 @@ int main(int argc, char * argv[])
 			return strcmp(ma->kobject.object_name, mb->kobject.object_name);
 		}
 
-		// Sort the calentries list
-		list_sort(&calentries, cal_compare);
+
 		list_sort(&modules, module_compare);
 
-		// Call init function on all modules
-		list_t * pos;
-		list_foreach(pos, &modules)
+		// Call preact function on all modules
 		{
-			module_t * module = list_entry(pos, module_t, global_list);
-			module_init(module);
+			list_t * pos;
+			list_foreach(pos, &modules)
+			{
+				module_t * module = list_entry(pos, module_t, global_list);
+				module_act(module, act_preact);
+			}
 		}
+
+		// Call postact function on all modules
+		{
+			list_t * pos;
+			list_foreach(pos, &modules)
+			{
+				module_t * module = list_entry(pos, module_t, global_list);
+				module_act(module, act_postact);
+			}
+		}
+
+		// Call init function on all modules
+		{
+			list_t * pos;
+			list_foreach(pos, &modules)
+			{
+				module_t * module = list_entry(pos, module_t, global_list);
+				module_init(module);
+			}
+		}
+
+
+		// Sort some lists
+		cal_sort();
 
 		// Check for new kernel thread tasks every second
 		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);

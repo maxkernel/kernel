@@ -4,6 +4,7 @@ Ext.define('Max.model.MenuItem', {
     fields: [
         {name: 'name', type: 'string'},
         {name: 'icon', type: 'string'},
-        {name: 'path', type: 'string'}
+        {name: 'path', type: 'string'},
+        {name: 'view', type: 'string'}
     ]
 });

@@ -2,7 +2,7 @@ Ext.define('Max.store.CalibrationItems', {
     extend: 'Ext.data.Store',
     model: 'Max.model.CalibrationItem',
     
-    groupField: 'group',
+    groupField: 'domain',
     
     proxy: {
         type: 'ajax',
@@ -20,7 +20,5 @@ Ext.define('Max.store.CalibrationItems', {
         sortParam: undefined,
         limitParam: undefined,
     },
-    
-    autoLoad: true
 });
 

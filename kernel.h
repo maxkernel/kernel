@@ -8,6 +8,7 @@
 
 #include <aul/common.h>
 #include <aul/exception.h>
+#include <aul/constraint.h>
 #include <aul/log.h>
 #include <aul/list.h>
 
@@ -117,17 +118,10 @@ const char * kernel_datatype(char type);
 const char * kernel_loghistory();
 string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseconds, const char * message);
 
-//typedef void (*cal_itr_d)(void * userdata, char * module, char * name, char type, char * desc, double value, double min, double max);
-//typedef void (*cal_itr_i)(void * userdata, char * module, char * name, char type, char * desc, int value, int min, int max);
-//void cal_iterate(cal_itr_i, cal_itr_d, void * userdata);
-//void cal_setparam(const char * module, const char * name, const char * value);
-//void cal_merge(const char * comment);
-//void cal_revert();
-
 typedef enum
 {
-	calmode_exit	= 0,
-	calmode_enter	= 1,
+	calmode_runtime	= 0,
+	calmode_calibrating	= 1,
 } calmode_t;
 
 typedef enum
@@ -137,16 +131,33 @@ typedef enum
 	//calstatus_autocal	= 3		// TODO - provide auto calibration
 } calstatus_t;
 
-typedef void (*calpreview_f)(void * object, const char * domain, const char * name, const char sig, void * backing);
-typedef bool (*calmodechange_f)(void * object, calmode_t mode, calstatus_t status);
+typedef void (*calpreview_f)(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length);
+typedef void (*calgpreview_f)(void * object, const char * domain, const char * name, const char sig, const void * backing, char * hint, size_t hint_length);
+typedef void (*calmodechange_f)(void * object, calmode_t mode, calstatus_t status);
 
-void cal_register(const char * domain, const char * name, const char sig, const char * constraints, void * backing, calpreview_f onpreview, void * onpreview_object)
-void cal_onpreview(const char * domain, calpreview_f callback, void * object);
+#define cal_register(domain, variable, sig, desc, onpreview, onpreview_object) \
+	({ \
+		exception_t * __e = NULL;			\
+		cal_doregister(domain, #variable, sig, constraint_parse(desc, &__e), constraint_parsepast(desc), &variable, onpreview, onpreview_object); \
+		if (exception_check(&__e))			\
+		{									\
+			LOG(LOG_WARN, "Invalid constraint declaration: %s", __e->message); \
+			exception_free(__e);			\
+		}									\
+	})
+
+void cal_doregister(const char * domain, const char * name, const char sig, const constraint_t constraints, const char * desc, void * backing, calpreview_f onpreview, void * onpreview_object);
+void cal_onpreview(const char * domain, calgpreview_f callback, void * object);
 void cal_onmodechange(calmodechange_f callback, void * object);
 
-int parse_int(const char * s, exception_t ** err);
-double parse_double(const char * s, exception_t ** err);
-bool parse_bool(const char * s, exception_t ** err);
+calmode_t cal_getmode();
+void cal_start();
+const char * cal_preview(const char * domain, const char * name, const char * value, char * hint, size_t hint_length);
+void cal_commit(const char * comment);
+void cal_revert();
+iterator_t cal_iterator();
+bool cal_next(iterator_t itr, const char ** domain, const char ** name, char * sig, const constraint_t ** constraints, const char ** desc, const char ** value);
+
 
 #ifdef __cplusplus
 }

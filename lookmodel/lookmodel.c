@@ -46,12 +46,19 @@ void model_updatecal(const char * name, const char type, void * newvalue, void *
 	mode_calibration = false;
 }
 
-void model_previewcal(const char * name, const char type, void * newvalue, void * target)
+void model_calpreview(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length)
 {
+	/*
 	mode_calibration = true;
 
 	if		(strprefix(name, "pan"))		pwm_pan		= *(int *)newvalue;
 	else if	(strprefix(name, "tilt"))		pwm_tilt	= *(int *)newvalue;
+	*/
+}
+
+void model_calmodechange(void * object, calmode_t mode, calstatus_t status)
+{
+
 }
 
 void model_update(void * obj)
@@ -80,6 +87,15 @@ void model_update(void * obj)
 
 bool model_init()
 {
+	cal_register(	NULL,	pan_min,		'i',		"[0:15000] Head Pan Minimum (left -270 deg)",	model_calpreview,	NULL);
+	cal_register(	NULL,	pan_forward,	'i',		"[0:15000] Head Pan Center Forward",			model_calpreview,	NULL);
+	cal_register(	NULL,	pan_backward,	'i',		"[0:15000] Head Pan Center Backward",			model_calpreview,	NULL);
+	cal_register(	NULL,	pan_max,		'i',		"[0:15000] Head Pan Maximum (right +90 deg)",	model_calpreview,	NULL);
+	cal_register(	NULL,	tilt_min,		'i',		"[0:15000] Head Tilt Minimum (down -45 deg)",	model_calpreview,	NULL);
+	cal_register(	NULL,	tilt_center,	'i',		"[0:15000] Head Tilt Center (level forward)",	model_calpreview,	NULL);
+	cal_register(	NULL,	tilt_max,		'i',		"[0:15000] Head Tilt Maximum (up +90 deg)",		model_calpreview,	NULL);
+	cal_onmodechange(model_calmodechange,	NULL);
+
 	pwm_pan = pan_forward;
 	pwm_tilt = tilt_center;
 
@@ -101,17 +117,6 @@ module_description("Helper module for use in applications where the robot has a 
 module_dependency("map");
 module_oninitialize(model_init);
 module_ondestroy(model_destroy);
-
-cal_param(	pan_min,		'i',		"[0:15000] Head Pan Minimum (left -270 deg)");
-cal_param(	pan_forward,	'i',		"[0:15000] Head Pan Center Forward");
-cal_param(	pan_backward,	'i',		"[0:15000] Head Pan Center Backward");
-cal_param(	pan_max,		'i',		"[0:15000] Head Pan Maximum (right +90 deg)");
-cal_param(	tilt_min,		'i',		"[0:15000] Head Tilt Minimum (down -45 deg)");
-cal_param(	tilt_center,	'i',		"[0:15000] Head Tilt Center (level forward)");
-cal_param(	tilt_max,		'i',		"[0:15000] Head Tilt Maximum (up +90 deg)");
-// TODO - finish me!
-//cal_onmodechange(model_modechange); CAL_UPDATE(model_updatecal);
-cal_onpreview(model_previewcal);
 
 block_input(	static, 	pan, 		'd', 	"Rotates the head by given value (param 1) radians between -3pi/2 to pi/2 (-270 degrees to +90 degrees)");
 block_input(	static, 	tilt, 		'd', 	"Tilts the head by given value (param 1) radians between -pi/4 ... pi/2 (-45 degrees to +90 degrees)");

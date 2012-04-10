@@ -367,12 +367,6 @@ void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
 	*mem = meta_copy(meta);
 }
 
-string_t model_getconstraint(const char * desc)
-{
-	// TODO - FINISH ME!
-	return string_blank();
-}
-
 const char * model_getpastconstraint(const char * desc)
 {
 	// TODO - FINISH ME!
@@ -612,17 +606,9 @@ model_configparam_t * model_configparam_new(model_t * model, model_module_t * mo
 
 	char sig;
 	const char * desc;
-
 	if (!meta_getconfigparam(module->backing, configname, &sig, &desc))
 	{
 		exception_set(err, EINVAL, "Module %s does not have config param %s", path, configname);
-		return NULL;
-	}
-
-	string_t constraint = model_getconstraint(desc);
-	if (constraint.length >= MODEL_SIZE_CONSTRAINT)
-	{
-		exception_set(err, EINVAL, "Constraint syntax too long for config param %s in module %s", configname, path);
 		return NULL;
 	}
 
@@ -643,7 +629,7 @@ model_configparam_t * model_configparam_new(model_t * model, model_module_t * mo
 
 	strcpy(configparam->name, configname);
 	configparam->sig = sig;
-	strcpy(configparam->constraint, constraint.string);
+	configparam->constraints = constraint_parse(desc, NULL);
 	strcpy(configparam->value, value);
 
 	return configparam;
@@ -966,6 +952,7 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 			if (regexec(&arg_pattern, outname, 0, NULL, 0) != 0)
 			{
 				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a1' ... 'a#')", outname);
+				regfree(&arg_pattern);
 				return NULL;
 			}
 

@@ -8,6 +8,7 @@
 #include <aul/exception.h>
 #include <aul/hashtable.h>
 #include <aul/mutex.h>
+#include <aul/parse.h>
 
 #include <kernel-types.h>
 
