@@ -350,14 +350,19 @@ void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destr
 bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
 bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
 
-iterator_t meta_getdependencyitr(const meta_t * meta);
+iterator_t meta_dependencyitr(const meta_t * meta);
 bool meta_dependencynext(iterator_t itr, const char ** dependency);
 
-bool meta_findconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config);
-iterator_t meta_getconfigitr(const meta_t * meta);
+bool meta_lookupconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config);
+iterator_t meta_configitr(const meta_t * meta);
 bool meta_confignext(iterator_t itr, const meta_variable_t ** config);
 
-void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, const void ** value);
+bool meta_lookupsyscall(const meta_t * meta, const char * syscallname, const meta_callback_t ** syscall);
+iterator_t meta_syscallitr(const meta_t * meta);
+bool meta_syscallnext(iterator_t itr, const meta_callback_t ** syscall);
+
+void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value);
+void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * value);
 
 #ifdef __cplusplus
 }

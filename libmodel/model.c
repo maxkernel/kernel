@@ -32,7 +32,7 @@ static void compact(void ** elems, size_t length)
 	}
 }
 
-static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f destroy, model_analyse_f analyse, size_t size)
+static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f destroy, size_t size)
 {
 	// Sanity check
 	{
@@ -57,7 +57,6 @@ static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f de
 		model->id[head->id = model->numids++] = head;
 		head->type = type;
 		head->destroy = destroy;
-		head->analyse = analyse;
 	}
 
 	return head;
@@ -126,7 +125,7 @@ static bool model_module_destroy(model_t * model, modelhead_t * self, modelhead_
 	return isself;
 }
 
-static bool model_configparam_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
+static bool model_config_destroy(model_t * model, modelhead_t * self, modelhead_t * target)
 {
 	return (target == NULL)? true : self->id == target->id;
 }
@@ -171,7 +170,7 @@ static bool model_link_destroy(model_t * model, modelhead_t * self, modelhead_t 
 }
 
 
-
+/*
 static inline void traverse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void ** items, size_t maxsize)
 {
 	modelhead_t * item = NULL;
@@ -180,17 +179,39 @@ static inline void traverse(const model_t * model, modeltraversal_t traversal, c
 		item->analyse(model, traversal, cbs, item);
 	}
 }
+*/
 
-#define model_handlecallback(callback, model, object) \
-	if (callback != NULL) object->head.userdata = callback(object->head.userdata, model, object)
+#define traverse(model, func, t, cbs, items, size, ...) \
+	({ \
+		modelhead_t * item = NULL;								\
+		model_foreach(item, items, size)						\
+		{														\
+			func(model, t, cbs, (void *)item, ##__VA_ARGS__);	\
+		}														\
+	})
 
-static void model_model_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+#define model_handlecallback(callback, model, object, ...) \
+	({ \
+		if (callback != NULL)					\
+		{										\
+			object->head.userdata = callback(object->head.userdata, model, object, ##__VA_ARGS__); \
+		}										\
+	})
+
+static void model_model_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs);
+static void model_script_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_script_t * script);
+static void model_module_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_module_t * module, model_script_t * script);
+static void model_config_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_config_t * config, model_script_t * script, model_module_t * module);
+static void model_linkable_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_linkable_t * linkable, model_script_t * script);
+static void model_link_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_link_t * link, model_script_t * script);
+
+static void model_model_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs)
 {
 	switch (traversal)
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			traverse(model, traversal, cbs, (void **)model->scripts, MODEL_MAX_SCRIPTS);
+			traverse(model, model_script_analyse, traversal, cbs, (void **)model->scripts, MODEL_MAX_SCRIPTS);
 			break;
 		}
 
@@ -198,18 +219,16 @@ static void model_model_analyse(const model_t * model, modeltraversal_t traversa
 	}
 }
 
-static void model_script_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+static void model_script_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_script_t * script)
 {
-	model_script_t * script = object;
-
 	switch (traversal)
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
 			model_handlecallback(cbs->scripts, model, script);
-			traverse(model, traversal, cbs, (void **)script->modules, MODEL_MAX_MODULES);
-			traverse(model, traversal, cbs, (void **)script->linkables, MODEL_MAX_LINKABLES);
-			traverse(model, traversal, cbs, (void **)script->links, MODEL_MAX_LINKS);
+			traverse(model, model_module_analyse, traversal, cbs, (void **)script->modules, MODEL_MAX_MODULES, script);
+			traverse(model, model_linkable_analyse, traversal, cbs, (void **)script->linkables, MODEL_MAX_LINKABLES, script);
+			traverse(model, model_link_analyse, traversal, cbs, (void **)script->links, MODEL_MAX_LINKS, script);
 			break;
 		}
 
@@ -217,16 +236,14 @@ static void model_script_analyse(const model_t * model, modeltraversal_t travers
 	}
 }
 
-static void model_module_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+static void model_module_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_module_t * module, model_script_t * script)
 {
-	model_module_t * module = object;
-
 	switch (traversal)
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->modules, model, module);
-			traverse(model, traversal, cbs, (void **)module->configs, MODEL_MAX_CONFIGS);
+			model_handlecallback(cbs->modules, model, module, script);
+			traverse(model, model_config_analyse, traversal, cbs, (void **)module->configs, MODEL_MAX_CONFIGS, script, module);
 			break;
 		}
 
@@ -234,15 +251,13 @@ static void model_module_analyse(const model_t * model, modeltraversal_t travers
 	}
 }
 
-static void model_configparam_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+static void model_config_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_config_t * config, model_script_t * script, model_module_t * module)
 {
-	model_config_t * configparam = object;
-
 	switch (traversal)
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->configs, model, configparam);
+			model_handlecallback(cbs->configs, model, config, script, module);
 			break;
 		}
 
@@ -250,18 +265,16 @@ static void model_configparam_analyse(const model_t * model, modeltraversal_t tr
 	}
 }
 
-static void model_linkable_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+static void model_linkable_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_linkable_t * linkable, model_script_t * script)
 {
-	model_linkable_t * linkable = object;
-
 	void linkable_handlecallbacks()
 	{
 		model_handlecallback(cbs->linkables, model, linkable);
 		switch (linkable->head.type)
 		{
-			case model_blockinst:	model_handlecallback(cbs->blockinsts, model, linkable);		break;
-			case model_syscall:		model_handlecallback(cbs->syscalls, model, linkable);		break;
-			case model_rategroup:	model_handlecallback(cbs->rategroups, model, linkable);		break;
+			case model_blockinst:	model_handlecallback(cbs->blockinsts, model, linkable);			break;
+			case model_syscall:		model_handlecallback(cbs->syscalls, model, linkable, script);	break;
+			case model_rategroup:	model_handlecallback(cbs->rategroups, model, linkable);			break;
 			default: break;
 		}
 	}
@@ -278,10 +291,8 @@ static void model_linkable_analyse(const model_t * model, modeltraversal_t trave
 	}
 }
 
-static void model_link_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
+static void model_link_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, model_link_t * link, model_script_t * script)
 {
-	model_link_t * link = object;
-
 	switch (traversal)
 	{
 		case traversal_scripts_modules_configs_linkables_links:
@@ -314,7 +325,6 @@ model_t * model_new()
 	model->id[head->id = model->numids++] = head;
 	head->type = model_model;
 	head->destroy = model_model_destroy;
-	head->analyse = model_model_analyse;
 
 	return model;
 }
@@ -367,12 +377,6 @@ void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
 	*mem = meta_copy(meta);
 }
 
-const char * model_getpastconstraint(const char * desc)
-{
-	// TODO - FINISH ME!
-	return NULL;
-}
-
 string_t model_getbase(const char * ioname)
 {
 	// TODO - finish me!
@@ -386,7 +390,7 @@ string_t model_getsubscript(const char * ioname)
 }
 
 
-model_script_t * model_script_new(model_t * model, const char * path, exception_t ** err)
+model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -430,7 +434,7 @@ model_script_t * model_script_new(model_t * model, const char * path, exception_
 		return NULL;
 	}
 
-	model_script_t * script = *mem = model_malloc(model, model_script, model_script_destroy, model_script_analyse, sizeof(model_script_t));
+	model_script_t * script = *mem = model_malloc(model, model_script, model_script_destroy, sizeof(model_script_t));
 	if (script == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -441,7 +445,7 @@ model_script_t * model_script_new(model_t * model, const char * path, exception_
 	return script;
 }
 
-model_module_t * model_module_new(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err)
+model_module_t * model_newmodule(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -528,7 +532,7 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 			return NULL;
 		}
 
-		module = *mem = model_malloc(model, model_module, model_module_destroy, model_module_analyse, sizeof(model_module_t));
+		module = *mem = model_malloc(model, model_module, model_module_destroy, sizeof(model_module_t));
 		if (module == NULL)
 		{
 			exception_set(err, ENOMEM, "Out of heap memory!");
@@ -538,7 +542,7 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 		module->backing = backing;
 
 		// Create static block instance
-		module->staticinst = model_blockinst_new(model, module, script, "static", NULL, 0, err);
+		module->staticinst = model_newblockinst(model, module, script, "static", NULL, 0, err);
 		if (module->staticinst == NULL || exception_check(err))
 		{
 			// An error happened!
@@ -573,7 +577,7 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 	return module;
 }
 
-model_config_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
+model_config_t * model_newconfig(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -611,7 +615,7 @@ model_config_t * model_configparam_new(model_t * model, model_module_t * module,
 	meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
 
 	const meta_variable_t * variable = NULL;
-	if (!meta_findconfig(module->backing, configname, &variable))
+	if (!meta_lookupconfig(module->backing, configname, &variable))
 	{
 		exception_set(err, EINVAL, "Module %s does not have config param %s", path, configname);
 		return NULL;
@@ -629,7 +633,7 @@ model_config_t * model_configparam_new(model_t * model, model_module_t * module,
 		return false;
 	}
 
-	model_config_t * configparam = *mem = model_malloc(model, model_config, model_configparam_destroy, model_configparam_analyse, sizeof(model_config_t) + strlen(value) + 1);
+	model_config_t * configparam = *mem = model_malloc(model, model_config, model_config_destroy, sizeof(model_config_t) + strlen(value) + 1);
 	if (configparam == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -644,7 +648,7 @@ model_config_t * model_configparam_new(model_t * model, model_module_t * module,
 	return configparam;
 }
 
-model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err)
+model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -723,7 +727,7 @@ model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module,
 		return NULL;
 	}
 
-	model_linkable_t * linkable = *mem = model_malloc(model, model_blockinst, model_linkable_destroy, model_linkable_analyse, sizeof(model_linkable_t) + sizeof(model_blockinst_t) + args_size);
+	model_linkable_t * linkable = *mem = model_malloc(model, model_blockinst, model_linkable_destroy, sizeof(model_linkable_t) + sizeof(model_blockinst_t) + args_size);
 	if (linkable == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -748,7 +752,7 @@ model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module,
 	return linkable;
 }
 
-model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script, const char * groupname, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err)
+model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, const char * groupname, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -798,7 +802,7 @@ model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script,
 		return NULL;
 	}
 
-	model_linkable_t * linkable = *mem = model_malloc(model, model_rategroup, model_linkable_destroy, model_linkable_analyse, sizeof(model_linkable_t) + sizeof(model_rategroup_t));
+	model_linkable_t * linkable = *mem = model_malloc(model, model_rategroup, model_linkable_destroy, sizeof(model_linkable_t) + sizeof(model_rategroup_t));
 	if (linkable == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -818,7 +822,7 @@ model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script,
 	return linkable;
 }
 
-model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err)
+model_linkable_t * model_newsyscall(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -854,7 +858,7 @@ model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, c
 		return NULL;
 	}
 
-	model_linkable_t * linkable = *mem = model_malloc(model, model_syscall, model_linkable_destroy, model_linkable_analyse, sizeof(model_linkable_t) + sizeof(model_syscall_t));
+	model_linkable_t * linkable = *mem = model_malloc(model, model_syscall, model_linkable_destroy, sizeof(model_linkable_t) + sizeof(model_syscall_t));
 	if (linkable == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -873,7 +877,7 @@ model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, c
 	return linkable;
 }
 
-model_link_t * model_link_new(model_t * model, model_script_t * script, model_linkable_t * out, const char * outname, model_linkable_t * in, const char * inname, exception_t ** err)
+model_link_t * model_newlink(model_t * model, model_script_t * script, model_linkable_t * out, const char * outname, model_linkable_t * in, const char * inname, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -1054,7 +1058,7 @@ model_link_t * model_link_new(model_t * model, model_script_t * script, model_li
 		return NULL;
 	}
 
-	model_link_t * link = *mem = model_malloc(model, model_link, model_link_destroy, model_link_analyse, sizeof(model_link_t));
+	model_link_t * link = *mem = model_malloc(model, model_link, model_link_destroy, sizeof(model_link_t));
 	if (link == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -1079,7 +1083,7 @@ void model_analyse(model_t * model, modeltraversal_t traversal, const model_anal
 		}
 	}
 
-	model->head.analyse(model, traversal, funcs, model);
+	model_model_analyse(model, traversal, funcs);
 }
 
 
@@ -1101,7 +1105,7 @@ bool model_getmeta(const model_module_t * module, const meta_t ** meta)
 	return true;
 }
 
-bool model_findmeta(const model_t * model, const char * path, const meta_t ** meta)
+bool model_metalookup(const model_t * model, const char * path, const meta_t ** meta)
 {
 	// Sanity check
 	{
@@ -1131,7 +1135,7 @@ bool model_findmeta(const model_t * model, const char * path, const meta_t ** me
 	return false;
 }
 
-bool model_findmodule(const model_t * model, model_script_t * script, const char * path, model_module_t ** module)
+bool model_modulelookup(const model_t * model, model_script_t * script, const char * path, model_module_t ** module)
 {
 	// Sanity check
 	{

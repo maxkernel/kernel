@@ -25,7 +25,7 @@ static bool config_updatecache(const meta_variable_t * variable, char * cachebac
 {
 	const char * name = NULL;
 	char sig = 0;
-	const void * value = NULL;
+	void * value = NULL;
 	meta_getvariable(variable, &name, &sig, NULL, &value);
 
 	if (value == NULL)
@@ -41,32 +41,32 @@ static bool config_updatecache(const meta_variable_t * variable, char * cachebac
 	{
 		case T_BOOLEAN:
 		{
-			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%s", (*(const bool *)value)? "true" : "false");
+			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%s", (*(bool *)value)? "true" : "false");
 			break;
 		}
 
 		case T_INTEGER:
 		{
 
-			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%d", *(const int *)value);
+			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%d", *(int *)value);
 			break;
 		}
 
 		case T_DOUBLE:
 		{
-			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%f", *(const double *)value);
+			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%f", *(double *)value);
 			break;
 		}
 
 		case T_CHAR:
 		{
-			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%c", *(const char *)value);
+			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%c", *(char *)value);
 			break;
 		}
 
 		case T_STRING:
 		{
-			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%s", *(const char **)value);
+			wrote = snprintf(cache, CONFIG_SIZE_CACHE, "%s", *(char **)value);
 			break;
 		}
 
@@ -92,7 +92,7 @@ static bool config_updatebacking(const meta_variable_t * variable, const char * 
 {
 	const char * name = NULL;
 	char sig = 0;
-	const void * value = NULL;
+	void * value = NULL;
 	meta_getvariable(variable, &name, &sig, NULL, &value);
 
 	exception_t * e = NULL;
@@ -169,8 +169,7 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config_variab
 
 	const char * name = NULL;
 	char sig = 0;
-	const void * value = NULL;
-	meta_getvariable(config_variable, &name, &sig, NULL, &value);
+	meta_getvariable(config_variable, &name, &sig, NULL, NULL);
 
 	char cache[CONFIG_SIZE_CACHE] = {0};
 	if (!config_updatecache(config_variable, cache, err))
@@ -179,13 +178,12 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config_variab
 		return NULL;
 	}
 
-	LOGK(LOG_DEBUG, "Registered config variable %s in module %s", name, path);
-
 	string_t objectname = string_new("%s -> %s", path, name);
 	config_t * config = kobj_new("Config", objectname.string, config_info, config_destroy, sizeof(config_t));
 	config->variable = config_variable;
 	strcpy(config->cache, cache);
 
+	LOGK(LOG_DEBUG, "Registered config variable %s in module %s", name, path);
 	return config;
 }
 
@@ -214,8 +212,7 @@ bool config_apply(config_t * config, const model_config_t * config_newvalue, exc
 
 	const char * name = NULL;
 	char sig = 0;
-	const void * value = NULL;
-	meta_getvariable(config->variable, &name, &sig, NULL, &value);
+	meta_getvariable(config->variable, &name, &sig, NULL, NULL);
 
 	const char * newname = NULL;
 	char newsig = 1;

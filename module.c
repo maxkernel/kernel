@@ -10,9 +10,9 @@
 
 
 extern list_t modules;
-extern list_t calentries;
-extern GHashTable * syscalls;
-extern module_t * kernel_module;
+//extern list_t calentries;
+//extern GHashTable * syscalls;
+//extern module_t * kernel_module;
 
 
 static char * module_info(void * object)
@@ -93,8 +93,7 @@ module_t * module_get(const char * name)
 }
 */
 
-// TODO - see if this const qualifier is needed
-const module_t * module_lookup(const char * name)
+module_t * module_lookup(const char * name)
 {
 	const char * prefix = path_resolve(name, P_MODULE);
 	if (prefix == NULL)

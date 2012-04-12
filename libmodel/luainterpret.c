@@ -99,7 +99,7 @@ static int l_loadmodule(lua_State * L)
 			return luaL_error(L, "loadmodule failed (meta): %s", (e == NULL)? "Unknown error!" : e->message);
 		}
 
-		model_module_t * module = model_module_new(env->model, env->script, meta, &e);
+		model_module_t * module = model_newmodule(env->model, env->script, meta, &e);
 		if (module == NULL || exception_check(&e))
 		{
 			return luaL_error(L, "loadmodule failed (module): %s", (e == NULL)? "Unknown error!" : e->message);
@@ -158,7 +158,7 @@ static int l_newblockinst(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_linkable_t * blockinst = model_blockinst_new(env->model, module, env->script, blockname, args, args_length, &e);
+	model_linkable_t * blockinst = model_newblockinst(env->model, module, env->script, blockname, args, args_length, &e);
 	if (blockinst == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "blockinst failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -194,7 +194,7 @@ static int l_route(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_link_t * link = model_link_new(env->model, env->script, (model_linkable_t *)out->head, out->name, (model_linkable_t *)in->head, in->name, &e);
+	model_link_t * link = model_newlink(env->model, env->script, (model_linkable_t *)out->head, out->name, (model_linkable_t *)in->head, in->name, &e);
 	if (link == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "link failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -237,7 +237,7 @@ static int l_newrategroup(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_linkable_t * rg = model_rategroup_new(env->model, env->script, name, rate_hz, blockinsts, index, &e);
+	model_linkable_t * rg = model_newrategroup(env->model, env->script, name, rate_hz, blockinsts, index, &e);
 	if (rg == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "rategroup failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -275,7 +275,7 @@ static int l_newsyscall(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_linkable_t * syscall = model_syscall_new(env->model, env->script, name, desc, &e);
+	model_linkable_t * syscall = model_newsyscall(env->model, env->script, name, desc, &e);
 	if (syscall == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "syscall failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -291,7 +291,7 @@ static int l_newsyscall(lua_State * L)
 	// Link the return value
 	if (retvalue != NULL)
 	{
-		model_link_t * link = model_link_new(env->model, env->script, (model_linkable_t *)retvalue->head, retvalue->name, syscall, "r", &e);
+		model_link_t * link = model_newlink(env->model, env->script, (model_linkable_t *)retvalue->head, retvalue->name, syscall, "r", &e);
 		if (link == NULL || exception_check(&e))
 		{
 			return luaL_error(L, "link(r) failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -314,7 +314,7 @@ static int l_newsyscall(lua_State * L)
 
 			string_t aname = string_new("a%d", index+1);
 
-			model_link_t * link = model_link_new(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
+			model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
 			if (link == NULL || exception_check(&e))
 			{
 				return luaL_error(L, "link(a%d) failed: %s", index+1, (e == NULL)? "Unknown error!" : e->message);
@@ -432,7 +432,7 @@ static int mt_entry_newindex(lua_State * L)
 		{
 			if (strcmp(entry->name, CONFIG_FLAG) == 0)
 			{
-				model_config_t * configparam = model_configparam_new(env->model, (model_module_t *)entry->head, key, value, &e);
+				model_config_t * configparam = model_newconfig(env->model, (model_module_t *)entry->head, key, value, &e);
 				if (configparam == NULL || exception_check(&e))
 				{
 					return luaL_error(L, "configparam failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -485,7 +485,7 @@ bool interpret_lua(model_t * model, const char * path, const interpret_callbacks
 		.path = path,
 		.cbs = cbs,
 		.model = model,
-		.script = model_script_new(model, path, err),
+		.script = model_newscript(model, path, err),
 	};
 
 	if (exception_check(err) || env.script == NULL)

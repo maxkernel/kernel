@@ -65,6 +65,8 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 	}
 
 	hashtable_put(&syscalls, syscall->name, &syscall->global_entry);
+
+	LOGK(LOG_DEBUG, "Registered syscall %s with sig %s", name, sig);
 	return syscall;
 }
 

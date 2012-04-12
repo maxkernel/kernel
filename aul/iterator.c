@@ -24,6 +24,11 @@ void iterator_init()
 	mutex_init(&iterators_mutex, M_RECURSIVE);
 }
 
+iterator_t iterator_none()
+{
+	return -1;
+}
+
 iterator_t iterator_new(const char * class, itrnext_f next_func, itrfree_f free_func, const void * object, void * itrobject)
 {
 	iterator_t itr = -1;

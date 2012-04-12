@@ -808,7 +808,7 @@ int main(int argc, char * argv[])
 
 		{
 			exception_t * e = NULL;
-			script = model_script_new(model, scriptpath, &e);
+			script = model_newscript(model, scriptpath, &e);
 
 			if (script == NULL || exception_check(&e))
 			{
@@ -931,7 +931,7 @@ int main(int argc, char * argv[])
 					return -1;
 				}
 
-				model_module_t * module = model_module_new(model, script, meta, &e);
+				model_module_t * module = model_newmodule(model, script, meta, &e);
 				if (module == NULL || exception_check(&e))
 				{
 					cfg_error(cfg, "Could not add module %s: %s", argv[i], (e == NULL)? "Unknown error" : e->message);
@@ -971,14 +971,14 @@ int main(int argc, char * argv[])
 			}
 
 			model_module_t * module = NULL;
-			if (!model_findmodule(model, script, path.string, &module))
+			if (!model_modulelookup(model, script, path.string, &module))
 			{
 				cfg_error(cfg, "Could not find module %s. Module not loaded?", modulename);
 				return -1;
 			}
 
 			exception_t * e = NULL;
-			model_config_t * param = model_configparam_new(model, module, name, value, &e);
+			model_config_t * param = model_newconfig(model, module, name, value, &e);
 			if (param == NULL || exception_check(&e))
 			{
 				cfg_error(cfg, "Could not set config %s=%s: %s", name, value, (e == NULL)? "Unknown error" : e->message);
@@ -1144,7 +1144,7 @@ int main(int argc, char * argv[])
 
 	// Now start building the kernel from the model_t
 	{
-		void * f_load_modules(void * udata, const model_t * model, const model_module_t * module)
+		void * f_load_modules(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script)
 		{
 			// TODO - handle circular dependencies, somehow... (IMPORTANT)
 			void load_module(const meta_t * meta)
@@ -1164,7 +1164,7 @@ int main(int argc, char * argv[])
 
 				// Handle dependencies
 				{
-					iterator_t ditr = meta_getdependencyitr(meta);
+					iterator_t ditr = meta_dependencyitr(meta);
 					{
 						const char * depname = NULL;
 						while (meta_dependencynext(ditr, &depname))
@@ -1185,7 +1185,7 @@ int main(int argc, char * argv[])
 							}
 
 							const meta_t * depmeta = NULL;
-							if (!model_findmeta(model, path.string, &depmeta))
+							if (!model_metalookup(model, path.string, &depmeta))
 							{
 								// Meta not in model, load it in manually
 								exception_t * e = NULL;
@@ -1205,7 +1205,7 @@ int main(int argc, char * argv[])
 
 								meta_destroy(parsemeta);
 
-								if (!model_findmeta(model, path.string, &depmeta))
+								if (!model_metalookup(model, path.string, &depmeta))
 								{
 									LOGK(LOG_FATAL, "Could not find meta just added to model!");
 									// Will exit
@@ -1231,19 +1231,44 @@ int main(int argc, char * argv[])
 				{
 					exception_t * e = NULL;
 
-					iterator_t citr = meta_getconfigitr(meta);
+					iterator_t citr = meta_configitr(meta);
 					const meta_variable_t * variable = NULL;
 					while (meta_confignext(citr, &variable))
 					{
 						config_t * config = config_new(meta, variable, &e);
 						if (config == NULL || exception_check(&e))
 						{
-							LOGK(LOG_FATAL, "Config failed: %s", (e == NULL)? "Unknown error" : e->message);
+							LOGK(LOG_FATAL, "Create config failed: %s", (e == NULL)? "Unknown error" : e->message);
 							// Will exit
 						}
 
 						list_add(&rmodule->configs, &config->module_list);
 					}
+					iterator_free(citr);
+				}
+
+				// Create the syscalls
+				{
+					exception_t * e = NULL;
+
+					iterator_t sitr = meta_syscallitr(meta);
+					const meta_callback_t * callback = NULL;
+					while(meta_syscallnext(sitr, &callback))
+					{
+						const char * name = NULL, * sig = NULL, * desc = NULL;
+						syscall_f func = NULL;
+						meta_getcallback(callback, &name, &sig, &desc, &func);
+
+						syscall_t * syscall = syscall_new(name, sig, func, desc, &e);
+						if (syscall == NULL || exception_check(&e))
+						{
+							LOGK(LOG_FATAL, "Create syscall failed: %s", (e == NULL)? "Unknown error" : e->message);
+							// Will exit
+						}
+
+						list_add(&rmodule->syscalls, &syscall->module_list);
+					}
+					iterator_free(sitr);
 				}
 			}
 
@@ -1263,7 +1288,65 @@ int main(int argc, char * argv[])
 			.modules = f_load_modules,
 		};
 
+		LOGK(LOG_DEBUG, "Loading modules...");
 		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_load);
+
+
+		void * f_buildmod_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
+		{
+			const meta_t * meta = NULL;
+			model_getmeta(module, &meta);
+
+			const char * path = NULL;
+			meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
+
+			const char * name = NULL;
+			model_getconfig(config, &name, NULL, NULL, NULL);
+
+			module_t * mod = module_lookup(path);
+			if (mod == NULL)
+			{
+				LOGK(LOG_FATAL, "Could not apply config %s to module %s, module doesn't exist!", name, path);
+				// Will exit
+			}
+
+			list_t * pos = NULL;
+			config_t * modconfig = NULL;
+			list_foreach(pos, &mod->configs)
+			{
+				config_t * test = list_entry(pos, config_t, module_list);
+				const char * testname = NULL;
+				meta_getvariable(test->variable, &testname, NULL, NULL, NULL);
+
+				if (strcmp(name, testname) == 0)
+				{
+					modconfig = test;
+					break;
+				}
+			}
+
+			if (modconfig == NULL)
+			{
+				LOGK(LOG_FATAL, "Could not apply config %s to module %s, config item doesn't exist!", name, path);
+				// Will exit
+			}
+
+			exception_t * e = NULL;
+			if (!config_apply(modconfig, config, &e))
+			{
+				LOGK(LOG_FATAL, "Could not apply config %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+				// Will exit
+			}
+
+			return udata;
+		}
+
+		model_analysis_t f_buildmod = {
+			.configs = f_buildmod_configs,
+		};
+
+		LOGK(LOG_DEBUG, "Building modules...");
+		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_buildmod);
 	}
 
 

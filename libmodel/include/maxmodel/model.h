@@ -54,7 +54,7 @@ enum   __modeltraversal_t;
 
 typedef uint32_t mid_t;
 typedef bool (*model_destroy_f)(struct __model_t * model, struct __modelhead_t * self, struct __modelhead_t * target);
-typedef void (*model_analyse_f)(const struct __model_t * model, enum __modeltraversal_t traversal, const struct __model_analysis_t * cbs, void * object);
+//typedef void (*model_analyse_f)(const struct __model_t * model, enum __modeltraversal_t traversal, const struct __model_analysis_t * cbs, void * object);
 
 typedef enum
 {
@@ -85,7 +85,7 @@ typedef struct __modelhead_t
 	modeltype_t type;
 
 	model_destroy_f destroy;
-	model_analyse_f analyse;
+	//model_analyse_f analyse;
 	void * userdata;
 } modelhead_t;
 
@@ -178,11 +178,11 @@ typedef struct __model_t
 typedef struct __model_analysis_t
 {
 	void * (*scripts)(void * udata, const model_t * model, const model_script_t * script);
-	void * (*modules)(void * udata, const model_t * model, const model_module_t * module);
-	void * (*configs)(void * udata, const model_t * model, const model_config_t * config);
+	void * (*modules)(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script);
+	void * (*configs)(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module);
 	void * (*linkables)(void * udata, const model_t * model, const model_linkable_t * linkable);
 	void * (*blockinsts)(void * udata, const model_t * model, const model_linkable_t * blockinst);
-	void * (*syscalls)(void * udata, const model_t * model, const model_linkable_t * syscall);
+	void * (*syscalls)(void * udata, const model_t * model, const model_linkable_t * syscall, const model_script_t * script);
 	void * (*rategroups)(void * udata, const model_t * model, const model_linkable_t * rategroup);
 	void * (*links)(void * udata, const model_t * model, const model_link_t * link);
 } model_analysis_t;
@@ -198,25 +198,23 @@ void model_clearalluserdata(model_t * model);
 void model_destroy(model_t * model);
 void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err);
 
-string_t model_getconstraint(const char * desc);
-const char * model_getpastconstraint(const char * desc);
 string_t model_getbase(const char * ioname);
 string_t model_getsubscript(const char * ioname);
 
-model_script_t * model_script_new(model_t * model, const char * path, exception_t ** err);
-model_module_t * model_module_new(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);
-model_config_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
-model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err);
-model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script, const char * name, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err);
-model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err);
-model_link_t * model_link_new(model_t * model, model_script_t * script, model_linkable_t * outinst, const char * outname, model_linkable_t * ininst, const char * inname, exception_t ** err);
+model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err);
+model_module_t * model_newmodule(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);
+model_config_t * model_newconfig(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
+model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err);
+model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, const char * name, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err);
+model_linkable_t * model_newsyscall(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err);
+model_link_t * model_newlink(model_t * model, model_script_t * script, model_linkable_t * outinst, const char * outname, model_linkable_t * ininst, const char * inname, exception_t ** err);
 
 void model_analyse(model_t * model, modeltraversal_t traversal, const model_analysis_t * funcs);
 
 bool model_getmeta(const model_module_t * module, const meta_t ** meta);
 
-bool model_findmeta(const model_t * model, const char * path, const meta_t ** meta);
-bool model_findmodule(const model_t * model, model_script_t * script, const char * path, model_module_t ** module);
+bool model_metalookup(const model_t * model, const char * path, const meta_t ** meta);
+bool model_modulelookup(const model_t * model, model_script_t * script, const char * path, model_module_t ** module);
 
 void model_getconfig(const model_config_t * config, const char ** name, char * sig, constraint_t * constraints, const char ** value);
 

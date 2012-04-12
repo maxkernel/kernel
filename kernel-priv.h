@@ -390,7 +390,7 @@ typedef enum
 } moduleact_t;
 //meta_t * meta_parse(const char * path);
 //module_t * module_get(const char * name);
-const module_t * module_lookup(const char * name);
+module_t * module_lookup(const char * name);
 const block_t * module_getblock(const module_t * module, const char * blockname);
 //const blockinst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);

@@ -649,13 +649,23 @@ bool meta_getblockios(const meta_t * meta, const char * blockname, char const **
 	return true;
 }
 
-iterator_t meta_getdependencyitr(const meta_t * meta)
+iterator_t meta_dependencyitr(const meta_t * meta)
 {
+	// Sanity check
+	{
+		if (meta == NULL)
+		{
+			return iterator_none();
+		}
+	}
+
 	const void * ditr_next(const void * object, void ** itrobject)
 	{
 		const meta_t * meta = object;
 		meta_dependency_t ** dep = (meta_dependency_t **)*itrobject;
 		*itrobject = (*dep == NULL)? (void *)&meta->dependencies[0] : (void *)&dep[1];
+
+		// TODO - (IMPORTANT) boundry conditions (prevent overrunning dependencies array!)
 
 		return *dep;
 	}
@@ -675,33 +685,7 @@ bool meta_dependencynext(iterator_t itr, const char ** dependency)
 	return false;
 }
 
-iterator_t meta_getconfigitr(const meta_t * meta)
-{
-	const void * citr_next(const void * object, void ** itrobject)
-	{
-		const meta_t * meta = object;
-		meta_variable_t ** cfg = (meta_variable_t **)*itrobject;
-		*itrobject = (*cfg == NULL)? (void *)&meta->configs[0] : (void *)&cfg[1];
-
-		return *cfg;
-	}
-
-	return iterator_new("meta_config", citr_next, NULL, meta, (void *)&meta->configs[0]);
-}
-
-bool meta_confignext(iterator_t itr, const meta_variable_t ** variable)
-{
-	const meta_variable_t * nextconfig = iterator_next(itr, "meta_config");
-	if (nextconfig != NULL)
-	{
-		if (variable != NULL)		*variable = nextconfig;
-		return true;
-	}
-
-	return false;
-}
-
-bool meta_findconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config)
+bool meta_lookupconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config)
 {
 	// Sanity check
 	{
@@ -729,8 +713,107 @@ bool meta_findconfig(const meta_t * meta, const char * configname, const meta_va
 	return false;
 }
 
+iterator_t meta_configitr(const meta_t * meta)
+{
+	// Sanity check
+	{
+		if (meta == NULL)
+		{
+			return iterator_none();
+		}
+	}
 
-void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, const void ** value)
+	const void * citr_next(const void * object, void ** itrobject)
+	{
+		const meta_t * meta = object;
+		meta_variable_t ** cfg = (meta_variable_t **)*itrobject;
+		*itrobject = (*cfg == NULL)? (void *)&meta->configs[0] : (void *)&cfg[1];
+
+		// TODO - (IMPORTANT) boundary conditions (prevent overrunning configs array!)
+
+		return *cfg;
+	}
+
+	return iterator_new("meta_config", citr_next, NULL, meta, (void *)&meta->configs[0]);
+}
+
+bool meta_confignext(iterator_t itr, const meta_variable_t ** variable)
+{
+	const meta_variable_t * nextconfig = iterator_next(itr, "meta_config");
+	if (nextconfig != NULL)
+	{
+		if (variable != NULL)		*variable = nextconfig;
+		return true;
+	}
+
+	return false;
+}
+
+bool meta_lookupsyscall(const meta_t * meta, const char * syscallname, const meta_callback_t ** syscall)
+{
+	// Sanity check
+	{
+		if (meta == NULL || syscallname == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(syscallname) >= META_SIZE_FUNCTION)
+		{
+			return false;
+		}
+	}
+
+	meta_callback_t * callback = NULL;
+	meta_foreach(callback, meta->syscalls, META_MAX_SYSCALLS)
+	{
+		if (strcmp(callback->callback.function_name, syscallname) == 0)
+		{
+			if (syscall != NULL)	*syscall = callback;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+iterator_t meta_syscallitr(const meta_t * meta)
+{
+	// Sanity check
+	{
+		if (meta == NULL)
+		{
+			return iterator_none();
+		}
+	}
+
+	const void * sitr_next(const void * object, void ** itrobject)
+	{
+		const meta_t * meta = object;
+		meta_callback_t ** sys = (meta_callback_t **)*itrobject;
+		*itrobject = (*sys == NULL)? (void *)&meta->syscalls[0] : (void *)&sys[1];
+
+		// TODO - (IMPORTANT) boundary conditions (prevent overrunning syscalls array!)
+
+		return *sys;
+	}
+
+	return iterator_new("meta_syscall", sitr_next, NULL, meta, (void *)&meta->syscalls[0]);
+}
+
+bool meta_syscallnext(iterator_t itr, const meta_callback_t ** callback)
+{
+	const meta_callback_t * nextsyscall = iterator_next(itr, "meta_syscall");
+	if (nextsyscall != NULL)
+	{
+		if (callback != NULL)	*callback = nextsyscall;
+		return true;
+	}
+
+	return false;
+}
+
+void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value)
 {
 	// Sanity check
 	{
@@ -744,4 +827,20 @@ void meta_getvariable(const meta_variable_t * variable, const char ** name, char
 	if (sig != NULL)		*sig = variable->variable_signature;
 	if (desc != NULL)		*desc = variable->variable_description;
 	if (value != NULL)		*value = variable->variable;
+}
+
+void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * value)
+{
+	// Sanity check
+	{
+		if (callback == NULL)
+		{
+			return;
+		}
+	}
+
+	if (name != NULL)		*name = callback->callback.function_name;
+	if (sig != NULL)		*sig = callback->callback.function_signature;
+	if (desc != NULL)		*desc = callback->callback.function_description;
+	if (value != NULL)		*value = callback->function;
 }
