@@ -35,7 +35,7 @@ void print_meta(meta_t * m)
 	}
 
 	meta_variable_t * config_param = NULL;
-	meta_foreach(config_param, m->config_params, META_MAX_CONFIGPARAMS)
+	meta_foreach(config_param, m->config_params, META_MAX_CONFIGS)
 	{
 		printf("-- Config Param: %s (%c) %s -> %zx\n", config_param->variable_name, config_param->variable_signature, config_param->variable_description, (size_t)config_param->variable);
 	}
@@ -136,7 +136,7 @@ int main()
 		return NULL;
 	}
 
-	void * cbs_configs(void * udata, const model_configparam_t * configparam)
+	void * cbs_configs(void * udata, const model_config_t * configparam)
 	{
 		printf("Config param: %s (%c) = %s\n", configparam->name, configparam->sig, configparam->value);
 		return NULL;

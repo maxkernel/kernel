@@ -36,20 +36,20 @@ static void * model_malloc(model_t * model, modeltype_t type, model_destroy_f de
 {
 	// Sanity check
 	{
-		if (UNLIKELY(model == NULL || size < sizeof(modelhead_t)))
+		if (unlikely(model == NULL || size < sizeof(modelhead_t)))
 		{
 			return NULL;
 		}
 	}
 
-	if (UNLIKELY(model->numids >= MODEL_MAX_IDS))
+	if (unlikely(model->numids >= MODEL_MAX_IDS))
 	{
 		// No memory for new ID
 		return NULL;
 	}
 
 	modelhead_t * head = malloc(size);
-	if (LIKELY(head != NULL))
+	if (likely(head != NULL))
 	{
 		model->malloc_size += size;
 
@@ -121,7 +121,7 @@ static bool model_module_destroy(model_t * model, modelhead_t * self, modelhead_
 	model_module_t * module = (model_module_t *)self;
 	bool isself = (target == NULL)? true : self->id == target->id;
 
-	model_array_handlefree(module->configparams, MODEL_MAX_CONFIGPARAMS);
+	model_array_handlefree(module->configs, MODEL_MAX_CONFIGS);
 
 	return isself;
 }
@@ -226,7 +226,7 @@ static void model_module_analyse(const model_t * model, modeltraversal_t travers
 		case traversal_scripts_modules_configs_linkables_links:
 		{
 			model_handlecallback(cbs->modules, model, module);
-			traverse(model, traversal, cbs, (void **)module->configparams, MODEL_MAX_CONFIGPARAMS);
+			traverse(model, traversal, cbs, (void **)module->configs, MODEL_MAX_CONFIGS);
 			break;
 		}
 
@@ -236,7 +236,7 @@ static void model_module_analyse(const model_t * model, modeltraversal_t travers
 
 static void model_configparam_analyse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void * object)
 {
-	model_configparam_t * configparam = object;
+	model_config_t * configparam = object;
 
 	switch (traversal)
 	{
@@ -573,7 +573,7 @@ model_module_t * model_module_new(model_t * model, model_script_t * script, meta
 	return module;
 }
 
-model_configparam_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
+model_config_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -594,6 +594,12 @@ model_configparam_t * model_configparam_new(model_t * model, model_module_t * mo
 			return NULL;
 		}
 
+		if (strlen(value) >= MODEL_SIZE_VALUE)
+		{
+			exception_set(err, ENOMEM, "Config value is too long! (MODEL_SIZE_VALUE = %d)", MODEL_SIZE_VALUE);
+			return NULL;
+		}
+
 		if (module->backing == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
@@ -604,23 +610,26 @@ model_configparam_t * model_configparam_new(model_t * model, model_module_t * mo
 	const char * path = NULL;
 	meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
 
-	char sig;
-	const char * desc;
-	if (!meta_getconfigparam(module->backing, configname, &sig, &desc))
+	const meta_variable_t * variable = NULL;
+	if (!meta_findconfig(module->backing, configname, &variable))
 	{
 		exception_set(err, EINVAL, "Module %s does not have config param %s", path, configname);
 		return NULL;
 	}
 
+	char sig = 0;
+	const char * desc = NULL;
+	meta_getvariable(variable, NULL, &sig, &desc, NULL);
+
 	// Allocate script memory and add it to model
-	model_configparam_t ** mem = nextfree(model_configparam_t, module->configparams, MODEL_MAX_CONFIGPARAMS);
+	model_config_t ** mem = nextfree(model_config_t, module->configs, MODEL_MAX_CONFIGS);
 	if (mem == NULL)
 	{
-		exception_set(err, ENOMEM, "Out of comfig param memory! (MODEL_MAX_CONFIGPARAMS = %d)", MODEL_MAX_CONFIGPARAMS);
+		exception_set(err, ENOMEM, "Out of comfig param memory! (MODEL_MAX_CONFIGPARAMS = %d)", MODEL_MAX_CONFIGS);
 		return false;
 	}
 
-	model_configparam_t * configparam = *mem = model_malloc(model, model_configparam, model_configparam_destroy, model_configparam_analyse, sizeof(model_configparam_t) + strlen(value) + 1);
+	model_config_t * configparam = *mem = model_malloc(model, model_config, model_configparam_destroy, model_configparam_analyse, sizeof(model_config_t) + strlen(value) + 1);
 	if (configparam == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of heap memory!");
@@ -1102,21 +1111,68 @@ bool model_findmeta(const model_t * model, const char * path, const meta_t ** me
 		}
 	}
 
-	if (meta != NULL)
+	meta_t * testmeta = NULL;
+	model_foreach(testmeta, model->backings, MODEL_MAX_BACKINGS)
 	{
-		meta_t * testmeta = NULL;
-		model_foreach(testmeta, model->backings, MODEL_MAX_BACKINGS)
-		{
-			const char * testpath = NULL;
-			meta_getinfo(testmeta, &testpath, NULL, NULL, NULL, NULL);
+		const char * testpath = NULL;
+		meta_getinfo(testmeta, &testpath, NULL, NULL, NULL, NULL);
 
-			if (strcmp(path, testpath) == 0)
+		if (strcmp(path, testpath) == 0)
+		{
+			if (meta != NULL)
 			{
 				*meta = testmeta;
-				return true;
 			}
+
+			return true;
 		}
 	}
 
 	return false;
+}
+
+bool model_findmodule(const model_t * model, model_script_t * script, const char * path, model_module_t ** module)
+{
+	// Sanity check
+	{
+		if (model == NULL || script == NULL || path == NULL)
+		{
+			return false;
+		}
+	}
+
+	model_module_t * test = NULL;
+	model_foreach(test, script->modules, MODEL_MAX_MODULES)
+	{
+		const char * testpath = NULL;
+		meta_getinfo(test->backing, &testpath, NULL, NULL, NULL, NULL);
+
+		if (strcmp(path, testpath) == 0)
+		{
+			if (module != NULL)
+			{
+				*module = test;
+			}
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void model_getconfig(const model_config_t * config, const char ** name, char * sig, constraint_t * constraints, const char ** value)
+{
+	// Sanity check
+	{
+		if (config == NULL)
+		{
+			return;
+		}
+	}
+
+	if (name != NULL)			*name = config->name;
+	if (sig != NULL)			*sig = config->sig;
+	if (constraints != NULL)	*constraints = config->constraints;
+	if (value != NULL)			*value = config->value;
 }

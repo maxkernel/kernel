@@ -135,7 +135,7 @@ module_description("Connects to the SSC-32 Servo Controller");
 module_oninitialize(ssc32_init);
 module_ondestroy(ssc32_destroy);
 
-config_param(	serial_port, 	's', 	"The serial port to connect to (eg. /dev/ttyUSB0)");
+module_config(	serial_port, 	's', 	"The serial port to connect to (eg. /dev/ttyUSB0)");
 
 block_input(	static, 	pwm0, 		'i', 	"Channel 0 PWM");
 block_input(	static, 	pwm1, 		'i', 	"Channel 1 PWM");

@@ -20,8 +20,8 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 	memset(buf, 0, sizeof(buf));
 
 	struct sockaddr_in remote;
-	socklen_t remote_len = sizeof(remote);
-	ZERO(remote);
+	memset(&remote, 0, sizeof(struct sockaddr_in));
+	socklen_t remote_len = sizeof(struct sockaddr_in);
 
 	ssize_t bytesread = recvfrom(fd, buf, PACKET_LEN-1, 0, (struct sockaddr *)&remote, &remote_len);
 	if (bytesread > 0)
@@ -71,4 +71,4 @@ module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides discovery/auto-discovery of rovers on the network.");
 module_oninitialize(module_init);
 
-config_param(enable_discovery, 'b', "Enables other computers to auto-discover this robot automatically (setting to false hides robot on network)");
+module_config(enable_discovery, 'b', "Enables other computers to auto-discover this robot automatically (setting to false hides robot on network)");

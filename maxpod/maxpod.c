@@ -221,7 +221,7 @@ module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Driver for MaxPOD (Forth) IO Board.");
 module_oninitialize(maxpod_init);
 
-config_param(serial_port, 's', "The serial port to connect to (eg /dev/ttyS0)");
+module_config(serial_port, 's', "The serial port to connect to (eg /dev/ttyS0)");
 
 block_input(	static, 	pwm0, 	'i', 	"Channel 0 PWM");
 block_input(	static, 	pwm1, 	'i', 	"Channel 1 PWM");

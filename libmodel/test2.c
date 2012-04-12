@@ -71,7 +71,7 @@ module_onpostactivate(mod_postact);
 
 define_syscall(new_syscall, "i:sc", "The syscall description");
 
-config_param(cfg_param, 'i', "Config param desc");
+module_config(cfg_param, 'i', "Config param desc");
 
 cal_param(cal_param, 'i', "Cal param desc");
 cal_onmodechange(cal_modechange);
@@ -133,7 +133,7 @@ int main2()
 	printf("Config params: %d\n", m->configparams_length);
 	for (size_t i = 0; i < m->configparams_length; i++)
 	{
-		printf("(%zu) Config param: %s (%c) %s -> %zx, %zx\n", i, m->configparams[i].config_name, m->configparams[i].config_signature, m->configparams[i].config_description, (size_t)m->configparams[i].variable, (size_t)&cfg_param);
+		printf("(%zu) Config param: %s (%c) %s -> %zx, %zx\n", i, m->configs[i].config_name, m->configs[i].config_signature, m->configs[i].config_description, (size_t)m->configs[i].variable, (size_t)&cfg_param);
 	}
 
 	printf("Cal modechange: %s -> %zx\n", m->cal_modechange_name, (size_t)m->cal_modechange);

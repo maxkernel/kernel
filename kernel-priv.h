@@ -27,7 +27,8 @@ extern "C" {
 #endif
 
 
-#define CAL_SIZE_CACHE		AUL_STRING_MAXLEN
+#define CAL_SIZE_CACHE			AUL_STRING_MAXLEN
+#define CONFIG_SIZE_CACHE		MODEL_SIZE_VALUE
 
 // TODO - make these typedefs!
 struct __block_t;
@@ -92,8 +93,8 @@ typedef struct
 	//blind_f destroy;			//the destroy function to call when exiting
 	list_t syscalls;			//a list of syscall_t syscalls
 	//list_t dependencies;		//a list of dependency_t dependency objects
-	list_t cfgentries;			//a list of cfgentry_t config entries
-	list_t calentries;			//a list of calentry_t calibration entries (name -> calentry_t)
+	list_t configs;				//a list of config_t config entries
+	//list_t calentries;			//a list of calentry_t calibration entries (name -> calentry_t)
 	//calibration_f calupdate;	//the function to call when the calibration has been updated
 	//calibration_f calpreview;	//the function to call when a calibration item should be previewed
 	list_t blocks;				//a list of all blocks defined in this module
@@ -155,15 +156,12 @@ typedef struct
 } syscallblock_t;
 
 typedef struct {
+	kobject_t kobject;
+
 	list_t module_list;
-
-	char * name;
-	char * desc;
-	char type;
-
-	variable_t variable;
-	module_t * module;
-} cfgentry_t;
+	const meta_variable_t * variable;
+	char cache[CONFIG_SIZE_CACHE];
+} config_t;
 
 /*
 typedef struct {
@@ -375,7 +373,7 @@ typedef struct __kthread_t
 
 typedef struct
 {
-	const char * desc;
+	char * desc;
 	kthread_t * thread;
 	kthread_dotask_f task_func;
 	list_t list;
@@ -461,8 +459,8 @@ boutput_inst_t * io_getboutput(const blockinst_t * blockinst, const char * name)
 void io_newcomplete(blockinst_t * inst);
 bool io_route(boutput_inst_t * out, binput_inst_t * in);
 
-const cfgentry_t * cfg_getparam(const char * path, const char * cfgname);
-void cfg_setparam(const char * path, const char * cfgname, const char * value);
+config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err);
+bool config_apply(config_t * config, const model_config_t * config_newvalue, exception_t ** err);
 
 void cal_init();
 void cal_sort();

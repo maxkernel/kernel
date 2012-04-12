@@ -112,7 +112,7 @@ syscall_t * max_syscallcache_lookup(maxhandle_t * hand, exception_t ** err, cons
 		}
 
 
-		PZERO(syscall, sizeof(syscall_t));
+		memset(syscall, 0, sizeof(syscall_t));
 		strncpy(syscall->name, name, SYSCALL_CACHE_NAMELEN - 1);
 		strncpy(syscall->sig, r.data.t_string, SYSCALL_CACHE_SIGLEN);
 		syscall->last_access = time(NULL);

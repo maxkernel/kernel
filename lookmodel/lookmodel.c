@@ -7,11 +7,10 @@
 
 
 // Default calibration settings
-int pan_min		= 5000,		pan_forward		= 8000,		pan_backward	= 6000,			pan_max		= 9000;
-int tilt_min	= 5000,		tilt_center		= 7000,		tilt_max		= 9000;
+int pan_min		= 1500,		pan_forward		= 1800,		pan_backward	= 1600,			pan_max		= 1900;
+int tilt_min	= 1400,		tilt_center		= 1500,		tilt_max		= 1700;
 
 
-static bool mode_calibration = false;
 static int pwm_pan = 0, pwm_tilt = 0;
 static map_t * map_pan = NULL, * map_tilt = NULL;
 
@@ -32,39 +31,27 @@ static void setmaps()
 	}
 }
 
-void model_updatecal(const char * name, const char type, void * newvalue, void * target)
+static void model_calpreview(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length)
 {
-	if (type != T_INTEGER)
+	if		(strprefix(name, "pan"))		pwm_pan		= *(int *)backing;
+	else if	(strprefix(name, "tilt"))		pwm_tilt	= *(int *)backing;
+}
+
+static void model_calmodechange(void * object, calmode_t mode, calstatus_t status)
+{
+	if (mode == calmode_runtime)
 	{
-		LOG(LOG_WARN, "Unknown calibration entry: %s", name);
-		return;
+		// Just completed calibration, reset the maps
+		setmaps();
 	}
-
-	memcpy(target, newvalue, sizeof(int));
-	setmaps();
-
-	mode_calibration = false;
-}
-
-void model_calpreview(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length)
-{
-	/*
-	mode_calibration = true;
-
-	if		(strprefix(name, "pan"))		pwm_pan		= *(int *)newvalue;
-	else if	(strprefix(name, "tilt"))		pwm_tilt	= *(int *)newvalue;
-	*/
-}
-
-void model_calmodechange(void * object, calmode_t mode, calstatus_t status)
-{
-
 }
 
 void model_update(void * obj)
 {
-	if (mode_calibration == false)
+	if (cal_getmode() == calmode_runtime)
 	{
+		// Not in calibration mode, read inputs and apply maps
+
 		const double * value_pan = INPUT(pan);
 		const double * value_tilt = INPUT(tilt);
 
@@ -78,7 +65,7 @@ void model_update(void * obj)
 		}
 
 		if (value_tilt != NULL)
-			pwm_tilt = (int)map_tovalue(map_tilt, CLAMP(*value_tilt, -M_PI/4.0, M_PI/2.0));
+			pwm_tilt = (int)map_tovalue(map_tilt, clamp(*value_tilt, -M_PI/4.0, M_PI/2.0));
 	}
 
 	OUTPUT(pan_pwm, &pwm_pan);

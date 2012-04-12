@@ -104,7 +104,6 @@ static block_t * getblk(list_t * list, char * name)
 	list_t * pos;
 	block_t * blk;
 
-
 	list_foreach(pos, list)
 	{
 		blk = list_entry(pos, block_t, module_list);

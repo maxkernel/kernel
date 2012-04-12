@@ -27,6 +27,7 @@ typedef struct
 } constraint_t;
 
 
+constraint_t constraint_empty();
 constraint_t constraint_new(const char * constraint, exception_t ** err);
 bool constraint_check(const constraint_t * constraint, const char * value, char * hint, size_t hint_length);
 bool constraint_getstep(const constraint_t * constraint, double * step);

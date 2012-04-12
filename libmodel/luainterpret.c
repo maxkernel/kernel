@@ -432,7 +432,7 @@ static int mt_entry_newindex(lua_State * L)
 		{
 			if (strcmp(entry->name, CONFIG_FLAG) == 0)
 			{
-				model_configparam_t * configparam = model_configparam_new(env->model, (model_module_t *)entry->head, key, value, &e);
+				model_config_t * configparam = model_configparam_new(env->model, (model_module_t *)entry->head, key, value, &e);
 				if (configparam == NULL || exception_check(&e))
 				{
 					return luaL_error(L, "configparam failed: %s", (e == NULL)? "Unknown error!" : e->message);

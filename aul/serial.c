@@ -27,8 +27,7 @@ void serial_flush(int fd)
 bool serial_setattr(int fd, speed_t speed)
 {
 	struct termios tp;
-	ZERO(tp);
-
+	memset(&tp, 0, sizeof(struct termios));
 	tp.c_iflag = IGNBRK|IGNPAR;
 	tp.c_oflag = 0;
 	tp.c_cflag = CS8|CREAD|CLOCAL;

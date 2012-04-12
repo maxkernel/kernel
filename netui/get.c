@@ -5,7 +5,7 @@
 #include <httpserver.h>
 
 
-static void get_calibration_mode(http_connection * conn, http_context * ctx)
+static void get_calibration_mode(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: application/json\r\n");
@@ -26,7 +26,7 @@ static void get_calibration_mode(http_connection * conn, http_context * ctx)
 	http_printf(conn, "OK\n%s", mode);
 }
 
-static void get_calibration(http_connection * conn, http_context * ctx)
+static void get_calibration(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: application/json\r\n");
@@ -51,7 +51,7 @@ static void get_calibration(http_connection * conn, http_context * ctx)
 }
 
 
-void handle_get(http_connection * conn, http_context * ctx, const char * uri)
+void handle_get(httpconnection_t * conn, httpcontext_t * ctx, const char * uri)
 {
 	if (strsuffix(uri, "/calibration/mode"))
 	{

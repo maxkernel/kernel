@@ -28,7 +28,7 @@ static cond_t barrier;
 
 void send_init()
 {
-	ZERO(packets);
+	memset(packets, 0, sizeof(packetbuf_t) * SERVICE_PACKETS_MAX);
 
 	mutex_init(&listlock, M_RECURSIVE);
 	cond_init(&barrier);
@@ -117,7 +117,7 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 			packet->data.header.frag_num = fragnum++;
 			packet->data.header.timestamp = timestamp_us;
 
-			size_t payloadsize = MIN(length - index, SERVICE_FRAGSIZE);
+			size_t payloadsize = min(length - index, SERVICE_FRAGSIZE);
 			buffer_read(buffer, packet->data.packet.payload, index, payloadsize);
 			packet->size = payloadsize + HEADER_LENGTH;
 			index += payloadsize;

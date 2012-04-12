@@ -12,6 +12,7 @@ typedef struct __list_t
 typedef int (*list_compare_f)(list_t * a, list_t * b);
 
 
+// TODO - make this lower case
 #define LIST_INIT(ptr) \
 	({ (ptr)->next = (ptr); (ptr)->prev = (ptr); })
 
@@ -204,7 +205,7 @@ static inline void list_sort(list_t * head, list_compare_f cmp)
 	size_t i, j;
 	size_t len = list_size(head);
 
-	if (UNLIKELY(list_size(head) <= 1))
+	if (unlikely(list_size(head) <= 1))
 	{
 		return;
 	}

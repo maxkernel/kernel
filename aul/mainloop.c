@@ -100,7 +100,7 @@ void mainloop_init()
 
 void mainloop_new(const char * name, mainloop_t * loop)
 {
-	PZERO(loop, sizeof(mainloop_t));
+	memset(loop, 0, sizeof(mainloop_t));
 
 	loop->name = name;
 	loop->epollfd = epoll_create(AUL_MAINLOOP_SIZE_HINT);
@@ -130,7 +130,7 @@ void mainloop_run(mainloop_t * loop)
 	do
 	{
 
-		if (UNLIKELY( !haswatchers ))
+		if (unlikely( !haswatchers ))
 		{
 			// We are not watching any descriptors, just sleep
 			usleep(AUL_MAINLOOP_TIMEOUT_MS * 1000);
@@ -213,7 +213,7 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	}
 
 	// Initialize it and add it to the loops hashtable
-	PZERO(watcher, sizeof(watcher_t));
+	memset(watcher, 0, sizeof(watcher_t));
 	watcher->fd = fd;
 	watcher->function = listener;
 	watcher->userdata = userdata;
@@ -226,7 +226,7 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 
 	// Add it to epoll
 	struct epoll_event event;
-	ZERO(event);
+	memset(&event, 0, sizeof(struct epoll_event));
 	event.events = cond;
 	event.data.ptr = watcher;
 
@@ -259,7 +259,7 @@ void mainloop_addtimer(mainloop_t * loop, const char * name, uint64_t nanosecond
 	}
 
 	// Put data into timerwatcher_t structure
-	PZERO(timerwatcher, sizeof(timerwatcher_t));
+	memset(timerwatcher, 0, sizeof(timerwatcher_t));
 	timerwatcher->name = name;
 	timerwatcher->nanoseconds = nanoseconds;
 	timerwatcher->function = listener;
@@ -328,7 +328,7 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 	}
 
 	struct epoll_event event;
-	ZERO(event);
+	memset(&event, 0, sizeof(struct epoll_event));
 	event.events = cond;
 
 	// Remove the watcher from epoll

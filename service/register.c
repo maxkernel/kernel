@@ -29,9 +29,9 @@ static void service_free(void * object)
 	}
 	mutex_unlock(&service_lock);
 
-	FREES(s->name);
-	FREES(s->format);
-	FREES(s->desc);
+	if (s->name != NULL)	free(s->name);
+	if (s->format != NULL)	free(s->format);
+	if (s->desc != NULL)	free(s->desc);
 }
 
 

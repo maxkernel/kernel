@@ -45,9 +45,10 @@ static inline uint64_t hz2nanos(double freq_hz)
 static inline struct timespec nanos2timespec(uint64_t nanos)
 {
 	struct timespec tm;
-	ZERO(tm);
+	memset(&tm, 0, sizeof(struct timespec));
 	tm.tv_nsec = nanos % NANO_PER_SEC;
 	tm.tv_sec = nanos / NANO_PER_SEC;
+
 	return tm;
 }
 

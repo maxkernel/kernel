@@ -196,8 +196,8 @@ module_t * module_load(meta_t * meta)
 	module_t * module = kobj_new("Module", name, module_info, module_destroy, sizeof(module_t));
 	module->backing = meta;
 	LIST_INIT(&module->syscalls);
-	LIST_INIT(&module->cfgentries);
-	LIST_INIT(&module->calentries);
+	LIST_INIT(&module->configs);
+	//LIST_INIT(&module->calentries);
 	LIST_INIT(&module->blocks);
 	LIST_INIT(&module->blockinsts);
 

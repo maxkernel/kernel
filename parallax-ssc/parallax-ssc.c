@@ -266,8 +266,8 @@ module_description("Communicates to the Propeller Servo Controller USB");
 module_oninitialize(psc_init);
 module_ondestroy(psc_destroy);
 
-config_param(serial_port,	's',		"The serial port to connect to (eg. /dev/ttyUSB0)");
-config_param(servo_ramp,	'i',		"The ramp speed of the servos");
+module_config(serial_port,	's',		"The serial port to connect to (eg. /dev/ttyUSB0)");
+module_config(servo_ramp,	'i',		"The ramp speed of the servos");
 
 block_input(	static, 	pwm0, 		'i', 	"Channel 0 PWM");
 block_input(	static, 	pwm1, 		'i', 	"Channel 1 PWM");

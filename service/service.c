@@ -101,7 +101,7 @@ void * service_newstream(void * array, protocol_t protocol, psend_f send, pdestr
 
 			if (!item->inuse)
 			{
-				PZERO(item, size);
+				memset(item, 0, size);
 				item->inuse = true;
 				item->protocol = protocol;
 				item->send = send;
@@ -150,7 +150,7 @@ client_t * service_getclient(char * client_handle)
 		{
 			if (!clients[i].inuse)
 			{
-				ZERO(clients[i]);
+				memset(&clients[i], 0, sizeof(client_t));
 				clients[i].timeout_us = kernel_timestamp();
 				clients[i].inuse = true;
 				client = &clients[i];
@@ -237,7 +237,7 @@ const char * service_getstreamconfig()
 
 void module_preactivate()
 {
-	PZERO(clients, sizeof(clients));
+	memset(clients, 0, sizeof(client_t) * SERVICE_CLIENTS_MAX);
 
 	mutex_init(&service_lock, M_RECURSIVE);
 	service_table = g_hash_table_new(g_str_hash, g_str_equal);

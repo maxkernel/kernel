@@ -64,7 +64,8 @@ static double mtoll(char * start, regmatch_t * m)
 	memcpy(pbuf, start + m->rm_so, m->rm_eo - m->rm_so);
 	
 	regmatch_t match[3];
-	ZERO(match);
+	memset(match, 0, sizeof(regmatch_t) * 3);
+
 	if (regexec(&latlong_match, pbuf, 3, match, 0) == 0)
 	{
 		return (double)mtoi(pbuf, &match[1]) + mtod(pbuf, &match[2])/60.0;
@@ -106,7 +107,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 		*eol = '\0';	// We now have a complete null-terminated line in our buffer
 
 		regmatch_t match[11];
-		ZERO(match);
+		memset(match, 0, sizeof(regmatch_t) * 11);
 		
 		if (regexec(&gpgga_match, gps->buffer, 11, match, 0) == 0)
 		{
@@ -221,7 +222,7 @@ void * gps_new(char * serial_port, int baud)
 	else
 	{
 		LOG(LOG_WARN, "Could not open GPS serial device %s", gps->serial_port.string);
-		FREE(gps);
+		free(gps);
 		return NULL;
 	}
 

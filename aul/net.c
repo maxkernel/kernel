@@ -27,8 +27,7 @@ int udp_server(uint16_t port, exception_t ** err)
 	}
 
 	struct sockaddr_in addr;
-	ZERO(addr);
-
+	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
 	addr.sin_addr.s_addr = INADDR_ANY;
@@ -75,8 +74,7 @@ int tcp_server(uint16_t port, exception_t ** err)
 
 
 	struct sockaddr_in addr;
-	ZERO(addr);
-
+	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
 	addr.sin_addr.s_addr = INADDR_ANY;
@@ -133,8 +131,7 @@ int unix_server(const char * path, exception_t ** err)
 
 
 	struct sockaddr_un addr;
-	ZERO(addr);
-
+	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
 
@@ -179,8 +176,7 @@ int unix_client(const char * path, exception_t ** err)
 
 
 	struct sockaddr_un addr;
-	ZERO(addr);
-
+	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
 

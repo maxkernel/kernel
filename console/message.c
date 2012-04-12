@@ -185,11 +185,11 @@ void message_reset(msgbuffer_t * buf)
 	buf->index = 0;
 
 	// Reset for next pass
-	ZERO(buf->msg);
+	memset(&buf->msg, 0, sizeof(message_t));
 	buf->state = P_FRAMING;
 }
 
 void message_clear(msgbuffer_t * buf)
 {
-	PZERO(buf, sizeof(msgbuffer_t));
+	memset(buf, 0, sizeof(msgbuffer_t));
 }

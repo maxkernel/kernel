@@ -114,10 +114,10 @@ typedef struct __service_t
 	kobject_t object;
 	char handle[HANDLE_MAXLEN];
 
-	const char * name;
-	const char * format;
+	char * name;
+	char * format;
+	char * desc;
 	const char ** params;
-	const char * desc;
 
 	mutex_t lock;
 

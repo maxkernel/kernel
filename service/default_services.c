@@ -62,10 +62,8 @@ static void s_list_replyservices(service_h service_handle, stream_h stream_handl
 
 static void s_list_userdata(service_h service, stream_h stream, uint64_t timestamp_us, const void * data, size_t length)
 {
-	char buf[S_LIST_CMDSIZE];
-	ZERO(buf);
-
-	memcpy(buf, data, MIN(S_LIST_CMDSIZE - 1, length));
+	char buf[S_LIST_CMDSIZE] = {0};
+	memcpy(buf, data, min(S_LIST_CMDSIZE - 1, length));
 
 	if (strcmp(buf, S_LIST_CMDLIST) == 0)
 	{
@@ -132,7 +130,10 @@ static void s_log_write(level_t level, const char * domain, uint64_t millisecond
 
 static void s_log_close(void * userdata)
 {
-	FREE(userdata);
+	if (userdata != NULL)
+	{
+		free(userdata);
+	}
 }
 
 

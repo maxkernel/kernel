@@ -22,18 +22,18 @@ typedef struct
 {
 	const char * key;
 	const char * value;
-	hashentry_t hashentry;
-} http_keyvalue;
+	hashentry_t hash_entry;
+} httpkeyvalue_t;
 
 typedef struct
 {
 	const char * uri;
-	http_match match;
-	http_callback callback;
+	httpmatch_t match;
+	httpcallback_f callback;
 	void * userdata;
 
-	list_t filter;
-} http_filter;
+	list_t filter_list;
+} httpfilter_t;
 
 typedef struct
 {
@@ -41,17 +41,17 @@ typedef struct
 	char buffer[BUFFER_LEN];
 	size_t length;
 
-	http_context * ctx;
-} http_buffer;
+	httpcontext_t * ctx;
+} httpbuffer_t;
 
-struct __http_context
+struct __httpcontext_t
 {
 	int socket;
 	mainloop_t * mainloop;
 	list_t filters;
 
-	http_buffer buffers[NUM_BUFFERS];
-	http_keyvalue keyvalues[NUM_KEYVALUES];
+	httpbuffer_t buffers[NUM_BUFFERS];
+	httpkeyvalue_t keyvalues[NUM_KEYVALUES];
 	hashtable_t headers;
 	hashtable_t parameters;
 };
@@ -90,7 +90,7 @@ void http_urldecode(char * string)
 
 static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
-	http_buffer * buffer = userdata;
+	httpbuffer_t * buffer = userdata;
 
 	ssize_t bytesread = recv(fd, buffer->buffer + buffer->length, BUFFER_LEN - buffer->length - 1, 0);
 	if (bytesread > 0)
@@ -102,13 +102,13 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 		{
 			// We have the full header, parse it
 			regmatch_t match[3];
-			ZERO(match);
+			memset(match, 0, sizeof(regmatch_t) * 3);
 
 			if (regexec(&get_match, buffer->buffer, 3, match, 0) == 0)
 			{
 				// The browser is using GET. Gooood.
 				char request_uri[250] = {0};
-				memcpy(request_uri, buffer->buffer + match[1].rm_so, MIN(sizeof(request_uri) - 1, match[1].rm_eo - match[1].rm_so));
+				memcpy(request_uri, buffer->buffer + match[1].rm_so, min(sizeof(request_uri) - 1, match[1].rm_eo - match[1].rm_so));
 
 				size_t keyvalue_index = 0;
 
@@ -133,10 +133,10 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 						http_urldecode(key);
 						http_urldecode(value);
 
-						http_keyvalue * kv = &buffer->ctx->keyvalues[keyvalue_index++];
+						httpkeyvalue_t * kv = &buffer->ctx->keyvalues[keyvalue_index++];
 						kv->key = key;
 						kv->value = value;
-						hashtable_put(&buffer->ctx->parameters, key, &kv->hashentry);
+						hashtable_put(&buffer->ctx->parameters, key, &kv->hash_entry);
 
 						if (atend)
 							break;
@@ -146,11 +146,11 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 				}
 
 				// Pass the request through the filters
-				http_filter * pass_match = NULL;
+				httpfilter_t * pass_match = NULL;
 				list_t * pos;
 				list_foreach(pos, &buffer->ctx->filters)
 				{
-					http_filter * filter = list_entry(pos, http_filter, filter);
+					httpfilter_t * filter = list_entry(pos, httpfilter_t, filter_list);
 					switch (filter->match)
 					{
 						case MATCH_ALL:
@@ -191,10 +191,10 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 						char * value = buffer->buffer + offset + match[2].rm_so;
 						value[match[2].rm_eo - match[2].rm_so] = '\0';
 
-						http_keyvalue * kv = &buffer->ctx->keyvalues[keyvalue_index++];
+						httpkeyvalue_t * kv = &buffer->ctx->keyvalues[keyvalue_index++];
 						kv->key = key;
 						kv->value = value;
-						hashtable_put(&buffer->ctx->headers, key, &kv->hashentry);
+						hashtable_put(&buffer->ctx->headers, key, &kv->hash_entry);
 
 						offset += match[0].rm_eo+1;
 					}
@@ -235,7 +235,7 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 
 static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
-	http_context * ctx = userdata;
+	httpcontext_t * ctx = userdata;
 
 	struct sockaddr_in addr;
 	socklen_t socklen = sizeof(addr);
@@ -246,7 +246,7 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	}
 	else
 	{
-		http_buffer * buffer = NULL;
+		httpbuffer_t * buffer = NULL;
 		int i;
 
 		for (i=0; i<NUM_BUFFERS; i++)
@@ -277,15 +277,15 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	return true;
 }
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err)
+httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err)
 {
 	if (exception_check(err))
 	{
 		return NULL;
 	}
 
-	http_context * ctx = malloc(sizeof(http_context));
-	memset(ctx, 0, sizeof(http_context));
+	httpcontext_t * ctx = malloc(sizeof(httpcontext_t));
+	memset(ctx, 0, sizeof(httpcontext_t));
 
 	ctx->mainloop = mainloop;
 	LIST_INIT(&ctx->filters);
@@ -301,18 +301,19 @@ http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err
 	return ctx;
 }
 
-void http_adduri(http_context * ctx, const char * uri, http_match match, http_callback cb, void * userdata)
+void http_adduri(httpcontext_t * ctx, const char * uri, httpmatch_t match, httpcallback_f cb, void * userdata)
 {
-	http_filter * filt = malloc0(sizeof(http_filter));
+	httpfilter_t * filt = malloc(sizeof(httpfilter_t));
+	memset(filt, 0, sizeof(httpfilter_t));
 	filt->uri = uri;
 	filt->match = match;
 	filt->callback = cb;
 	filt->userdata = userdata;
 
-	list_add(&ctx->filters, &filt->filter);
+	list_add(&ctx->filters, &filt->filter_list);
 }
 
-void http_printf(http_connection * conn, const char * fmt, ...)
+void http_printf(httpconnection_t * conn, const char * fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -320,46 +321,57 @@ void http_printf(http_connection * conn, const char * fmt, ...)
 	va_end(args);
 }
 
-void http_vprintf(http_connection * conn, const char * fmt, va_list args)
+void http_vprintf(httpconnection_t * conn, const char * fmt, va_list args)
 {
 	string_t msg = string_blank();
 	string_vappend(&msg, fmt, args);
 	http_write(conn, msg.string, msg.length);
 }
 
-void http_write(http_connection * conn, const void * buf, size_t len)
+void http_write(httpconnection_t * conn, const void * buf, size_t len)
 {
 	send(*conn, buf, len, 0);
 }
 
-const char * http_getheader(http_context * ctx, const char * name)
+const char * http_getheader(httpcontext_t * ctx, const char * name)
 {
 	hashentry_t * entry = hashtable_get(&ctx->headers, name);
 	if (entry != NULL)
 	{
-		http_keyvalue * kv = hashtable_entry(entry, http_keyvalue, hashentry);
+		httpkeyvalue_t * kv = hashtable_entry(entry, httpkeyvalue_t, hash_entry);
 		return kv->value;
 	}
 
 	return NULL;
 }
 
-const char * http_getparam(http_context * ctx, const char * name)
+const char * http_getparam(httpcontext_t * ctx, const char * name)
 {
 	hashentry_t * entry = hashtable_get(&ctx->parameters, name);
 	if (entry != NULL)
 	{
-		http_keyvalue * kv = hashtable_entry(entry, http_keyvalue, hashentry);
+		httpkeyvalue_t * kv = hashtable_entry(entry, httpkeyvalue_t, hash_entry);
 		return kv->value;
 	}
 
 	return NULL;
 }
 
-void http_destroy(http_context * ctx)
+void http_destroy(httpcontext_t * ctx)
 {
 	//mainloop_removewatch(ctx->mainloop, ctx->socket, FD_READ);
 	close(ctx->socket);
+
+	// Free all the filters
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &ctx->filters)
+		{
+			httpfilter_t * filt = list_entry(pos, httpfilter_t, filter_list);
+			list_remove(&filt->filter_list);
+			free(filt);
+		}
+	}
 	free(ctx);
 }
 

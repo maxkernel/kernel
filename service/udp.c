@@ -13,7 +13,7 @@ extern mainloop_t * serviceloop;
 int udp_port = DEFAULT_UDP_PORT;
 static udpstream_t udpstreams[SERVICE_CLIENTS_MAX];
 
-config_param(udp_port, 'i', "UDP port to listen for service requests and send service data on");
+module_config(udp_port, 'i', "UDP port to listen for service requests and send service data on");
 
 
 static void udp_free(stream_t * data)
@@ -131,7 +131,7 @@ void udp_init()
 {
 	if (udp_port != 0)
 	{
-		if (CLAMP(udp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == udp_port)
+		if (clamp(udp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == udp_port)
 		{
 			exception_t * err = NULL;
 			int udp_fd = udp_server(udp_port, &err);

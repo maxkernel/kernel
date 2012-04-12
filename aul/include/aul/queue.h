@@ -25,7 +25,7 @@ typedef struct
 static inline void __queue_unwrap(queue_t * queue, void * head, void * target, size_t size)
 {
 	// First unwrap up to end of buffer
-	void * end = MIN(head + size, queue->buffer + queue->bufsize);
+	void * end = min(head + size, queue->buffer + queue->bufsize);
 	size_t bytes = end - head;
 	memcpy(target, head, bytes);
 
@@ -38,7 +38,7 @@ static inline void __queue_unwrap(queue_t * queue, void * head, void * target, s
 
 static inline void __queue_wrap(queue_t * queue, void * tail, void * src, size_t size)
 {
-	void * end = MIN(tail + size, queue->buffer + queue->bufsize);
+	void * end = min(tail + size, queue->buffer + queue->bufsize);
 	size_t bytes = end - tail;
 	memcpy(tail, src, bytes);
 
@@ -101,7 +101,7 @@ static inline queue_t queue_new(void * buffer, size_t bufsize)
 static inline bool queue_enqueue(queue_t * queue, void * data, size_t size)
 {
 	// Sanity check
-	if (UNLIKELY(size == 0))
+	if (unlikely(size == 0))
 	{
 		return true;
 	}
@@ -135,7 +135,7 @@ static inline bool queue_enqueue(queue_t * queue, void * data, size_t size)
 static inline bool queue_dequeue(queue_t * queue, void * target, size_t size)
 {
 	// Sanity check
-	if (UNLIKELY(size == 0))
+	if (unlikely(size == 0))
 	{
 		return true;
 	}

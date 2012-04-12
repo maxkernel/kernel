@@ -14,7 +14,7 @@
 
 void max_initialize(maxhandle_t * hand)
 {
-	PZERO(hand, sizeof(maxhandle_t));
+	memset(hand, 0, sizeof(maxhandle_t));
 
 	hand->malloc = malloc;
 	hand->free = free;

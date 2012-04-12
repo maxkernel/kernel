@@ -315,7 +315,7 @@ static void * kthread_dothread(void * object)
 			int max = sched_get_priority_max(KTHREAD_SCHED);
 			int min = sched_get_priority_min(KTHREAD_SCHED);
 
-			param.sched_priority = CLAMP(prio, min, max);
+			param.sched_priority = clamp(prio, min, max);
 			if (sched_setscheduler(0, KTHREAD_SCHED, &param) == -1)
 			{
 				LOGK(LOG_WARN, "Could not set scheduler parameters on thread %s: %s", kth->kobject.object_name, strerror(errno));
@@ -430,8 +430,12 @@ static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * user
 		task->task_func(task->thread);
 
 		list_remove(pos);
-		FREES(task->desc);
-		FREE(task);
+
+		if (task->desc != NULL)
+		{
+			free(task->desc);
+		}
+		free(task);
 	}
 
 	mutex_unlock(&kthread_tasks_mutex);
@@ -445,7 +449,7 @@ static void kthread_dosinglepass(void * userdata)
 
 	kthread_t * kth = kthread_self();
 	kth->stop = true;
-	FREE(rfunc);
+	free(rfunc);
 }
 
 static void kthread_stopsinglepass(void * userdata)
@@ -949,7 +953,38 @@ int main(int argc, char * argv[])
 				return -1;
 			}
 
-			cfg_setparam(argv[0], argv[1], argv[2]);
+			const char * modulename = argv[0];
+			const char * name = argv[1];
+			const char * value = argv[2];
+
+			const char * prefix = path_resolve(modulename, P_MODULE);
+			if (prefix == NULL)
+			{
+				cfg_error(cfg, "Could not resolve path %s", modulename);
+				return -1;
+			}
+
+			string_t path = path_join(prefix, modulename);
+			if (!strsuffix(path.string, ".mo"))
+			{
+				string_append(&path, ".mo");
+			}
+
+			model_module_t * module = NULL;
+			if (!model_findmodule(model, script, path.string, &module))
+			{
+				cfg_error(cfg, "Could not find module %s. Module not loaded?", modulename);
+				return -1;
+			}
+
+			exception_t * e = NULL;
+			model_config_t * param = model_configparam_new(model, module, name, value, &e);
+			if (param == NULL || exception_check(&e))
+			{
+				cfg_error(cfg, "Could not set config %s=%s: %s", name, value, (e == NULL)? "Unknown error" : e->message);
+				exception_free(e);
+				return -1;
+			}
 
 			return 0;
 		}
@@ -1132,7 +1167,7 @@ int main(int argc, char * argv[])
 					iterator_t ditr = meta_getdependencyitr(meta);
 					{
 						const char * depname = NULL;
-						while ((depname = meta_dependencynext(ditr)) != NULL)
+						while (meta_dependencynext(ditr, &depname))
 						{
 							LOGK(LOG_DEBUG, "Resolving dependency %s", depname);
 
@@ -1191,6 +1226,25 @@ int main(int argc, char * argv[])
 					LOGK(LOG_FATAL, "Module loading failed.");
 					// Will exit
 				}
+
+				// Create the config variables
+				{
+					exception_t * e = NULL;
+
+					iterator_t citr = meta_getconfigitr(meta);
+					const meta_variable_t * variable = NULL;
+					while (meta_confignext(citr, &variable))
+					{
+						config_t * config = config_new(meta, variable, &e);
+						if (config == NULL || exception_check(&e))
+						{
+							LOGK(LOG_FATAL, "Config failed: %s", (e == NULL)? "Unknown error" : e->message);
+							// Will exit
+						}
+
+						list_add(&rmodule->configs, &config->module_list);
+					}
+				}
 			}
 
 			const meta_t * meta = NULL;
@@ -1201,6 +1255,7 @@ int main(int argc, char * argv[])
 			}
 
 			load_module(meta);
+
 			return udata;
 		}
 

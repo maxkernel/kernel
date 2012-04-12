@@ -108,7 +108,7 @@ const char * path_resolve(const char * name, ptype_t type)
 		 type = P_FILE;
 	}
 
-	if (UNLIKELY(file.string[0] == '/'))
+	if (unlikely(file.string[0] == '/'))
 	{
 		// Absolute path
 		if (((type & P_FILE) && file_exists(file.string)) || ((type & P_DIRECTORY) && dir_exists(file.string)))

@@ -197,4 +197,4 @@ module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides syscall RPC from other processes via unix/tcp socket");
 module_oninitialize(module_init);
 
-config_param(enable_network, 'b', "Allow syscalls to be executed over the network (TCP)");
+module_config(enable_network, 'b', "Allow syscalls to be executed over the network (TCP)");

@@ -20,52 +20,42 @@ extern "C" {
 #undef  NANOS_PER_SECOND
 #define NANOS_PER_SECOND		1000000000LL
 
-#undef  LIKELY
-#define LIKELY(x)       __builtin_expect(!!(x), 1)
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
 
-#undef  UNLIKELY
-#define UNLIKELY(x)     __builtin_expect(!!(x), 0)
-
-// TODO - make these lower case
-#undef	MAX
-#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
-
-#undef	MIN
-#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
-
-#undef	ABS
-#define ABS(a)	   (((a) < 0) ? -(a) : (a))
-
+#define max(a, b)  (((a) > (b)) ? (a) : (b))
+#define min(a, b)  (((a) < (b)) ? (a) : (b))
+#define abs(a)	   (((a) < 0) ? -(a) : (a))
 // TODO - add abs_int, see mir bit twidling hacks!
-
-#undef	CLAMP
-#define CLAMP(x, low, high)  			(((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
+#define clamp(x, low, high)  			(((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 #undef  CHECK_PRINTF
 #define CHECK_PRINTF(fmt_arg, arg1)		__attribute__((format (printf, fmt_arg, arg1)))
 
-#undef  LABELS
-#define LABELS(...)						__label__ __VA_ARGS__
+
+#define labels(...)						__label__ __VA_ARGS__
+#define threadlocal						__thread
 
 #undef  nelems
 #define nelems(a)						(sizeof(a) / sizeof(a[0]))
 
 
-#define ZERO(x)			memset(&(x), 0, sizeof(x))
-#define PZERO(x, size)	memset(x, 0, size)
-#define FREE(x)			do { if (UNLIKELY((x) == NULL)) { break; } free(x); x = NULL; } while(0)
-#define FREES(x)		do { if (UNLIKELY((x) == NULL)) { break; } free((char *)x); x = NULL; } while(0)
+//#define ZERO(x)			memset(&(x), 0, sizeof(x))
+//#define PZERO(x, size)	memset(x, 0, size)
+//#define FREE(x)			do { if (unlikely((x) == NULL)) { break; } free(x); x = NULL; } while(0)
+#define FREES(x)		do { if (unlikely((x) == NULL)) { break; } free((char *)x); x = NULL; } while(0)
 
+// TODO - remove this method!
 static inline void * malloc0(size_t size)
 {
 	void * ptr = malloc(size);
-	PZERO(ptr, size);
+	memset(ptr, 0, size);
 	return ptr;
 }
 
 static inline char * STRDUP(const char * str)
 {
-	if (UNLIKELY(str == NULL))
+	if (unlikely(str == NULL))
 	{
 		return NULL;
 	}

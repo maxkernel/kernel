@@ -13,28 +13,28 @@
 extern "C" {
 #endif
 
-typedef struct __http_context http_context;
-typedef int http_connection;
+typedef struct __httpcontext_t httpcontext_t;
+typedef int httpconnection_t;
 
-typedef void (*http_callback)(http_connection * conn, http_context * ctx, const char * uri);
+typedef void (*httpcallback_f)(httpconnection_t * conn, httpcontext_t * ctx, const char * uri);
 
 typedef enum
 {
 	MATCH_ALL,
 	MATCH_PREFIX
-} http_match;
+} httpmatch_t;
 
-const char * http_getheader(http_context * ctx, const char * name);
-const char * http_getparam(http_context * ctx, const char * name);
+const char * http_getheader(httpcontext_t * ctx, const char * name);
+const char * http_getparam(httpcontext_t * ctx, const char * name);
 
-http_context * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err);
-void http_adduri(http_context * ctx, const char * uri, http_match match, http_callback cb, void * userdata);
+httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err);
+void http_adduri(httpcontext_t * ctx, const char * uri, httpmatch_t match, httpcallback_f cb, void * userdata);
 
-void http_printf(http_connection * conn, const char * fmt, ...) CHECK_PRINTF(2, 3);
-void http_vprintf(http_connection * conn, const char * fmt, va_list args);
-void http_write(http_connection * conn, const void * buf, size_t len);
+void http_printf(httpconnection_t * conn, const char * fmt, ...) CHECK_PRINTF(2, 3);
+void http_vprintf(httpconnection_t * conn, const char * fmt, va_list args);
+void http_write(httpconnection_t * conn, const void * buf, size_t len);
 
-void http_destroy(http_context * ctx);
+void http_destroy(httpcontext_t * ctx);
 
 // Helper functions
 void http_urldecode(char * string);

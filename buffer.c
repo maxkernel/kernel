@@ -92,7 +92,7 @@ static int buffer_getnew()
 
 static size_t buffer_extend(buffermem_t * m, size_t size)
 {
-	LABELS(done);
+	labels(done);
 
 	size_t newsize = 0;
 	mutex_lock(&m->access_lock);
@@ -108,7 +108,7 @@ static size_t buffer_extend(buffermem_t * m, size_t size)
 				}
 			}
 
-			size_t s = MIN(size, PAGESIZE);
+			size_t s = min(size, PAGESIZE);
 			size -= s;
 			m->length = newsize += s;
 		}
@@ -193,7 +193,7 @@ buffer_t buffer_dup(const buffer_t b)
 
 static void buffer_dowrite(buffer_t b, char * data, off_t offset, size_t length)
 {
-	LABELS(done);
+	labels(done);
 
 	mutex_lock(&buffers[b]->access_lock);
 	{
@@ -215,7 +215,7 @@ static void buffer_dowrite(buffer_t b, char * data, off_t offset, size_t length)
 				goto done;
 			}
 
-			size_t writelen = MIN(length, PAGESIZE - pageoff);
+			size_t writelen = min(length, PAGESIZE - pageoff);
 			memcpy(buffers[b]->pages[pagenum] + pageoff, data, writelen);
 
 			length -= writelen;
@@ -249,7 +249,7 @@ void buffer_write(buffer_t b, const void * data, off_t offset, size_t length)
 
 static void buffer_doread(const buffer_t b, char * data, off_t offset, size_t length)
 {
-	LABELS(done);
+	labels(done);
 
 	mutex_lock(&buffers[b]->access_lock);
 	{
@@ -270,7 +270,7 @@ static void buffer_doread(const buffer_t b, char * data, off_t offset, size_t le
 				goto done;
 			}
 
-			size_t readlen = MIN(length, PAGESIZE - pageoff);
+			size_t readlen = min(length, PAGESIZE - pageoff);
 			memcpy(data, buffers[b]->pages[pagenum] + pageoff, readlen);
 
 			length -= readlen;

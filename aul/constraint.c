@@ -14,7 +14,7 @@ typedef struct
 
 static bool crange_new(const char * constraint, void * object)
 {
-	LABELS(end);
+	labels(end);
 
 	regex_t pattern = {0};
 	bool success = false;
@@ -113,10 +113,16 @@ static bool crange_step(const void * object, double * step)
 	return false;
 }
 
+constraint_t constraint_empty()
+{
+	constraint_t constraint;
+	memset(&constraint, 0, sizeof(constraint_t));
+	return constraint;
+}
+
 constraint_t constraint_new(const char * constraint, exception_t ** err)
 {
-	constraint_t c;
-	memset(&c, 0, sizeof(constraint_t));
+	constraint_t c = constraint_empty();
 
 	// Sanity check
 	{
@@ -138,9 +144,8 @@ constraint_t constraint_new(const char * constraint, exception_t ** err)
 	}
 
 	// No dice, did not match any constraint types
-	memset(&c, 0, sizeof(constraint_t));
 	exception_set(err, EINVAL, "Could not match any constraint patterns for constraint '%s'", constraint);
-	return c;
+	return constraint_empty();
 }
 
 bool constraint_check(const constraint_t * constraint, const char * value, char * hint, size_t hint_length)
@@ -178,7 +183,7 @@ bool constraint_getstep(const constraint_t * constraint, double * step)
 
 constraint_t constraint_parse(const char * string, exception_t ** err)
 {
-	LABELS(noparse);
+	labels(noparse);
 
 	#define return_empty() \
 		({ constraint_t c; memset(&c, 0, sizeof(constraint_t)); return c;})
@@ -211,6 +216,7 @@ constraint_t constraint_parse(const char * string, exception_t ** err)
 		char buf[AUL_CONSTRAINT_TEXTSIZE] = {0};
 		memcpy(buf, &string[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
 
+		regfree(&pattern);
 		return constraint_new(buf, err);
 	}
 
@@ -221,7 +227,7 @@ noparse:
 
 const char * constraint_parsepast(const char * string)
 {
-	LABELS(end);
+	labels(end);
 
 	regex_t pattern = {0};
 	size_t index = 0;

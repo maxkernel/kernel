@@ -29,6 +29,7 @@ void string_vappend(string_t * str, const char * fmt, va_list args);
 
 size_t string_available(const string_t * str);
 string_t string_clone(const string_t * str);
+// TODO - remove string_copy
 char * string_copy(const string_t * str);
 void string_clear(string_t * str);
 

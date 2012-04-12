@@ -221,7 +221,7 @@ ssize_t serialize_2array(void * array, size_t arraylen, const char * sig, ...)
 
 ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_list args)
 {
-	LABELS(err_nomem);
+	labels(err_nomem);
 
 	unsigned int i = 0;
 	ssize_t wrote = 0;
@@ -293,7 +293,7 @@ err_nomem:
 
 ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void ** args)
 {
-	LABELS(err_nomem);
+	labels(err_nomem);
 
 	unsigned int i = 0;
 	ssize_t wrote = 0;
@@ -696,7 +696,7 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 
 ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
 {
-	LABELS(err_nomem);
+	labels(err_nomem);
 
 	va_list args;
 	va_start(args, arraylen);
@@ -788,7 +788,7 @@ err_nomem:
 
 ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, void * array, size_t arraylen)
 {
-	LABELS(err_nomem);
+	labels(err_nomem);
 
 	// Get the header size
 	size_t header_size = headersize(sig);
@@ -880,7 +880,7 @@ err_nomem:
 
 ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)		// TODO - This function sucks! Make it better
 {
-	LABELS(err_nomem, err_bufsize);
+	labels(err_nomem, err_bufsize);
 
 	// Get the header size
 	size_t header_size = headersize(sig);

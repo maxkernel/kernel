@@ -4,7 +4,7 @@
 #include <httpserver.h>
 
 
-static void set_calibration_start(http_connection * conn, http_context * ctx)
+static void set_calibration_start(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: text/plain\r\n");
@@ -13,7 +13,7 @@ static void set_calibration_start(http_connection * conn, http_context * ctx)
 	http_printf(conn, "OK");
 }
 
-static void set_calibration_preview(http_connection * conn, http_context * ctx)
+static void set_calibration_preview(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: text/plain\r\n");
@@ -41,7 +41,7 @@ static void set_calibration_preview(http_connection * conn, http_context * ctx)
 	}
 }
 
-static void set_calibration_commit(http_connection * conn, http_context * ctx)
+static void set_calibration_commit(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: text/plain\r\n");
@@ -52,7 +52,7 @@ static void set_calibration_commit(http_connection * conn, http_context * ctx)
 	http_printf(conn, "OK");
 }
 
-static void set_calibration_revert(http_connection * conn, http_context * ctx)
+static void set_calibration_revert(httpconnection_t * conn, httpcontext_t * ctx)
 {
 	http_printf(conn, "HTTP/1.1 200 OK\r\n");
 	http_printf(conn, "Content-Type: text/plain\r\n");
@@ -61,7 +61,7 @@ static void set_calibration_revert(http_connection * conn, http_context * ctx)
 	http_printf(conn, "OK");
 }
 
-void handle_set(http_connection * conn, http_context * ctx, const char * uri)
+void handle_set(httpconnection_t * conn, httpcontext_t * ctx, const char * uri)
 {
 	if (strsuffix(uri, "/calibration/start"))
 	{

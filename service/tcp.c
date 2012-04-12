@@ -14,7 +14,7 @@ extern mainloop_t * serviceloop;
 int tcp_port = DEFAULT_TCP_PORT;
 static tcpstream_t tcpstreams[SERVICE_CLIENTS_MAX];
 
-config_param(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
+module_config(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
 
 
 static void tcp_free(stream_t * data)
@@ -189,7 +189,7 @@ void tcp_init()
 {
 	if (tcp_port != 0)
 	{
-		if (CLAMP(tcp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == tcp_port)
+		if (clamp(tcp_port, SERVICE_PORT_MIN, SERVICE_PORT_MAX) == tcp_port)
 		{
 			exception_t * err = NULL;
 			int tcp_fd = tcp_server(tcp_port, &err);

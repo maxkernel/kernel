@@ -16,12 +16,12 @@
 
 int port = 80;
 
-static http_context * ctx;
+static httpcontext_t * ctx;
 
-void handle_get(http_connection * conn, http_context * ctx, const char * uri);
-void handle_set(http_connection * conn, http_context * ctx, const char * uri);
+void handle_get(httpconnection_t * conn, httpcontext_t * ctx, const char * uri);
+void handle_set(httpconnection_t * conn, httpcontext_t * ctx, const char * uri);
 
-static void reply_file(http_connection * conn, const char * path, const char * mimetype, const char * headers)
+static void reply_file(httpconnection_t * conn, const char * path, const char * mimetype, const char * headers)
 {
 	struct stat statbuf;
 
@@ -78,7 +78,7 @@ static const char * reply_mimetype(const char * path)
 	return NULL;
 }
 
-static void handle_root(http_connection * conn, http_context * ctx, const char * uri)
+static void handle_root(httpconnection_t * conn, httpcontext_t * ctx, const char * uri)
 {
 	if (strcmp(uri, "/") == 0)
 	{
@@ -89,7 +89,7 @@ static void handle_root(http_connection * conn, http_context * ctx, const char *
 	reply_file(conn, path.string, reply_mimetype(uri), NULL);
 }
 
-static void handle_compressed(http_connection * conn, http_context * ctx, const char * uri)
+static void handle_compressed(httpconnection_t * conn, httpcontext_t * ctx, const char * uri)
 {
 	string_t path = string_new("%s/%s%s.gz", INSTALL, ROOT, uri);
 	reply_file(conn, path.string, reply_mimetype(uri), "Content-Encoding: gzip\r\n");
@@ -134,4 +134,4 @@ module_dependency("httpserver");
 module_oninitialize(module_init);
 module_ondestroy(module_destroy);
 
-config_param(port, 'i', "The HTTP port to allow connections over");
+module_config(port, 'i', "The HTTP port to allow connections over");

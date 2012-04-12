@@ -15,14 +15,14 @@ extern calibration_t calibration;
 
 static bool cal_getentry(const char * domain, const char * name, const char sig, char * tovalue, size_t tovalue_size)
 {
-	LABELS(done);
+	labels(done);
 
 	bool success = false;
 	sqlite3_stmt * stmt;
 	const char * value = NULL;
 
-	string_t domain_query = (domain == NULL)? string_new("domain='%s' AND ", domain) : string_blank();
-	string_t query = string_new("SELECT value FROM calibration WHERE %sname='%s' AND sig='%c' AND updated=(SELECT MAX(updated) FROM calibration WHERE %sname='%s' AND sig='%c');", domain_query.string, name, sig, domain_query.string, name, sig);
+	string_t domain_query = (domain == NULL)? string_new(" IS NULL") : string_new("='%s'", domain);
+	string_t query = string_new("SELECT value FROM calibration WHERE domain%s AND name='%s' AND sig='%c' AND updated=(SELECT MAX(updated) FROM calibration WHERE domain%s AND name='%s' AND sig='%c');", domain_query.string, name, sig, domain_query.string, name, sig);
 
 	if (sqlite3_prepare_v2(database, query.string, -1, &stmt, NULL) != SQLITE_OK)
 	{
@@ -101,7 +101,7 @@ static bool cal_updatecache(calentry_t * entry)
 		return false;
 	}
 
-	memcpy(entry->cache, cache, CAL_SIZE_CACHE);
+	strcpy(entry->cache, cache);
 	return true;
 }
 

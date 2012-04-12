@@ -11,7 +11,7 @@
 
 meta_t * meta_parseelf(const char * path, exception_t ** err)
 {
-	LABELS(end);
+	labels(end);
 
 	// Sanity check
 	{
@@ -104,8 +104,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 				case meta_ondestroy:
 				case meta_onpreact:
 				case meta_onpostact:
-				case meta_calonmodechange:
-				case meta_calonpreview:
+				//case meta_calonmodechange:
+				//case meta_calonpreview:
 				{
 					const char * name = NULL;
 					void ** meta_location = NULL;
@@ -121,8 +121,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 						case meta_ondestroy:		name = "meta_destroy";			meta_location = (void **)&meta->destroy;		break;
 						case meta_onpreact:			name = "meta_preactivate";		meta_location = (void **)&meta->preact;			break;
 						case meta_onpostact:		name = "meta_postactivate";		meta_location = (void **)&meta->postact;		break;
-						case meta_calonmodechange:	name = "meta_calmodechange";	meta_location = (void **)&meta->cal_modechange;	break;
-						case meta_calonpreview:		name = "meta_calpreview";		meta_location = (void **)&meta->cal_preview;	break;
+						//case meta_calonmodechange:	name = "meta_calmodechange";	meta_location = (void **)&meta->cal_modechange;	break;
+						//case meta_calonpreview:		name = "meta_calpreview";		meta_location = (void **)&meta->cal_preview;	break;
 						default:
 						{
 							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
@@ -142,8 +142,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 
 				case meta_dependency:
 				case meta_syscall:
-				case meta_configparam:
-				case meta_calparam:
+				case meta_config:
+				//case meta_calparam:
 				case meta_block:
 				case meta_blockonupdate:
 				case meta_blockondestroy:
@@ -158,8 +158,8 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 					{
 						case meta_dependency:		name = "meta_dependency";	list = (void **)&meta->dependencies;	length = META_MAX_DEPENDENCIES;		break;
 						case meta_syscall:			name = "meta_syscall";		list = (void **)&meta->syscalls;		length = META_MAX_SYSCALLS;			break;
-						case meta_configparam:		name = "meta_configparam";	list = (void **)&meta->config_params;	length = META_MAX_CONFIGPARAMS;		break;
-						case meta_calparam:			name = "meta_calparam";		list = (void **)&meta->cal_params;		length = META_MAX_CALPARAMS;		break;
+						case meta_config:		name = "meta_configparam";	list = (void **)&meta->configs;			length = META_MAX_CONFIGS;		break;
+						//case meta_calparam:			name = "meta_calparam";		list = (void **)&meta->cal_params;		length = META_MAX_CALPARAMS;		break;
 						case meta_block:			name = "meta_block";		list = (void **)&meta->blocks;			length = META_MAX_BLOCKS;			break;
 						case meta_blockonupdate:
 						case meta_blockondestroy:	name = "meta_callback";		list = (void **)&meta->block_callbacks;	length = META_MAX_BLOCKCBS;			break;
@@ -274,7 +274,7 @@ bool meta_loadmodule(meta_t * meta, exception_t ** err)
 	exception_t * e = NULL;
 	void __do_meta_init(const meta_begin_t * begin)
 	{
-		LABELS(end_init);
+		labels(end_init);
 
 		// Sanity check
 		{
@@ -431,16 +431,18 @@ meta_t * meta_copy(const meta_t * meta)
 		{
 			fixptr(newmeta->syscalls[i]);
 		}
-		for (size_t i = 0; i < META_MAX_CONFIGPARAMS; i++)
+		for (size_t i = 0; i < META_MAX_CONFIGS; i++)
 		{
-			fixptr(newmeta->config_params[i]);
+			fixptr(newmeta->configs[i]);
 		}
+		/*
 		fixptr(newmeta->cal_modechange);
 		fixptr(newmeta->cal_preview);
 		for (size_t i = 0; i < META_MAX_CALPARAMS; i++)
 		{
 			fixptr(newmeta->cal_params[i]);
 		}
+		*/
 		for (size_t i = 0; i < META_MAX_BLOCKS; i++)
 		{
 			fixptr(newmeta->blocks[i]);
@@ -537,44 +539,6 @@ void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destr
 		*postact = meta->postact->function;
 	}
 }
-
-bool meta_getconfigparam(const meta_t * meta, const char * configname, char * sig, const char ** desc)
-{
-	// Sanity check
-	{
-		if (meta == NULL || configname == NULL)
-		{
-			return false;
-		}
-
-		if (strlen(configname) >= META_SIZE_VARIABLE)
-		{
-			return false;
-		}
-	}
-
-	meta_variable_t * variable = NULL;
-	meta_foreach(variable, meta->config_params, META_MAX_CONFIGPARAMS)
-	{
-		if (strcmp(variable->variable_name, configname) == 0)
-		{
-			if (sig != NULL)
-			{
-				*sig = variable->variable_signature;
-			}
-
-			if (desc != NULL)
-			{
-				*desc = variable->variable_description;
-			}
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
 
 bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc)
 {
@@ -691,17 +655,93 @@ iterator_t meta_getdependencyitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_dependency_t ** dep = (meta_dependency_t **)*itrobject;
-
-		const void * r = (*dep == NULL)? NULL : (*dep)->dependency;
 		*itrobject = (*dep == NULL)? (void *)&meta->dependencies[0] : (void *)&dep[1];
 
-		return r;
+		return *dep;
 	}
 
 	return iterator_new("meta_dependency", ditr_next, NULL, meta, (void *)&meta->dependencies[0]);
 }
 
-const char * meta_dependencynext(iterator_t itr)
+bool meta_dependencynext(iterator_t itr, const char ** dependency)
 {
-	return iterator_next(itr, "meta_dependency");
+	const meta_dependency_t * nextdependency = iterator_next(itr, "meta_dependency");
+	if (nextdependency != NULL)
+	{
+		if (dependency != NULL)		*dependency = nextdependency->dependency;
+		return true;
+	}
+
+	return false;
+}
+
+iterator_t meta_getconfigitr(const meta_t * meta)
+{
+	const void * citr_next(const void * object, void ** itrobject)
+	{
+		const meta_t * meta = object;
+		meta_variable_t ** cfg = (meta_variable_t **)*itrobject;
+		*itrobject = (*cfg == NULL)? (void *)&meta->configs[0] : (void *)&cfg[1];
+
+		return *cfg;
+	}
+
+	return iterator_new("meta_config", citr_next, NULL, meta, (void *)&meta->configs[0]);
+}
+
+bool meta_confignext(iterator_t itr, const meta_variable_t ** variable)
+{
+	const meta_variable_t * nextconfig = iterator_next(itr, "meta_config");
+	if (nextconfig != NULL)
+	{
+		if (variable != NULL)		*variable = nextconfig;
+		return true;
+	}
+
+	return false;
+}
+
+bool meta_findconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config)
+{
+	// Sanity check
+	{
+		if (meta == NULL || configname == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(configname) >= META_SIZE_VARIABLE)
+		{
+			return false;
+		}
+	}
+
+	meta_variable_t * variable = NULL;
+	meta_foreach(variable, meta->configs, META_MAX_CONFIGS)
+	{
+		if (strcmp(variable->variable_name, configname) == 0)
+		{
+			if (config != NULL)		*config = variable;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, const void ** value)
+{
+	// Sanity check
+	{
+		if (variable == NULL)
+		{
+			return;
+		}
+	}
+
+	if (name != NULL)		*name = variable->variable_name;
+	if (sig != NULL)		*sig = variable->variable_signature;
+	if (desc != NULL)		*desc = variable->variable_description;
+	if (value != NULL)		*value = variable->variable;
 }

@@ -129,7 +129,7 @@ static void archive(const char * path)
 
 struct log_file
 {
-	const char * path;
+	char * path;
 	int fd;
 	off_t size;
 };
@@ -236,7 +236,7 @@ bool log_openfile(const char * path, exception_t ** err)
 		data->size += wrote;
 		if (data->size > AUL_LOG_MAXFILESIZE)
 		{
-			//log file has become too big. Close it, archive it, and open a new one
+			// The log file has become too big. Close it, archive it, and open a new one
 			close(data->fd);
 			archive(data->path);
 			data->fd = FILEOPEN(data->path);
@@ -254,8 +254,8 @@ bool log_openfile(const char * path, exception_t ** err)
 			close(data->fd);
 		}
 
-		FREES(data->path);
-		FREE(data);
+		free(data->path);
+		free(data);
 	}
 
 	// Sanity check

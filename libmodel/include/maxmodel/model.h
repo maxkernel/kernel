@@ -15,15 +15,15 @@ extern "C" {
 #endif
 
 #define MODEL_SIZE_PATH					META_SIZE_PATH
-#define MODEL_SIZE_NAME					MAX(META_SIZE_ANNOTATE, MAX(META_SIZE_FUNCTION, MAX(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME)))
+#define MODEL_SIZE_NAME					max(META_SIZE_ANNOTATE, max(META_SIZE_FUNCTION, max(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME)))
 #define MODEL_SIZE_DESCRIPTION			META_SIZE_SHORTDESCRIPTION
 #define MODEL_SIZE_VALUE				150
 #define MODEL_SIZE_BLOCKIONAME			(MODEL_SIZE_NAME + 6)	// Support array indexes on end of name (ex. '[25]')
 #define MODEL_SIZE_MAX \
-	(MAX(MODEL_SIZE_PATH,			\
-	 MAX(MODEL_SIZE_NAME,			\
-	 MAX(MODEL_SIZE_DESCRIPTION,	\
-	 MAX(MODEL_SIZE_VALUE,			\
+	(max(MODEL_SIZE_PATH,			\
+	 max(MODEL_SIZE_NAME,			\
+	 max(MODEL_SIZE_DESCRIPTION,	\
+	 max(MODEL_SIZE_VALUE,			\
 	 MODEL_SIZE_BLOCKIONAME			\
 	 )))))
 
@@ -32,7 +32,7 @@ extern "C" {
 #define MODEL_MAX_MODULES				10							// Maximum number of modules per script
 #define MODEL_MAX_BACKINGS				((MODEL_MAX_MODULES * MODEL_MAX_SCRIPTS) + 10)			// Maximum number of meta_t backings
 #define MODEL_MAX_DEPENDENCIES			META_MAX_DEPENDENCIES		// Maximum number of dependencies per module
-#define MODEL_MAX_CONFIGPARAMS			META_MAX_CONFIGPARAMS		// Maximum number of set config params per module
+#define MODEL_MAX_CONFIGS				META_MAX_CONFIGS			// Maximum number of set config params per module
 #define MODEL_MAX_LINKABLES				(25 /* Blockinsts */ + 25 /* Syscalls */ + 10 /* Rategroups */ )		// Maximum number of block instances per script
 #define MODEL_MAX_LINKS					(MODEL_MAX_LINKABLES * 20)	// Maximum number of links per script
 #define MODEL_MAX_RATEGROUPELEMS		15							// Maximum number of block instances registered to a rategroup
@@ -42,7 +42,7 @@ extern "C" {
 	( 2 * MODEL_MAX_SCRIPTS * MODEL_MAX_MODULES ) + \
 	( MODEL_MAX_SCRIPTS * MODEL_MAX_LINKABLES ) +	\
 	( MODEL_MAX_SCRIPTS * MODEL_MAX_LINKS ) +		\
-	( MODEL_MAX_SCRIPTS * MODEL_MAX_MODULES * MODEL_MAX_CONFIGPARAMS )
+	( MODEL_MAX_SCRIPTS * MODEL_MAX_MODULES * MODEL_MAX_CONFIGS )
 
 
 struct __modelhead_t;
@@ -63,7 +63,7 @@ typedef enum
 	model_script		= (0x1 << 1),
 	model_module		= (0x1 << 2),
 	//model_modulebacking	= (0x1 << 3),
-	model_configparam	= (0x1 << 4),
+	model_config		= (0x1 << 4),
 	model_blockinst		= (0x1 << 5),
 	model_syscall		= (0x1 << 6),
 	model_rategroup		= (0x1 << 7),
@@ -97,16 +97,15 @@ typedef struct
 	char sig;
 	constraint_t constraints;
 	char value[MODEL_SIZE_VALUE];
-} model_configparam_t;
+} model_config_t;
 
 typedef struct
 {
 	modelhead_t head;
 
-	//model_modulebacking_t * backing;
 	meta_t * backing;
 	struct __model_linkable_t * staticinst;
-	model_configparam_t * configparams[MODEL_MAX_CONFIGPARAMS];
+	model_config_t * configs[MODEL_MAX_CONFIGS];
 } model_module_t;
 
 typedef struct
@@ -180,7 +179,7 @@ typedef struct __model_analysis_t
 {
 	void * (*scripts)(void * udata, const model_t * model, const model_script_t * script);
 	void * (*modules)(void * udata, const model_t * model, const model_module_t * module);
-	void * (*configs)(void * udata, const model_t * model, const model_configparam_t * config);
+	void * (*configs)(void * udata, const model_t * model, const model_config_t * config);
 	void * (*linkables)(void * udata, const model_t * model, const model_linkable_t * linkable);
 	void * (*blockinsts)(void * udata, const model_t * model, const model_linkable_t * blockinst);
 	void * (*syscalls)(void * udata, const model_t * model, const model_linkable_t * syscall);
@@ -206,7 +205,7 @@ string_t model_getsubscript(const char * ioname);
 
 model_script_t * model_script_new(model_t * model, const char * path, exception_t ** err);
 model_module_t * model_module_new(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);
-model_configparam_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
+model_config_t * model_configparam_new(model_t * model, model_module_t * module, const char * configname, const char * value, exception_t ** err);
 model_linkable_t * model_blockinst_new(model_t * model, model_module_t * module, model_script_t * script, const char * blockname, const char ** args, size_t args_length, exception_t ** err);
 model_linkable_t * model_rategroup_new(model_t * model, model_script_t * script, const char * name, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err);
 model_linkable_t * model_syscall_new(model_t * model, model_script_t * script, const char * funcname, const char * desc, exception_t ** err);
@@ -217,7 +216,9 @@ void model_analyse(model_t * model, modeltraversal_t traversal, const model_anal
 bool model_getmeta(const model_module_t * module, const meta_t ** meta);
 
 bool model_findmeta(const model_t * model, const char * path, const meta_t ** meta);
+bool model_findmodule(const model_t * model, model_script_t * script, const char * path, model_module_t ** module);
 
+void model_getconfig(const model_config_t * config, const char ** name, char * sig, constraint_t * constraints, const char ** value);
 
 #ifdef __cplusplus
 }
