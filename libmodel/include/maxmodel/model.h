@@ -15,7 +15,8 @@ extern "C" {
 #endif
 
 #define MODEL_SIZE_PATH					META_SIZE_PATH
-#define MODEL_SIZE_NAME					max(META_SIZE_ANNOTATE, max(META_SIZE_FUNCTION, max(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME)))
+#define MODEL_SIZE_NAME					max(max(META_SIZE_ANNOTATE, META_SIZE_FUNCTION), max(META_SIZE_VARIABLE, META_SIZE_BLOCKNAME))
+#define MODEL_SIZE_SIGNATURE			META_SIZE_SIGNATURE
 #define MODEL_SIZE_DESCRIPTION			META_SIZE_SHORTDESCRIPTION
 #define MODEL_SIZE_VALUE				150
 #define MODEL_SIZE_BLOCKIONAME			(MODEL_SIZE_NAME + 6)	// Support array indexes on end of name (ex. '[25]')
@@ -118,6 +119,7 @@ typedef struct
 {
 	char name[MODEL_SIZE_NAME];
 	model_module_t * module;
+	char args_sig[MODEL_SIZE_SIGNATURE];
 	char * args[MODEL_MAX_ARGS];
 } model_blockinst_t;
 
@@ -142,12 +144,17 @@ typedef struct __model_linkable_t
 
 typedef struct
 {
+	char name[MODEL_SIZE_NAME];
+	ssize_t index;
+	const model_linkable_t * linkable;
+} model_linksymbol_t;
+
+typedef struct
+{
 	modelhead_t head;
 
-	char out_name[MODEL_SIZE_BLOCKIONAME];
-	char in_name[MODEL_SIZE_BLOCKIONAME];
-	const model_linkable_t * out;
-	const model_linkable_t * in;
+	model_linksymbol_t out;
+	model_linksymbol_t in;
 } model_link_t;
 
 typedef struct
@@ -183,8 +190,8 @@ typedef struct __model_analysis_t
 	void * (*linkables)(void * udata, const model_t * model, const model_linkable_t * linkable);
 	void * (*blockinsts)(void * udata, const model_t * model, const model_linkable_t * blockinst);
 	void * (*syscalls)(void * udata, const model_t * model, const model_linkable_t * syscall, const model_script_t * script);
-	void * (*rategroups)(void * udata, const model_t * model, const model_linkable_t * rategroup);
-	void * (*links)(void * udata, const model_t * model, const model_link_t * link);
+	void * (*rategroups)(void * udata, const model_t * model, const model_linkable_t * rategroup, const model_script_t * script);
+	void * (*links)(void * udata, const model_t * model, const model_link_t * link, const model_linksymbol_t * out, const model_linksymbol_t * in);
 } model_analysis_t;
 
 //#define model_object(o)		((modelhead_t *)(o))
@@ -198,8 +205,8 @@ void model_clearalluserdata(model_t * model);
 void model_destroy(model_t * model);
 void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err);
 
-string_t model_getbase(const char * ioname);
-string_t model_getsubscript(const char * ioname);
+//string_t model_getbase(const char * ioname);
+//string_t model_getsubscript(const char * ioname);
 
 model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err);
 model_module_t * model_newmodule(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);

@@ -1017,7 +1017,7 @@ int main(int argc, char * argv[])
 				}
 				else
 				{
-					LOGK(LOG_WARN, "Could not determine how interpret file %s", path.string);
+					LOGK(LOG_INFO, "Could not determine how interpret file %s. Skipping.", path.string);
 					continue;
 				}
 
@@ -1032,7 +1032,7 @@ int main(int argc, char * argv[])
 				if (!execfunc(model, path.string, &cbs, &e))
 				{
 					// TODO - make less verbose?
-					cfg_error(cfg, "Error while executing file %s: %s", path.string, (e == NULL)? "Unknown error" : e->message);
+					cfg_error(cfg, "Error while executing script: %s", (e == NULL)? "Unknown error" : e->message);
 					exception_free(e);
 					return -1;
 				}
@@ -1341,12 +1341,32 @@ int main(int argc, char * argv[])
 			return udata;
 		}
 
+		// Call preact function on all modules
+		{
+			list_t * pos;
+			list_foreach(pos, &modules)
+			{
+				module_t * module = list_entry(pos, module_t, global_list);
+				module_act(module, act_preact);
+			}
+		}
+
 		model_analysis_t f_buildmod = {
 			.configs = f_buildmod_configs,
 		};
 
 		LOGK(LOG_DEBUG, "Building modules...");
 		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_buildmod);
+
+		// Call postact function on all modules
+		{
+			list_t * pos;
+			list_foreach(pos, &modules)
+			{
+				module_t * module = list_entry(pos, module_t, global_list);
+				module_act(module, act_postact);
+			}
+		}
 	}
 
 
@@ -1449,7 +1469,7 @@ int main(int argc, char * argv[])
 	}
 	*/
 
-	// Call post functions
+	// Call post-build functions
 	{
 
 		int module_compare(list_t * a, list_t * b)
@@ -1461,26 +1481,6 @@ int main(int argc, char * argv[])
 
 
 		list_sort(&modules, module_compare);
-
-		// Call preact function on all modules
-		{
-			list_t * pos;
-			list_foreach(pos, &modules)
-			{
-				module_t * module = list_entry(pos, module_t, global_list);
-				module_act(module, act_preact);
-			}
-		}
-
-		// Call postact function on all modules
-		{
-			list_t * pos;
-			list_foreach(pos, &modules)
-			{
-				module_t * module = list_entry(pos, module_t, global_list);
-				module_act(module, act_postact);
-			}
-		}
 
 		// Call init function on all modules
 		{

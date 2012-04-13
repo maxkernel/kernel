@@ -132,13 +132,16 @@ static int l_newblockinst(lua_State * L)
 	model_module_t * module = (model_module_t *)head;
 	meta_t * backing = module->backing;
 
-	const char * sig = NULL;
-	if (!meta_getblock(backing, blockname, &sig, NULL, NULL))
+	const meta_block_t * block = NULL;
+	if (!meta_lookupblock(backing, blockname, &block))
 	{
 		const char * path = NULL;
 		meta_getinfo(backing, &path, NULL, NULL, NULL, NULL);
 		return luaL_error(L, "Could not find block '%s' in module %s.", blockname, path);
 	}
+
+	const char * sig = NULL;
+	meta_getblock(block, NULL, NULL, NULL, &sig, NULL, NULL);
 
 	size_t args_length = strlen(sig);
 	const char * args[args_length];
@@ -359,7 +362,7 @@ static int mt_entry_index(lua_State * L)
 
 				return 1;
 			}
-			else if (meta_getblock(((model_module_t *)entry->head)->backing, key, NULL, NULL, NULL))
+			else if (meta_lookupblock(((model_module_t *)entry->head)->backing, key, NULL))
 			{
 				// We are a block reference, push a closure to create the new instance on the stack
 				lua_pushvalue(L, lua_upvalueindex(1));
@@ -379,18 +382,6 @@ static int mt_entry_index(lua_State * L)
 		}
 
 		case model_blockinst:
-		{
-			entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
-			memset(newentry, 0, sizeof(entry_t));
-			luaL_getmetatable(L, ENTRY_METATABLE);
-			lua_setmetatable(L, -2);
-
-			newentry->head = entry->head;
-			strcpy(newentry->name, key);
-
-			return 1;
-		}
-
 		case model_rategroup:
 		case model_syscall:
 		{
@@ -400,7 +391,22 @@ static int mt_entry_index(lua_State * L)
 			lua_setmetatable(L, -2);
 
 			newentry->head = entry->head;
-			strcpy(newentry->name, key);
+			if (strlen(entry->name) == 0)
+			{
+				// New entry, ex: pin1
+				strcpy(newentry->name, key);
+			}
+			else
+			{
+				// Concatenating to an entry, ex: pin1[2]
+				if ((strlen(entry->name) + strlen(key) + strlen("[]")) >= MODEL_SIZE_MAX)
+				{
+					return luaL_error(L, "Key label too long! (MODEL_SIZE_MAX = %d) %s[%s]", MODEL_SIZE_MAX, entry->name, key);
+				}
+
+				sprintf(newentry->name, "%s[%s]", entry->name, key);
+			}
+
 
 			return 1;
 		}

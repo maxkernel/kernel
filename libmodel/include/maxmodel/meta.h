@@ -93,7 +93,7 @@ typedef enum
 	meta_block			= 0x60,
 	meta_blockonupdate,
 	meta_blockondestroy,
-	meta_blockinput,
+	meta_blockinput,		// TODO - replace both these types with one meta_blockio
 	meta_blockoutput,
 
 } metatype_t;
@@ -103,7 +103,7 @@ typedef enum
 	meta_unknownio		= '?',
 	meta_input			= 'I',
 	meta_output			= 'O',
-} metaiotype_t;
+} meta_iotype_t;
 
 typedef struct
 {
@@ -210,7 +210,8 @@ typedef struct
 typedef struct
 {
 	const metahead_t head __meta_a1;
-	const char blockname[META_SIZE_BLOCKNAME] __meta_a1;
+	const char block_name[META_SIZE_BLOCKNAME] __meta_a1;
+	const meta_iotype_t io_type __meta_a1;
 	const char io_name[META_SIZE_BLOCKIONAME] __meta_a1;
 	const char io_signature __meta_a1;
 	const char io_description[META_SIZE_SHORTDESCRIPTION] __meta_a1;
@@ -279,9 +280,9 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 #define block_onupdate(blockname, function)		__meta_cbwrite(meta_blockcallback_t, meta_blockonupdate, (#function), "v:p", "", (#blockname), (function))
 #define block_ondestroy(blockname, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockondestroy, (#function), "v:p", "", (#blockname), (function))
 #define block_input(blockname, input_name, sig, desc) \
-												__meta_write(meta_blockio_t, meta_blockinput, (#blockname), (#input_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockinput, (#blockname), meta_input, (#input_name), (sig), (desc))
 #define block_output(blockname, output_name, sig, desc) \
-												__meta_write(meta_blockio_t, meta_blockoutput, (#blockname), (#output_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockoutput, (#blockname), meta_output, (#output_name), (sig), (desc))
 
 #define __meta_struct_version		version(1,0,0)
 
@@ -319,8 +320,8 @@ typedef struct
 	//meta_variable_t * cal_params[META_MAX_CALPARAMS];
 
 	meta_block_t * blocks[META_MAX_BLOCKS];
-	meta_blockcallback_t * block_callbacks[META_MAX_BLOCKCBS];
-	meta_blockio_t * block_ios[META_MAX_BLOCKIOS];
+	meta_blockio_t * blockios[META_MAX_BLOCKIOS];
+	meta_blockcallback_t * blockcbs[META_MAX_BLOCKCBS];
 } meta_t;
 
 typedef meta_callback_bv_f meta_initializer;
@@ -347,8 +348,16 @@ void meta_destroy(meta_t * meta);
 void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, const version_t ** version, const char ** author, const char ** desc);
 void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact);
 
-bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
-bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
+//bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
+//bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
+
+bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_block_t ** block);
+iterator_t meta_blockitr(const meta_t * meta);
+bool meta_blocknext(iterator_t itr, const meta_block_t ** block);
+
+bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const char * ioname, meta_iotype_t type, const meta_blockio_t ** blockio);
+iterator_t meta_blockioitr(const meta_t * meta);
+bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio);
 
 iterator_t meta_dependencyitr(const meta_t * meta);
 bool meta_dependencynext(iterator_t itr, const char ** dependency);
@@ -362,7 +371,8 @@ iterator_t meta_syscallitr(const meta_t * meta);
 bool meta_syscallnext(iterator_t itr, const meta_callback_t ** syscall);
 
 void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value);
-void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * value);
+void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * function);
+void meta_getblock(const meta_block_t * block, const char ** block_name, const char ** block_desc, const char ** constructor_name, const char ** constructor_sig, const char ** constructor_desc, meta_callback_f * constructor);
 
 #ifdef __cplusplus
 }

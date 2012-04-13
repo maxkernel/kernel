@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <regex.h>
 
+#include <aul/parse.h>
+
 #include <maxmodel/model.h>
 
 
@@ -162,8 +164,8 @@ static bool model_link_destroy(model_t * model, modelhead_t * self, modelhead_t 
 	if (!isself)
 	{
 		// If any of the linkables we are linking is being deleted, delete ourselves too
-		isself |= link->out->head.id == target->id;
-		isself |= link->in->head.id == target->id;
+		isself |= link->out.linkable->head.id == target->id;
+		isself |= link->in.linkable->head.id == target->id;
 	}
 
 	return isself;
@@ -274,7 +276,7 @@ static void model_linkable_analyse(const model_t * model, modeltraversal_t trave
 		{
 			case model_blockinst:	model_handlecallback(cbs->blockinsts, model, linkable);			break;
 			case model_syscall:		model_handlecallback(cbs->syscalls, model, linkable, script);	break;
-			case model_rategroup:	model_handlecallback(cbs->rategroups, model, linkable);			break;
+			case model_rategroup:	model_handlecallback(cbs->rategroups, model, linkable, script);	break;
 			default: break;
 		}
 	}
@@ -297,7 +299,7 @@ static void model_link_analyse(const model_t * model, modeltraversal_t traversal
 	{
 		case traversal_scripts_modules_configs_linkables_links:
 		{
-			model_handlecallback(cbs->links, model, link);
+			model_handlecallback(cbs->links, model, link, &link->out, &link->in);
 			break;
 		}
 
@@ -377,6 +379,7 @@ void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
 	*mem = meta_copy(meta);
 }
 
+/*
 string_t model_getbase(const char * ioname)
 {
 	// TODO - finish me!
@@ -388,7 +391,7 @@ string_t model_getsubscript(const char * ioname)
 	// TODO - finish me!
 	return string_blank();
 }
-
+*/
 
 model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err)
 {
@@ -695,21 +698,36 @@ model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, 
 	}
 
 	const char * path = NULL;
+	const char * constructor_sig = "";
 	meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
 
-	if (strcmp(blockname, "static") != 0)
+	// Verify the arguments
 	{
-		const char * constructor_sig = NULL;
-		if (!meta_getblock(module->backing, blockname, &constructor_sig, NULL, NULL))
+		if (strcmp(blockname, "static") == 0)
 		{
-			exception_set(err, EINVAL, "Module %s does not have block %s", path, blockname);
-			return NULL;
+			// We are a static block, make sure that args == 0
+			if (args_length != 0)
+			{
+				exception_set(err, EINVAL, "The static block instance for block %s cannot have arguments!", blockname);
+				return NULL;
+			}
 		}
-
-		if (strlen(constructor_sig) != args_length)
+		else
 		{
-			exception_set(err, EINVAL, "Block %s constructor argument mismatch. Expected %zu argument(s) for signature %s, got %zu", blockname, strlen(constructor_sig), constructor_sig, args_length);
-			return NULL;
+			const meta_block_t * block = NULL;
+			if (!meta_lookupblock(module->backing, blockname, &block))
+			{
+				exception_set(err, EINVAL, "Module %s does not have block %s", path, blockname);
+				return NULL;
+			}
+
+			meta_getblock(block, NULL, NULL, NULL, &constructor_sig, NULL, NULL);
+
+			if (strlen(constructor_sig) != args_length)
+			{
+				exception_set(err, EINVAL, "Block %s constructor argument mismatch. Expected %zu argument(s) for signature %s, got %zu", blockname, strlen(constructor_sig), constructor_sig, args_length);
+				return NULL;
+			}
 		}
 	}
 
@@ -739,6 +757,8 @@ model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, 
 
 	strcpy(blockinst->name, blockname);
 	blockinst->module = module;
+	strcpy(blockinst->args_sig, constructor_sig);
+
 	char * buffer  = (char *)&blockinst[1];
 	for (size_t i = 0; i < args_length; i++)
 	{
@@ -891,18 +911,71 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
+	}
 
-		if (strlen(outname) >= MODEL_SIZE_BLOCKIONAME)
+	// Parse out the symbol
+	bool makesym(const model_linkable_t * linkable, const char * name, model_linksymbol_t * sym, exception_t ** err)
+	{
+		// Sanity check
 		{
-			exception_set(err, ENOMEM, "Block output name %s too long! (MODEL_SIZE_BLOCKIONAME = %d)", outname, MODEL_SIZE_BLOCKIONAME);
-			return NULL;
+			if (exception_check(err))
+			{
+				return false;
+			}
+
+			if (linkable == NULL || name == NULL)
+			{
+				exception_set(err, EINVAL, "Bad arguments!");
+				return false;
+			}
+
+			if (strlen(name) >= MODEL_SIZE_BLOCKIONAME)
+			{
+				exception_set(err, EINVAL, "Block io name (%s) too long! (MODEL_SIZE_BLOCKIONAME = %d)", name, MODEL_SIZE_BLOCKIONAME);
+				return false;
+			}
 		}
 
-		if (strlen(inname) >= MODEL_SIZE_BLOCKIONAME)
+		char base[MODEL_SIZE_BLOCKIONAME] = {0};
+		ssize_t index = -1;
+
+		strcpy(base, name);
+
+		regex_t pattern = {0};
+		if (regcomp(&pattern, "^(.+)\\[([0-9]+)\\]$", REG_EXTENDED) != 0)
 		{
-			exception_set(err, ENOMEM, "Block input name %s too long! (MODEL_SIZE_BLOCKIONAME = %d)", inname, MODEL_SIZE_BLOCKIONAME);
-			return NULL;
+			exception_set(err, EFAULT, "Bad model_newlink -> makesym regex!");
+			return false;
 		}
+
+		regmatch_t match[3];
+		memset(match, 0, sizeof(regmatch_t) * 3);
+
+		if (regexec(&pattern, base, 3, match, 0) == 0)
+		{
+			// Regex matched, pull base and index out
+			base[match[1].rm_eo] = '\0';
+			base[match[2].rm_eo] = '\0';
+			index = parse_int(&base[match[2].rm_so], NULL);
+		}
+
+		regfree(&pattern);
+
+		sym->linkable = linkable;
+		sym->index = index;
+		strcpy(sym->name, base);
+
+		return true;
+	}
+
+	model_linksymbol_t outsym, insym;
+	memset(&outsym, 0, sizeof(model_linksymbol_t));
+	memset(&insym, 0, sizeof(model_linksymbol_t));
+
+	if (!makesym(out, outname, &outsym, err) || !makesym(in, inname, &insym, err))
+	{
+		// An error happened in makesym (exception was set in function), just return NULL
+		return NULL;
 	}
 
 	// Verify that out_name and in_name are valid!
@@ -913,32 +986,14 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 			model_blockinst_t * blockinst = out->backing.blockinst;
 			meta_t * backing = blockinst->module->backing;
 
-			size_t ios_length = 0;
-			if (!meta_getblock(backing, blockinst->name, NULL, &ios_length, NULL))
+			const meta_block_t * block = NULL;
+			if (!meta_lookupblock(backing, blockinst->name, &block))
 			{
-				exception_set(err, EINVAL, "Could not get block instance IO length");
+				exception_set(err, EINVAL, "Could not lookup block %s", blockinst->name);
 				return NULL;
 			}
 
-			const char * names[ios_length];
-			metaiotype_t types[ios_length];
-			if (!meta_getblockios(backing, blockinst->name, names, types, NULL, NULL, ios_length))
-			{
-				exception_set(err, EINVAL, "Could not get block instance IOs");
-				return NULL;
-			}
-
-			bool found = false;
-			for (size_t i = 0; i < ios_length; i++)
-			{
-				if (types[i] == meta_output && strcmp(names[i], outname) == 0)
-				{
-					found = true;
-					break;
-				}
-			}
-
-			if (!found)
+			if (!meta_lookupblockio(backing, block, outname, meta_output, NULL))
 			{
 				exception_set(err, EINVAL, "Block instance has no output named '%s'", outname);
 				return NULL;
@@ -955,21 +1010,12 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 
 		case model_syscall:
 		{
-			regex_t arg_pattern = {0};
-			if (regcomp(&arg_pattern, "^a[0-9]+$", REG_EXTENDED | REG_NOSUB) != 0)
+			if (strcmp(outsym.name, "a") != 0)
 			{
-				exception_set(err, EFAULT, "Bad model_syscall output regex!");
+				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a[0]' ... 'a[n]')", outname);
 				return NULL;
 			}
 
-			if (regexec(&arg_pattern, outname, 0, NULL, 0) != 0)
-			{
-				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a1' ... 'a#')", outname);
-				regfree(&arg_pattern);
-				return NULL;
-			}
-
-			regfree(&arg_pattern);
 			break;
 		}
 
@@ -987,32 +1033,14 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 			model_blockinst_t * blockinst = in->backing.blockinst;
 			meta_t * backing = blockinst->module->backing;
 
-			size_t ios_length = 0;
-			if (!meta_getblock(backing, blockinst->name, NULL, &ios_length, NULL))
+			const meta_block_t * block = NULL;
+			if (!meta_lookupblock(backing, blockinst->name, &block))
 			{
-				exception_set(err, EINVAL, "Could not get block instance IO length");
+				exception_set(err, EINVAL, "Could not lookup block %s", blockinst->name);
 				return NULL;
 			}
 
-			const char * names[ios_length];
-			metaiotype_t types[ios_length];
-			if (!meta_getblockios(backing, blockinst->name, names, types, NULL, NULL, ios_length))
-			{
-				exception_set(err, EINVAL, "Could not get block instance IOs");
-				return NULL;
-			}
-
-			bool found = false;
-			for (size_t i = 0; i < ios_length; i++)
-			{
-				if (types[i] == meta_input && strcmp(names[i], inname) == 0)
-				{
-					found = true;
-					break;
-				}
-			}
-
-			if (!found)
+			if (!meta_lookupblockio(backing, block, inname, meta_input, NULL))
 			{
 				exception_set(err, EINVAL, "Block instance has no input named '%s'", inname);
 				return NULL;
@@ -1065,10 +1093,8 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 		return NULL;
 	}
 
-	strcpy(link->out_name, outname);
-	link->out = out;
-	strcpy(link->in_name, inname);
-	link->in = in;
+	link->out = outsym;
+	link->in = insym;
 
 	return link;
 }
