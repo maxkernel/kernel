@@ -1166,9 +1166,12 @@ int main(int argc, char * argv[])
 				{
 					iterator_t ditr = meta_dependencyitr(meta);
 					{
-						const char * depname = NULL;
-						while (meta_dependencynext(ditr, &depname))
+						const meta_dependency_t * dependency = NULL;
+						while (meta_dependencynext(ditr, &dependency))
 						{
+							const char * depname = NULL;
+							meta_getdependency(dependency, &depname);
+
 							LOGK(LOG_DEBUG, "Resolving dependency %s", depname);
 
 							const char * prefix = path_resolve(depname, P_MODULE);

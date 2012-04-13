@@ -196,7 +196,6 @@ module_t * module_load(meta_t * meta)
 	module->backing = meta;
 	LIST_INIT(&module->syscalls);
 	LIST_INIT(&module->configs);
-	//LIST_INIT(&module->calentries);
 	LIST_INIT(&module->blocks);
 	LIST_INIT(&module->blockinsts);
 

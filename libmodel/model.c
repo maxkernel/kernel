@@ -171,18 +171,6 @@ static bool model_link_destroy(model_t * model, modelhead_t * self, modelhead_t 
 	return isself;
 }
 
-
-/*
-static inline void traverse(const model_t * model, modeltraversal_t traversal, const model_analysis_t * cbs, void ** items, size_t maxsize)
-{
-	modelhead_t * item = NULL;
-	model_foreach(item, items, maxsize)
-	{
-		item->analyse(model, traversal, cbs, item);
-	}
-}
-*/
-
 #define traverse(model, func, t, cbs, items, size, ...) \
 	({ \
 		modelhead_t * item = NULL;								\

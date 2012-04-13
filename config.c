@@ -183,7 +183,7 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config_variab
 	config->variable = config_variable;
 	strcpy(config->cache, cache);
 
-	LOGK(LOG_DEBUG, "Registered config variable %s in module %s", name, path);
+	LOGK(LOG_DEBUG, "Registered config variable '%s' in module %s", name, path);
 	return config;
 }
 

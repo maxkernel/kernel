@@ -27,7 +27,6 @@ extern "C" {
 #define META_MAX_DEPENDENCIES			15
 #define META_MAX_SYSCALLS				50
 #define META_MAX_CONFIGS				50
-//#define META_MAX_CALPARAMS				50
 #define META_MAX_BLOCKS					25
 #define META_MAX_BLOCKCBS				(2 * META_MAX_BLOCKS)
 #define META_MAX_BLOCKIOS				(2 * 30 * META_MAX_BLOCKS)
@@ -45,7 +44,6 @@ extern "C" {
 	+ 1		/* meta_postactivate */	\
 	+ META_MAX_SYSCALLS				\
 	+ META_MAX_CONFIGS				\
-	/*+ META_MAX_CALPARAMS*/		\
 	+ 1		/* meta_modechange */	\
 	+ 1		/* meta_preview */		\
 	+ META_MAX_BLOCKS				\
@@ -86,15 +84,10 @@ typedef enum
 
 	meta_config			= 0x40,
 
-	//meta_calparam		= 0x50,
-	//meta_calonmodechange,
-	//meta_calonpreview,
-
 	meta_block			= 0x60,
 	meta_blockonupdate,
 	meta_blockondestroy,
-	meta_blockinput,		// TODO - replace both these types with one meta_blockio
-	meta_blockoutput,
+	meta_blockio,
 
 } metatype_t;
 
@@ -251,7 +244,7 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 	: (_)== meta_postactivate? sizeof(meta_callback_vv_t) : (_)== meta_syscall? sizeof(meta_callback_t) : (_)== meta_configparam? sizeof(meta_variable_t) \
 	: (_)== meta_calparam? sizeof(meta_variable_t) : (_)== meta_calmodechange? sizeof(meta_callback_vi_t) : (_)== meta_calpreview? sizeof(meta_callback_bscpp_t) \
 	: (_)== meta_block? sizeof(meta_block_t) : (_)== meta_blockupdate? sizeof(meta_blockcallback_t) : (_)== meta_blockdestroy? sizeof(meta_blockcallback_t) \
-	: (_)== meta_blockinput? sizeof(meta_blockio_t) : (_)== meta_blockoutput? sizeof(meta_blockio_t) : 0)
+	: (_)== meta_blockio? sizeof(meta_blockio_t) : 0)
 
 
 
@@ -271,18 +264,14 @@ typedef void (*__meta_begin_callback)(const meta_begin_t * begin);
 
 #define define_syscall(function, sig, desc)		__meta_cbwrite(meta_callback_t, meta_syscall, (#function), (sig), (desc), (meta_callback_f)(function))
 
-//#define cal_param(variable, sig, desc)			__meta_write(meta_variable_t, meta_calparam, (#variable), (sig), (desc), (meta_variable_m)&(variable))
-//#define cal_onmodechange(function)				__meta_cbwrite(meta_callback_vi_t, meta_calonmodechange, (#function), "v:i", "", (function))
-//#define cal_onpreview(function)					__meta_cbwrite(meta_callback_bscpp_t, meta_calonpreview, (#function), "b:scpp", "", (function))
-
 #define define_block(blockname, block_desc, constructor, sig, constructor_desc) \
 												__meta_write(meta_block_t, meta_block, (#blockname), (block_desc), (#constructor), (sig), (constructor_desc), (meta_callback_f)(constructor))
 #define block_onupdate(blockname, function)		__meta_cbwrite(meta_blockcallback_t, meta_blockonupdate, (#function), "v:p", "", (#blockname), (function))
 #define block_ondestroy(blockname, function)	__meta_cbwrite(meta_blockcallback_t, meta_blockondestroy, (#function), "v:p", "", (#blockname), (function))
 #define block_input(blockname, input_name, sig, desc) \
-												__meta_write(meta_blockio_t, meta_blockinput, (#blockname), meta_input, (#input_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockio, (#blockname), meta_input, (#input_name), (sig), (desc))
 #define block_output(blockname, output_name, sig, desc) \
-												__meta_write(meta_blockio_t, meta_blockoutput, (#blockname), meta_output, (#output_name), (sig), (desc))
+												__meta_write(meta_blockio_t, meta_blockio, (#blockname), meta_output, (#output_name), (sig), (desc))
 
 #define __meta_struct_version		version(1,0,0)
 
@@ -315,10 +304,6 @@ typedef struct
 
 	meta_variable_t * configs[META_MAX_CONFIGS];
 
-	//meta_callback_vi_t * cal_modechange;
-	//meta_callback_bscpp_t * cal_preview;
-	//meta_variable_t * cal_params[META_MAX_CALPARAMS];
-
 	meta_block_t * blocks[META_MAX_BLOCKS];
 	meta_blockio_t * blockios[META_MAX_BLOCKIOS];
 	meta_blockcallback_t * blockcbs[META_MAX_BLOCKCBS];
@@ -348,9 +333,6 @@ void meta_destroy(meta_t * meta);
 void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, const version_t ** version, const char ** author, const char ** desc);
 void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact);
 
-//bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc);
-//bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length);
-
 bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_block_t ** block);
 iterator_t meta_blockitr(const meta_t * meta);
 bool meta_blocknext(iterator_t itr, const meta_block_t ** block);
@@ -359,8 +341,9 @@ bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const c
 iterator_t meta_blockioitr(const meta_t * meta);
 bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio);
 
+bool meta_lookupdependency(const meta_t * meta, const char * name, const meta_dependency_t ** dependency);
 iterator_t meta_dependencyitr(const meta_t * meta);
-bool meta_dependencynext(iterator_t itr, const char ** dependency);
+bool meta_dependencynext(iterator_t itr, const meta_dependency_t ** dependency);
 
 bool meta_lookupconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config);
 iterator_t meta_configitr(const meta_t * meta);
@@ -370,6 +353,7 @@ bool meta_lookupsyscall(const meta_t * meta, const char * syscallname, const met
 iterator_t meta_syscallitr(const meta_t * meta);
 bool meta_syscallnext(iterator_t itr, const meta_callback_t ** syscall);
 
+void meta_getdependency(const meta_dependency_t * dependency, const char ** name);
 void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value);
 void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * function);
 void meta_getblock(const meta_block_t * block, const char ** block_name, const char ** block_desc, const char ** constructor_name, const char ** constructor_sig, const char ** constructor_desc, meta_callback_f * constructor);

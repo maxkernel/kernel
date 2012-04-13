@@ -142,8 +142,7 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 				case meta_block:
 				case meta_blockonupdate:
 				case meta_blockondestroy:
-				case meta_blockinput:
-				case meta_blockoutput:
+				case meta_blockio:
 				{
 					const char * name = NULL;
 					void ** list = NULL;
@@ -157,8 +156,7 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 						case meta_block:			name = "meta_block";		list = (void **)&meta->blocks;			length = META_MAX_BLOCKS;			break;
 						case meta_blockonupdate:
 						case meta_blockondestroy:	name = "meta_callback";		list = (void **)&meta->blockcbs;		length = META_MAX_BLOCKCBS;			break;
-						case meta_blockinput:
-						case meta_blockoutput:		name = "meta_io";			list = (void **)&meta->blockios;		length = META_MAX_BLOCKIOS; 		break;
+						case meta_blockio:			name = "meta_io";			list = (void **)&meta->blockios;		length = META_MAX_BLOCKIOS; 		break;
 						default:
 						{
 							exception_set(err, EFAULT, "Unhandled switch for item %x!", head->type);
@@ -400,55 +398,27 @@ meta_t * meta_copy(const meta_t * meta)
 	memcpy(newmeta->buffer, meta->buffer, newmeta->section_size);
 
 	ssize_t offset = ((ssize_t)newmeta->buffer - (ssize_t)meta->buffer);
-	#define fixptr(p)		(p) = ((p) == NULL)? NULL : (void *)((ssize_t)(p) + (offset))
+	#define fixptr(p) \
+		({ (p) = ((p) == NULL)? NULL : (void *)((ssize_t)(p) + (offset)); })
 
 	// Fix the pointers to point to the new buffer
 	{
-		for (size_t i = 0; i < META_MAX_STRUCTS; i++)
-		{
-			fixptr(newmeta->buffer_indexes[i]);
-		}
+		for (size_t i = 0; i < META_MAX_STRUCTS; i++)		fixptr(newmeta->buffer_indexes[i]);
 		fixptr(newmeta->begin);
 		fixptr(newmeta->name);
 		fixptr(newmeta->version);
 		fixptr(newmeta->author);
 		fixptr(newmeta->description);
-		for (size_t i = 0; i < META_MAX_DEPENDENCIES; i++)
-		{
-			fixptr(newmeta->dependencies[i]);
-		}
+		for (size_t i = 0; i < META_MAX_DEPENDENCIES; i++)	fixptr(newmeta->dependencies[i]);
 		fixptr(newmeta->init);
 		fixptr(newmeta->destroy);
 		fixptr(newmeta->preact);
 		fixptr(newmeta->postact);
-		for (size_t i = 0; i < META_MAX_SYSCALLS; i++)
-		{
-			fixptr(newmeta->syscalls[i]);
-		}
-		for (size_t i = 0; i < META_MAX_CONFIGS; i++)
-		{
-			fixptr(newmeta->configs[i]);
-		}
-		/*
-		fixptr(newmeta->cal_modechange);
-		fixptr(newmeta->cal_preview);
-		for (size_t i = 0; i < META_MAX_CALPARAMS; i++)
-		{
-			fixptr(newmeta->cal_params[i]);
-		}
-		*/
-		for (size_t i = 0; i < META_MAX_BLOCKS; i++)
-		{
-			fixptr(newmeta->blocks[i]);
-		}
-		for (size_t i = 0; i < META_MAX_BLOCKCBS; i++)
-		{
-			fixptr(newmeta->blockcbs[i]);
-		}
-		for (size_t i = 0; i < META_MAX_BLOCKIOS; i++)
-		{
-			fixptr(newmeta->blockios[i]);
-		}
+		for (size_t i = 0; i < META_MAX_SYSCALLS; i++)		fixptr(newmeta->syscalls[i]);
+		for (size_t i = 0; i < META_MAX_CONFIGS; i++)		fixptr(newmeta->configs[i]);
+		for (size_t i = 0; i < META_MAX_BLOCKS; i++)		fixptr(newmeta->blocks[i]);
+		for (size_t i = 0; i < META_MAX_BLOCKCBS; i++)		fixptr(newmeta->blockcbs[i]);
+		for (size_t i = 0; i < META_MAX_BLOCKIOS; i++)		fixptr(newmeta->blockios[i]);
 	}
 
 	return newmeta;
@@ -467,6 +437,10 @@ void meta_destroy(meta_t * meta)
 }
 
 
+static const void * __meta_null = NULL;
+#define meta_itrnext(start, ptr, max) \
+	(((void *)(ptr) < ((void *)(start) + sizeof(void *) * ((max) - 1)))? (void *)&(ptr)[1] : &__meta_null)
+
 void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, const version_t ** version, const char ** author, const char ** desc)
 {
 	// Sanity check
@@ -477,30 +451,11 @@ void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, c
 		}
 	}
 
-	if (path != NULL)
-	{
-		*path = meta->path;
-	}
-
-	if (name != NULL && meta->name != NULL)
-	{
-		*name = meta->name->name;
-	}
-
-	if (version != NULL && meta->version != NULL)
-	{
-		*version = &meta->version->version;
-	}
-
-	if (author != NULL && meta->author != NULL)
-	{
-		*author = meta->author->name;
-	}
-
-	if (desc != NULL && meta->description != NULL)
-	{
-		*desc = meta->description->description;
-	}
+	if (path != NULL)								*path = meta->path;
+	if (name != NULL && meta->name != NULL)			*name = meta->name->name;
+	if (version != NULL && meta->version != NULL)	*version = &meta->version->version;
+	if (author != NULL && meta->author != NULL)		*author = meta->author->name;
+	if (desc != NULL && meta->description != NULL)	*desc = meta->description->description;
 }
 
 void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact)
@@ -513,137 +468,11 @@ void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destr
 		}
 	}
 
-	if (init != NULL && meta->init != NULL)
-	{
-		*init = meta->init->function;
-	}
-
-	if (destroy != NULL && meta->destroy != NULL)
-	{
-		*destroy = meta->destroy->function;
-	}
-
-	if (preact != NULL && meta->preact != NULL)
-	{
-		*preact = meta->preact->function;
-	}
-
-	if (postact != NULL && meta->postact != NULL)
-	{
-		*postact = meta->postact->function;
-	}
+	if (init != NULL && meta->init != NULL)			*init = meta->init->function;
+	if (destroy != NULL && meta->destroy != NULL)	*destroy = meta->destroy->function;
+	if (preact != NULL && meta->preact != NULL)		*preact = meta->preact->function;
+	if (postact != NULL && meta->postact != NULL)	*postact = meta->postact->function;
 }
-
-/*
-bool meta_getblock(const meta_t * meta, const char * blockname, char const ** constructor_sig, size_t * ios_length, const char ** desc)
-{
-	// Sanity check
-	{
-		if (meta == NULL || blockname == NULL)
-		{
-			return false;
-		}
-
-		if (strlen(blockname) >= META_SIZE_BLOCKNAME)
-		{
-			return false;
-		}
-	}
-
-	meta_block_t * block = NULL;
-	meta_foreach(block, meta->blocks, META_MAX_BLOCKS)
-	{
-		if (strcmp(block->block_name, blockname) == 0)
-		{
-			if (constructor_sig != NULL)
-			{
-				*constructor_sig = block->constructor_signature;
-			}
-
-			if (ios_length != NULL)
-			{
-				*ios_length = 0;
-
-				meta_blockio_t * blockio = NULL;
-				meta_foreach(blockio, meta->block_ios, META_MAX_BLOCKIOS)
-				{
-					if (strcmp(blockio->blockname, blockname) == 0)
-					{
-						*ios_length += 1;
-					}
-				}
-			}
-
-			if (desc != NULL)
-			{
-				*desc = block->block_description;
-			}
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool meta_getblockios(const meta_t * meta, const char * blockname, char const ** names, metaiotype_t * types, char * sigs, const char ** descs, size_t length)
-{
-	// Sanity check
-	{
-		if (meta == NULL || blockname == NULL)
-		{
-			return false;
-		}
-
-		if (strlen(blockname) >= META_SIZE_BLOCKNAME)
-		{
-			return false;
-		}
-	}
-
-	meta_blockio_t * blockio = NULL;
-	size_t index = 0;
-	meta_foreach(blockio, meta->block_ios, META_MAX_BLOCKIOS)
-	{
-		if (index == length)
-		{
-			break;
-		}
-
-		if (strcmp(blockio->blockname, blockname) == 0)
-		{
-			if (names != NULL)
-			{
-				names[index] = blockio->io_name;
-			}
-
-			if (types != NULL)
-			{
-				switch (blockio->head.type)
-				{
-					case meta_blockinput:	types[index] = meta_input;		break;
-					case meta_blockoutput:	types[index] = meta_output;		break;
-					default:				types[index] = meta_unknownio;	break;
-				}
-			}
-
-			if (sigs != NULL)
-			{
-				sigs[index] = blockio->io_signature;
-			}
-
-			if (descs != NULL)
-			{
-				descs[index] = blockio->io_description;
-			}
-
-			index += 1;
-		}
-	}
-
-	return true;
-}
-*/
 
 bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_block_t ** block)
 {
@@ -687,9 +516,7 @@ iterator_t meta_blockitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_block_t ** blk = (meta_block_t **)*itrobject;
-		*itrobject = (*blk == NULL)? (void *)&meta->blocks[0] : (void *)&blk[1];
-
-		// TODO - (IMPORTANT) boundary conditions (prevent overrunning blocks array!)
+		*itrobject = (*blk == NULL)? (void *)&meta->blocks[0] : meta_itrnext(meta->blocks, blk, META_MAX_BLOCKS);
 
 		return *blk;
 	}
@@ -756,9 +583,7 @@ iterator_t meta_blockioitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_blockio_t ** bio = (meta_blockio_t **)*itrobject;
-		*itrobject = (*bio == NULL)? (void *)&meta->blockios[0] : (void *)&bio[1];
-
-		// TODO - (IMPORTANT) boundry conditions (prevent overrunning block_ios array!)
+		*itrobject = (*bio == NULL)? (void *)&meta->blockios[0] : meta_itrnext(meta->blockios, bio, META_MAX_BLOCKIOS);
 
 		return *bio;
 	}
@@ -778,6 +603,34 @@ bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio)
 	return false;
 }
 
+bool meta_lookupdependency(const meta_t * meta, const char * name, const meta_dependency_t ** dependency)
+{
+	// Sanity check
+	{
+		if (meta == NULL || name == NULL)
+		{
+			return false;
+		}
+
+		if (strlen(name) >= META_SIZE_DEPENDENCY)
+		{
+			return false;
+		}
+	}
+
+	meta_dependency_t * tdependency = NULL;
+	meta_foreach(tdependency, meta->dependencies, META_MAX_DEPENDENCIES)
+	{
+		if (strcmp(tdependency->dependency, name) == 0)
+		{
+			if (dependency != NULL)		*dependency = tdependency;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 iterator_t meta_dependencyitr(const meta_t * meta)
 {
 	// Sanity check
@@ -792,9 +645,7 @@ iterator_t meta_dependencyitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_dependency_t ** dep = (meta_dependency_t **)*itrobject;
-		*itrobject = (*dep == NULL)? (void *)&meta->dependencies[0] : (void *)&dep[1];
-
-		// TODO - (IMPORTANT) boundry conditions (prevent overrunning dependencies array!)
+		*itrobject = (*dep == NULL)? (void *)&meta->dependencies[0] : meta_itrnext(meta->dependencies, dep, META_MAX_DEPENDENCIES);
 
 		return *dep;
 	}
@@ -802,12 +653,12 @@ iterator_t meta_dependencyitr(const meta_t * meta)
 	return iterator_new("meta_dependency", ditr_next, NULL, meta, (void *)&meta->dependencies[0]);
 }
 
-bool meta_dependencynext(iterator_t itr, const char ** dependency)
+bool meta_dependencynext(iterator_t itr, const meta_dependency_t ** dependency)
 {
 	const meta_dependency_t * nextdependency = iterator_next(itr, "meta_dependency");
 	if (nextdependency != NULL)
 	{
-		if (dependency != NULL)		*dependency = nextdependency->dependency;
+		if (dependency != NULL)		*dependency = nextdependency;
 		return true;
 	}
 
@@ -856,9 +707,7 @@ iterator_t meta_configitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_variable_t ** cfg = (meta_variable_t **)*itrobject;
-		*itrobject = (*cfg == NULL)? (void *)&meta->configs[0] : (void *)&cfg[1];
-
-		// TODO - (IMPORTANT) boundary conditions (prevent overrunning configs array!)
+		*itrobject = (*cfg == NULL)? (void *)&meta->configs[0] : meta_itrnext(meta->configs, cfg, META_MAX_CONFIGS);
 
 		return *cfg;
 	}
@@ -920,9 +769,7 @@ iterator_t meta_syscallitr(const meta_t * meta)
 	{
 		const meta_t * meta = object;
 		meta_callback_t ** sys = (meta_callback_t **)*itrobject;
-		*itrobject = (*sys == NULL)? (void *)&meta->syscalls[0] : (void *)&sys[1];
-
-		// TODO - (IMPORTANT) boundary conditions (prevent overrunning syscalls array!)
+		*itrobject = (*sys == NULL)? (void *)&meta->syscalls[0] : meta_itrnext(meta->syscalls, sys, META_MAX_SYSCALLS);
 
 		return *sys;
 	}
@@ -940,6 +787,21 @@ bool meta_syscallnext(iterator_t itr, const meta_callback_t ** callback)
 	}
 
 	return false;
+}
+
+
+
+void meta_getdependency(const meta_dependency_t * dependency, const char ** name)
+{
+	// Sanity check
+	{
+		if (dependency == NULL)
+		{
+			return;
+		}
+	}
+
+	if (name != NULL)		*name = dependency->dependency;
 }
 
 void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value)
