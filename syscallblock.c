@@ -6,7 +6,7 @@
 #include <serialize.h>
 
 
-extern module_t * kernel_module;
+//extern module_t * kernel_module;
 
 static void syscallblock_dosyscall(void * ret, const void * args[], void * userdata)
 {
@@ -73,19 +73,20 @@ blockinst_t * syscallblock_getblockinst(syscallblock_t * sb)
 	return sb->blockinst;
 }
 
-syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc)
+syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, size_t numparams, const char * desc)
 {
 	// Sanity check
 	{
-		if (name == NULL || params == NULL)
+		if (name == NULL || sig == NULL)
 		{
-			LOGK(LOG_ERR, "Could not create syscall block with name '%s' or invalid parameters", name);
+			LOGK(LOG_ERR, "Could not create syscall block with name '%s' or invalid signature", name);
 			return NULL;
 		}
 
-		for (size_t i=0; i<numparams; i++)
+		const char * param = NULL;
+		foreach_methodparam(method_params(sig), param)
 		{
-			switch (params[i]->input->sig)
+			switch (*param)
 			{
 				case T_BOOLEAN:
 				case T_INTEGER:
@@ -95,24 +96,21 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 					continue;
 
 				default:
-					LOGK(LOG_ERR, "Could not create syscall block %s: invalid type for parameter %zu: %s", name, i, kernel_datatype(params[i]->input->sig));
+					LOGK(LOG_ERR, "Could not create syscall block %s: invalid type '%s'", name, kernel_datatype(*param));
 					return NULL;
 			}
 		}
 	}
 
-	syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
+	size_t argcount = method_numparams(method_params(sig));
+	size_t sb_size = sizeof(syscallblock_t) + (sizeof(biobacking_t *) * argcount);
+	syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sb_size);
 	syscall_f func = NULL;
-	string_t sig = string_new("%c:", (ret == NULL)? 'v' : ret->output->sig);
-	for (size_t i = 0; i < numparams; i++)
-	{
-		string_append(&sig, "%c", params[i]->input->sig);
-	}
 
 	// Build the closure
 	{
 		exception_t * e = NULL;
-		sb->closure = closure_build(&func, syscallblock_dosyscall, sig.string, sb, &e);
+		sb->closure = closure_build(&func, syscallblock_dosyscall, sig, sb, &e);
 		if (sb->closure == NULL || exception_check(&e))
 		{
 			LOGK(LOG_ERR, "Could not create syscall block closure %s: %s", name, (e == NULL)? "Unknown error" : e->message);
@@ -124,24 +122,56 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 	// Build syscall
 	{
 		exception_t * e = NULL;
-		sb->syscall = syscall_new(name, sig.string, func, desc, &e);
+		sb->syscall = syscall_new(name, sig, func, desc, &e);
 		if (sb->syscall == NULL || exception_check(&e))
 		{
 			LOGK(LOG_ERR, "Could not create syscall %s: %s", name, (e == NULL)? "Unknown error" : e->message);
 			exception_free(e);
 			return NULL;
 		}
+	}
 
+	// Build the biobacking return
+	{
+		exception_t * e = NULL;
+		sb->retbacking = link_newbacking(method_returntype(sig), &e);
+		if (sb->retbacking == NULL || exception_check(&e))
+		{
+			LOGK(LOG_ERR, "Could not create syscall return backing for %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+			exception_free(e);
+			return NULL;
+		}
+	}
+
+	// Build the biobacking arguments
+	{
+		exception_t * e = NULL;
+		sb->argcount = argcount;
+
+		const char * param = NULL;
+		size_t index = 0;
+		foreach_methodparam(method_params(sig), param)
+		{
+			sb->argbacking[index] = link_newbacking(*param, &e);
+			if (sb->argbacking[index] == NULL || exception_check(&e))
+			{
+				LOGK(LOG_ERR, "Could not create syscall arg[%zu] backing for %s: %s", index, name, (e == NULL)? "Unknown error" : e->message);
+				exception_free(e);
+				return NULL;
+			}
+
+			index += 1;
+		}
 	}
 
 	// Build block
+	/* TODO - finish me!
 	{
 		string_t blkobjname = string_new("%s(%s) syscall block", sb->syscall->name, sb->syscall->sig);
 		string_t blkname = string_new("syscall_%s", name);
 		string_t blkdesc = string_new("Syscall block for %s(%s)", sb->syscall->name, sb->syscall->sig);
 
 		block_t * blk = kobj_new("Block", string_copy(&blkobjname), io_blockinfo, io_blockfree, sizeof(block_t));
-
 		blk->name = string_copy(&blkname);
 		blk->desc = string_copy(&blkdesc);
 		LIST_INIT(&blk->inputs);
@@ -173,11 +203,14 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 
 		sb->block = blk;
 	}
+	*/
 
 	// Create block instance
-	sb->blockinst = io_newblockinst(sb->block, NULL);
+	//sb->blockinst = io_newblockinst(sb->block, NULL);
+	sb->blockinst = blockinst_new(NULL, syscall, name);
 
 	// Route the data
+	/* TODO - finish me!
 	{
 		for (size_t index = 0; index < numparams; index++)
 		{
@@ -209,6 +242,7 @@ syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binpu
 			}
 		}
 	}
+	*/
+
 	return sb;
 }
-

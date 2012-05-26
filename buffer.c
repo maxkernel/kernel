@@ -187,6 +187,14 @@ buffer_t buffer_new()
 
 buffer_t buffer_dup(const buffer_t b)
 {
+	// Sanity check
+	{
+		if (buffer_invalid(b))
+		{
+			return (buffer_t)-1;
+		}
+	}
+
 	__sync_add_and_fetch(&buffers[b]->references, 1);		// Atomic increment
 	return (buffer_t)b;
 }
@@ -231,9 +239,12 @@ done:
 
 void buffer_write(buffer_t b, const void * data, off_t offset, size_t length)
 {
-	if (buffer_invalid(b))
+	// Sanity check
 	{
-		return;
+		if (buffer_invalid(b) || data == NULL)
+		{
+			return;
+		}
 	}
 
 	size_t size = buffer_size(b);
@@ -286,9 +297,12 @@ done:
 
 size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
 {
-	if (buffer_invalid(b))
+	// Sanity check
 	{
-		return 0;
+		if (buffer_invalid(b) || data == NULL)
+		{
+			return 0;
+		}
 	}
 
 	size_t size = buffer_size(b);
@@ -317,9 +331,12 @@ bool buffer_send(buffer_t buffer, int sock)
 
 size_t buffer_size(const buffer_t b)
 {
-	if (buffer_invalid(b))
+	// Sanity check
 	{
-		return 0;
+		if (buffer_invalid(b))
+		{
+			return 0;
+		}
 	}
 
 	size_t s = 0;
@@ -333,11 +350,13 @@ size_t buffer_size(const buffer_t b)
 
 void buffer_free(buffer_t b)
 {
-	if (buffer_invalid(b))
+	// Sanity check
 	{
-		return;
+		if (buffer_invalid(b))
+		{
+			return;
+		}
 	}
-
 
 	int refs = __sync_sub_and_fetch(&buffers[b]->references, 1);		// Atomic decrement
 	if (refs > 0)

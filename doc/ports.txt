@@ -1,8 +1,8 @@
-NAME			TYPE		PORT				DEFINED IN
+NAME			TYPE		PORT					DEFINED IN
 ===========================================================================================================
 bundlepeer		TCP		59001
-discovery		UDP		50091				/discovery/include/discovery.h
-console			TCP		48000				/console/include/console.h
-console			UNIX		/var/local/maxkern.sock		/console/include/console.h
+discovery		UDP		50091						/discovery/include/discovery.h
+console			TCP		48000						/console/include/console.h
+console			UNIX	/var/run/maxkernel.socket	/console/include/console.h
 service			TCP		10001
 service			UDP		10002

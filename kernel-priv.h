@@ -30,24 +30,29 @@ extern "C" {
 #define CAL_SIZE_CACHE			AUL_STRING_MAXLEN
 #define CONFIG_SIZE_CACHE		MODEL_SIZE_VALUE
 
-// TODO - make these typedefs!
-struct __block_t;
-struct __block_inst_t;
-struct __boutput_inst_t;
-struct __binput_inst_t;
-struct __kthread_t;
+typedef struct __block_t block_t;
+typedef struct __blockinst_t blockinst_t;
+//struct __boutput_inst_t;
+//struct __binput_inst_t;
+typedef struct __trigger_t trigger_t;
+typedef struct __kthread_t kthread_t;
+typedef struct __biobacking_t biobacking_t;
+typedef struct __link_t link_t;
 
 typedef void (*blind_f)();
 typedef void (*closure_f)(void * ret, const void * args[], void * userdata);
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
 //typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
-typedef bool (*trigger_f)(void * object);
-typedef void * (*blk_constructor_f)();
-typedef void (*blk_onupdate_f)(void * userdata);
-typedef void (*blk_destroy_f)(void * userdata);
-typedef void (*blk_link_f)(const void * output, bool output_isnull, size_t outsize, void * input, bool input_isnull, size_t insize);
-typedef bool (*kthread_dotask_f)(struct __kthread_t * thread);
+typedef bool (*trigger_f)(trigger_t * trigger, void * userdata);
+//typedef void * (*blk_constructor_f)();
+//typedef void (*blk_onupdate_f)(void * userdata);
+//typedef void (*blk_destroy_f)(void * userdata);
+//typedef void (*blk_link_f)(const void * output, bool output_isnull, size_t outsize, void * input, bool input_isnull, size_t insize);
+typedef void (*link_f)(const link_t * link, const void * from, bool from_isnull, void * to, bool to_isnull);
+//typedef bool (*kthread_dotask_f)(kthread_t * thread);
+typedef bool (*runnable_f)(kthread_t * thread, void * userdata);
+typedef void (*blockact_f)(void * userdata);
 
 
 typedef struct
@@ -151,8 +156,13 @@ typedef struct
 
 	syscall_t * syscall;
 	ffi_closure_t * closure;
-	struct __block_t * block;
-	struct __block_inst_t * blockinst;
+	//block_t * block;
+	blockinst_t * blockinst;
+
+	biobacking_t * retbacking;
+
+	size_t argcount;
+	biobacking_t * argbacking[0];	// Must be last
 } syscallblock_t;
 
 typedef struct {
@@ -229,12 +239,13 @@ typedef struct
 	list_t modechanges;
 } calibration_t;
 
-typedef struct
+struct __trigger_t
 {
 	kobject_t kobject;
 
-	trigger_f func;
-} trigger_t;
+	trigger_f function;
+	void * userdata;
+};
 
 typedef struct
 {
@@ -254,28 +265,35 @@ typedef struct
 
 	struct timespec last_trigger;
 	uint64_t interval_nsec;
-	struct __block_inst_t * blockinst;
+	blockinst_t * blockinst;
 } trigger_varclock_t;
 
-typedef struct __block_t
+struct __block_t
 {
 	kobject_t kobject;
 	list_t module_list;
 
-	const char * name;
-	module_t * module;
-	const char * desc;
-	const char * new_name;
-	const char * new_sig;
-	blk_constructor_f new;
-	const char * onupdate_name;
-	blk_onupdate_f onupdate;
-	const char * ondestroy_name;
-	blk_destroy_f ondestroy;
-	list_t inputs;
-	list_t outputs;
-} block_t;
+	const meta_block_t * backing;
+	blockact_f onupdate;
+	blockact_f ondestroy;
 
+	module_t * module;
+	//const char * name;
+	//const char * desc;
+	//const char * new_name;
+	//const char * new_sig;
+	//blk_constructor_f new;
+	//const char * onupdate_name;
+	//blk_onupdate_f onupdate;
+	//const char * ondestroy_name;
+	//blk_destroy_f ondestroy;
+	//list_t inputs;
+	//list_t outputs;
+
+	list_t insts;
+};
+
+/*
 typedef struct {
 	block_t * block;
 	list_t block_list;
@@ -284,7 +302,9 @@ typedef struct {
 	char sig;
 	const char * desc;
 } bio_t;
+*/
 
+/*
 typedef struct
 {
 	kobject_t kobject;
@@ -315,22 +335,80 @@ typedef struct
 	handler_f dostopfunc;
 	void * userdata;
 } runfunction_t;
+*/
 
-typedef struct __block_inst_t
+struct __blockinst_t
 {
 	kobject_t kobject;
+	list_t block_list;
 
-	handler_f runfunc;
-	handler_f stopfunc;
-
-	list_t module_list;
+	//model_blockinst_t * backing;
+	const model_linkable_t * backing;
 	block_t * block;
-	blk_destroy_f ondestroy;
-	void * userdata;
-	list_t inputs_inst;
-	list_t outputs_inst;
-} blockinst_t;
 
+	//handler_f runfunc;
+	//handler_f stopfunc;
+
+	//list_t module_list;
+	//block_t * block;
+	//blk_destroy_f ondestroy;
+	//void * userdata;
+	list_t inputs;
+	list_t outputs;
+
+	void * userdata;
+};
+
+struct __biobacking_t
+{
+	size_t size;		// TODO - delete this field
+	char sig;
+	bool isnull;
+	uint8_t data[0];
+};
+
+struct __link_t
+{
+	link_f function;
+	union
+	{
+		size_t length;
+	} data;
+};
+
+typedef struct
+{
+	blockinst_t * blockinst;
+	list_t blockinst_list;
+
+	model_linksymbol_t * symbol;
+	link_t link;
+	biobacking_t * backing;
+} biolink_t;
+
+typedef struct
+{
+	blockinst_t * blockinst;
+	list_t rategroup_list;
+
+	meta_iotype_t type;
+	char name[MODEL_SIZE_NAME];
+	biobacking_t * backing;			// TODO - rename iobacking or io
+} riobacking_t;
+
+typedef struct
+{
+	kobject_t kobject;
+	list_t global_list;
+
+	blockinst_t * active;
+	list_t * activeriobackings;
+
+	blockinst_t * group[MODEL_MAX_RATEGROUPELEMS + SENTINEL];
+	list_t riobackings;
+} rategroup_t;
+
+/*
 typedef struct __boutput_inst_t
 {
 	blockinst_t * blockinst;
@@ -358,19 +436,27 @@ typedef struct __binput_inst_t
 	void * stage3;
 	bool stage3_isnull;
 } binput_inst_t;
+*/
 
-typedef struct __kthread_t
+struct __kthread_t
 {
 	kobject_t kobject;
+	list_t schedule_list;
 
 	pthread_t thread;
 	int priority;
 	volatile bool running;
 	volatile bool stop;
 	trigger_t * trigger;
-	runnable_t * runnable;
-} kthread_t;
 
+	runnable_f runfunction;
+
+	// TODO - rename this destroyfunction (because it is called in all cased of threaddeath)
+	runnable_f stopfunction;
+	void * userdata;
+};
+
+/*
 typedef struct
 {
 	char * desc;
@@ -378,6 +464,7 @@ typedef struct
 	kthread_dotask_f task_func;
 	list_t list;
 } kthread_task_t;
+*/
 
 #define LOGFILE					"maxkernel.log"
 #define PIDFILE					"/var/run/maxkernel.pid"
@@ -391,7 +478,8 @@ typedef enum
 //meta_t * meta_parse(const char * path);
 //module_t * module_get(const char * name);
 module_t * module_lookup(const char * name);
-const block_t * module_getblock(const module_t * module, const char * blockname);
+const meta_t * module_getmeta(const module_t * module);
+///const block_t * module_getblock(const module_t * module, const char * blockname);
 //const blockinst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
@@ -418,27 +506,26 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
-syscallblock_t * syscallblock_new(const char * name, boutput_inst_t * ret, binput_inst_t ** params, size_t numparams, const char * desc);
+syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, size_t numparams, const char * desc);
 blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #define KTHREAD_SCHED		SCHED_RR
-kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * runnable, int priority);
+kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, runnable_f runfunction, runnable_f stopfunction, void * userdata, exception_t ** err);
 void kthread_schedule(kthread_t * thread);
 kthread_t * kthread_self();
-runnable_t * kthread_getrunnable(kthread_t * thread);
 trigger_t * kthread_gettrigger(kthread_t * thread);
 
 void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
 trigger_t * trigger_newclock(const char * name, double freq_hz);
 trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz);
-trigger_t * trigger_newtrue(const char * name);
+//trigger_t * trigger_newtrue(const char * name);
 blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger);
-binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger);
+///binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger);
 
-void * exec_new(const char * name, info_f info, destructor_f destructor, handler_f runfunc, handler_f stopfunc, size_t malloc_size);
-runnable_t * exec_newrungroup(const char * name, runnable_t ** runnables);
-runnable_t * exec_newfunction(const char * name, handler_f runfunc, handler_f stopfunc, void * userdata);
-runnable_t * exec_getcurrent();
+//void * exec_new(const char * name, info_f info, destructor_f destructor, handler_f runfunc, handler_f stopfunc, size_t malloc_size);
+//runnable_t * exec_newrungroup(const char * name, runnable_t ** runnables);
+//runnable_t * exec_newfunction(const char * name, handler_f runfunc, handler_f stopfunc, void * userdata);
+//runnable_t * exec_getcurrent();
 
 ffi_function_t * function_build(void * function, const char * sig, exception_t ** err);
 void function_free(ffi_function_t * ffi);
@@ -446,18 +533,43 @@ void function_call(ffi_function_t * ffi, void * ret, void ** args);
 ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err);
 void closure_free(ffi_closure_t * ci);
 
+block_t * block_new(module_t * module, const meta_block_t * backing, exception_t ** err);
+void block_getonupdate(const block_t * block, blockact_f * onupdate);
+void block_addinst(block_t * block, blockinst_t * blockinst);
+iterator_t block_ioitr(const block_t * block);
+bool block_ioitrnext(iterator_t itr, const meta_blockio_t ** blockio);
+
+blockinst_t * blockinst_newempty(const char * name);
+blockinst_t * blockinst_new(block_t * block, const model_linkable_t * backing, const char * name);
+const block_t * blockinst_getblock(const blockinst_t * blockinst);
+void blockinst_act(blockinst_t * blockinst, blockact_f callback);
+
+biobacking_t * link_newbacking(char sig, exception_t ** err);
+void link_freebacking(biobacking_t * backing);
+static inline void link_copy(const link_t * link, const biobacking_t * from, biobacking_t * to)
+{
+	link->function(link, from, from->isnull, to->data, to->isnull);
+	to->isnull = from->isnull;
+}
+
+rategroup_t * rategroup_new(const char * name);
+bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
+void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err);
+
+/*
 char * io_blockinfo(void * obj);
 void io_blockfree(void * obj);
 blockinst_t * io_newblockinst(block_t * blk, void ** args);
-void io_beforeblock(blockinst_t * block);
-void io_afterblock(blockinst_t * block);
+void io_beforeblockinst(blockinst_t * block);
+void io_afterblockinst(blockinst_t * block);
 const void * io_doinput(blockinst_t * blk, const char * name);
 void io_dooutput(blockinst_t * blk, const char * name, const void * value);
-binput_inst_t * io_getbinput(const blockinst_t * blockinst, const char * name);
-boutput_inst_t * io_getboutput(const blockinst_t * blockinst, const char * name);
+*/
+///binput_inst_t * io_getbinput(const blockinst_t * blockinst, const char * name);
+///boutput_inst_t * io_getboutput(const blockinst_t * blockinst, const char * name);
 
-void io_newcomplete(blockinst_t * inst);
-bool io_route(boutput_inst_t * out, binput_inst_t * in);
+///void io_newcomplete(blockinst_t * inst);
+///bool io_route(boutput_inst_t * out, binput_inst_t * in);
 
 config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err);
 bool config_apply(config_t * config, const model_config_t * config_newvalue, exception_t ** err);

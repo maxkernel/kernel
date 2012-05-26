@@ -37,22 +37,24 @@
 model_t * model = NULL;
 
 list_t modules;
+list_t rategroups;
 //list_t calentries;
 hashtable_t properties;
 hashtable_t syscalls;
 //module_t * kernel_module = NULL;
-GHashTable * kthreads = NULL;
+list_t kthreads;
+//GHashTable * kthreads = NULL;
 
 mutex_t io_lock;
 sqlite3 * database = NULL;
 calibration_t calibration;
 uint64_t starttime = 0;
+threadlocal kthread_t * kthread_local = NULL;
 
-static list_t objects = {0};
+static list_t kobjects = {0};
 static mutex_t kobj_mutex;
 
-static list_t kthread_tasks = {0};
-static mutex_t kthread_tasks_mutex;
+static mutex_t kthreads_mutex;
 
 static char logbuf[LOGBUF_SIZE] = {0};
 static size_t loglen = 0;
@@ -214,10 +216,19 @@ string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseco
 /*---------------- KOBJECT FUNCTIONS --------------------*/
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size)
 {
-	if (size < sizeof(kobject_t))
+	// Sanity check
 	{
-		LOGK(LOG_FATAL, "Size of new kobject_t is too small");
-		//will exit
+		if (size < sizeof(kobject_t))
+		{
+			LOGK(LOG_FATAL, "Size of new kobject_t is too small");
+			//will exit
+		}
+
+		if (class_name == NULL || name == NULL)
+		{
+			LOGK(LOG_FATAL, "Invalid arguments to kobj_new");
+			// Will exit
+		}
 	}
 
 	kobject_t * object = malloc(size);
@@ -230,11 +241,29 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 
 	mutex_lock(&kobj_mutex);
 	{
-		list_add(&objects, &object->objects_list);
+		list_add(&kobjects, &object->objects_list);
 	}
 	mutex_unlock(&kobj_mutex);
 
 	return object;
+}
+
+bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const char ** object_name, const kobject_t ** parent)
+{
+	// Sanity check
+	{
+		if (kobject == NULL)
+		{
+			return false;
+		}
+	}
+
+	// TODO - return more kobject info (like callback functions)
+	if (class_name != NULL)		*class_name = kobject->class_name;
+	if (object_name != NULL)	*object_name = kobject->object_name;
+	if (parent != NULL)			*parent = kobject->parent;
+
+	return true;
 }
 
 void kobj_makechild(kobject_t * parent, kobject_t * child)
@@ -247,7 +276,7 @@ void kobj_register(kobject_t * object)
 {
 	mutex_lock(&kobj_mutex);
 	{
-		list_add(&objects, &object->objects_list);
+		list_add(&kobjects, &object->objects_list);
 	}
 	mutex_unlock(&kobj_mutex);
 }
@@ -287,28 +316,28 @@ static void kthread_destroy(void * kthread)
 	kthread_t * kth = kthread;
 	kth->stop = true;
 
-	if (kth->running && kth != kthread_self())
+	if (kth->stopfunction != NULL && !kth->stopfunction(kth, kth->userdata))
 	{
-		if (kth->runnable->stopfunc != NULL)
-		{
-			kth->runnable->stopfunc(kth->runnable);
-		}
-
-		pthread_join(kth->thread, NULL);
+		LOGK(LOG_WARN, "KThread stop function returned failure");
 	}
 
-	kobj_destroy(&kth->trigger->kobject);
-	kobj_destroy(&kth->runnable->kobject);
+	if (kth->running && kth != kthread_self())
+	{
+		// TODO - read thread return (2nd parameter)
+		pthread_join(kth->thread, NULL);
+	}
 }
 
 static void * kthread_dothread(void * object)
 {
 	kthread_t * kth = object;
-	g_hash_table_insert(kthreads, (void *)pthread_self(), kth);
+	kthread_local = kth;
 
-	//set scheduling parameters
+	// Set scheduling parameters
 	{
 		struct sched_param param;
+		memset(&param, 0, sizeof(struct sched_param));
+
 		if (sched_getparam(0, &param) == 0)
 		{
 			int prio = param.sched_priority + kth->priority;
@@ -327,34 +356,36 @@ static void * kthread_dothread(void * object)
 		}
 	}
 
-	kth->thread = pthread_self();
 	kth->running = true;
+	kth->stop = false;
 	while (!kth->stop)
 	{
-		while (!kth->trigger->func(kth->trigger) && !kth->stop)
+		while (kth->trigger != NULL && !trigger_watch(kth->trigger) && !kth->stop)
 		{
-			//this function will block or return false until triggered
+			// This function will block or return false until triggered
 		}
 
 		if (!kth->stop)
 		{
-			kth->runnable->runfunc(kth->runnable);	//this function will do the thread execution
-													//rinse and repeat
+			if (!kth->runfunction(kth, kth->userdata))		// This function will do the thread execution
+			{
+				break;
+			}
 
-			//yield before the next round
+			// Yield before the next round
 			sched_yield();
 		}
 	}
 
 	kth->running = false;
+	kobj_destroy(&kth->kobject);
+
 	return NULL;
 }
 
 static bool kthread_start(kthread_t * kth)
 {
-	pthread_t pthread;
-	int result = pthread_create(&pthread, NULL, kthread_dothread, kth);
-
+	int result = pthread_create(&kth->thread, NULL, kthread_dothread, kth);
 	if (result == -1)
 	{
 		LOGK(LOG_ERR, "Could not create new kernel thread: %s", strerror(result));
@@ -366,52 +397,54 @@ static bool kthread_start(kthread_t * kth)
 
 void kthread_schedule(kthread_t * thread)
 {
-	kthread_task_t * task = malloc0(sizeof(kthread_task_t));
-	string_t str = string_new("Starting thread '%s'", thread->kobject.object_name);
-
-	task->desc = string_copy(&str);
-	task->thread = thread;
-	task->task_func = kthread_start;
-
-	mutex_lock(&kthread_tasks_mutex);
-	list_add(&kthread_tasks, &task->list);
-	mutex_unlock(&kthread_tasks_mutex);
+	mutex_lock(&kthreads_mutex);
+	{
+		list_add(&kthreads, &thread->schedule_list);
+	}
+	mutex_unlock(&kthreads_mutex);
 }
 
-kthread_t * kthread_new(const char * name, trigger_t * trigger, runnable_t * runnable, int priority)
+kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, runnable_f runfunction, runnable_f stopfunction, void * userdata, exception_t ** err)
 {
+	// Sanity check
+	{
+		if (exception_check(err))
+		{
+			return NULL;
+		}
+
+		if (name == NULL || trigger == NULL || runfunction == NULL)
+		{
+			exception_set(err, EINVAL, "Invalid arguments!");
+			return NULL;
+		}
+	}
+
 	kthread_t * kth = kobj_new("Thread", name, kthread_info, kthread_destroy, sizeof(kthread_t));
 	kth->priority = priority;
 	kth->running = false;
+	kth->stop = false;
 	kth->trigger = trigger;
-	kth->runnable = runnable;
-
-	kobj_makechild(&kth->kobject, &kth->trigger->kobject);
-	kobj_makechild(&kth->kobject, &kth->runnable->kobject);
+	kth->runfunction = runfunction;
+	kth->stopfunction = stopfunction;
+	kth->userdata = userdata;
 
 	return kth;
 }
 
 kthread_t * kthread_self()
 {
-	return g_hash_table_lookup(kthreads, (void *)pthread_self());
-}
-
-runnable_t * kthread_getrunnable(kthread_t * kth)
-{
-	if (kth == NULL)
-	{
-		return NULL;
-	}
-
-	return kth->runnable;
+	return kthread_local;
 }
 
 trigger_t * kthread_gettrigger(kthread_t * kth)
 {
-	if (kth == NULL)
+	// Sanity check
 	{
-		return NULL;
+		if (kth == NULL)
+		{
+			return NULL;
+		}
 	}
 
 	return kth->trigger;
@@ -419,29 +452,25 @@ trigger_t * kthread_gettrigger(kthread_t * kth)
 
 static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
-	mutex_lock(&kthread_tasks_mutex);
-
-	list_t * pos, * q;
-	list_foreach_safe(pos, q, &kthread_tasks)
+	mutex_lock(&kthreads_mutex);
 	{
-		kthread_task_t * task = list_entry(pos, kthread_task_t, list);
-
-		LOGK(LOG_DEBUG, "Executing thread task: %s", task->desc);
-		task->task_func(task->thread);
-
-		list_remove(pos);
-
-		if (task->desc != NULL)
+		list_t * pos, * q;
+		list_foreach_safe(pos, q, &kthreads)
 		{
-			free(task->desc);
-		}
-		free(task);
-	}
+			kthread_t * kth = list_entry(pos, kthread_t, schedule_list);
+			list_remove(pos);
 
-	mutex_unlock(&kthread_tasks_mutex);
+			const char * object_name = NULL;
+			kobj_getinfo(&kth->kobject, NULL, &object_name, NULL);
+			LOGK(LOG_DEBUG, "Starting thread %s", object_name);
+			kthread_start(kth);
+		}
+	}
+	mutex_unlock(&kthreads_mutex);
 	return true;
 }
 
+/* TODO - finish me!
 static void kthread_dosinglepass(void * userdata)
 {
 	runfunction_t * rfunc = userdata;
@@ -493,6 +522,7 @@ bool kthread_requeststop()
 	kthread_t * kth = kthread_self();
 	return kth == NULL? false : kth->stop;
 }
+*/
 
 /*---------------- KERN FUNCTIONS -----------------------*/
 const char * max_model() { return property_get("model"); }
@@ -691,13 +721,13 @@ int main(int argc, char * argv[])
 	// Initialize global variables
 	model = model_new();
 	LIST_INIT(&modules);
-	LIST_INIT(&objects);
-	LIST_INIT(&kthread_tasks);
+	LIST_INIT(&rategroups);
+	LIST_INIT(&kobjects);
+	LIST_INIT(&kthreads);
 	HASHTABLE_INIT(&properties, hash_str, hash_streq);
 	HASHTABLE_INIT(&syscalls, hash_str, hash_streq);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
-	mutex_init(&kthread_tasks_mutex, M_RECURSIVE);
-	kthreads = g_hash_table_new(g_int_hash, g_int_equal);
+	mutex_init(&kthreads_mutex, M_RECURSIVE);
 	mutex_init(&io_lock, M_RECURSIVE);
 
 	// Set start time
@@ -971,7 +1001,7 @@ int main(int argc, char * argv[])
 			}
 
 			model_module_t * module = NULL;
-			if (!model_modulelookup(model, script, path.string, &module))
+			if (!model_lookupmodule(model, script, path.string, &module))
 			{
 				cfg_error(cfg, "Could not find module %s. Module not loaded?", modulename);
 				return -1;
@@ -1188,7 +1218,7 @@ int main(int argc, char * argv[])
 							}
 
 							const meta_t * depmeta = NULL;
-							if (!model_metalookup(model, path.string, &depmeta))
+							if (!model_lookupmeta(model, path.string, &depmeta))
 							{
 								// Meta not in model, load it in manually
 								exception_t * e = NULL;
@@ -1208,7 +1238,7 @@ int main(int argc, char * argv[])
 
 								meta_destroy(parsemeta);
 
-								if (!model_metalookup(model, path.string, &depmeta))
+								if (!model_lookupmeta(model, path.string, &depmeta))
 								{
 									LOGK(LOG_FATAL, "Could not find meta just added to model!");
 									// Will exit
@@ -1276,7 +1306,8 @@ int main(int argc, char * argv[])
 			}
 
 			const meta_t * meta = NULL;
-			if (!model_getmeta(module, &meta))
+			model_getmodule(module, NULL, &meta);
+			if (meta == NULL)
 			{
 				LOGK(LOG_FATAL, "Could not get module meta from model");
 				// Will exit
@@ -1294,11 +1325,10 @@ int main(int argc, char * argv[])
 		LOGK(LOG_DEBUG, "Loading modules...");
 		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_load);
 
-
 		void * f_buildmod_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
 		{
 			const meta_t * meta = NULL;
-			model_getmeta(module, &meta);
+			model_getmodule(module, NULL, &meta);
 
 			const char * path = NULL;
 			meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
@@ -1344,6 +1374,34 @@ int main(int argc, char * argv[])
 			return udata;
 		}
 
+		void * f_buildmod_syscalls(void * udata, const model_t * model, const model_linkable_t * syscall, const model_script_t * script)
+		{
+			char r = 'v';
+			string_t args = string_blank();
+
+			iterator_t litr = model_linkitr(model, script, syscall);
+			const model_linksymbol_t * out = NULL, * in = NULL;
+			while (model_linknext(litr, &out, &in))
+			{
+				const model_linkable_t * linkable = NULL;
+				const char * name = NULL;
+
+				// Process output
+				{
+					model_getlinksymbol(out, &linkable, &name, NULL, NULL);
+					LOGK(LOG_INFO, "Out %s", name);
+				}
+
+				// Process input
+				{
+					model_getlinksymbol(in, &linkable, &name, NULL, NULL);
+					LOGK(LOG_INFO, "In %s", name);
+				}
+			}
+
+			return udata;
+		}
+
 		// Call preact function on all modules
 		{
 			list_t * pos;
@@ -1356,6 +1414,7 @@ int main(int argc, char * argv[])
 
 		model_analysis_t f_buildmod = {
 			.configs = f_buildmod_configs,
+			.syscalls = f_buildmod_syscalls,
 		};
 
 		LOGK(LOG_DEBUG, "Building modules...");
@@ -1522,13 +1581,13 @@ int main(int argc, char * argv[])
 		}
 		*/
 
-		while (objects.next != &objects)
+		while (kobjects.next != &kobjects)
 		{
 			kobject_t * item = NULL;
 			bool found = false;
 
 			list_t * pos;
-			list_foreach(pos, &objects)
+			list_foreach(pos, &kobjects)
 			{
 				item = list_entry(pos, kobject_t, objects_list);
 				if (item->parent == NULL)

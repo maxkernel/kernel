@@ -313,7 +313,7 @@ bool io_route(boutput_inst_t * out, binput_inst_t * in)
 	return true;
 }
 
-void io_beforeblock(blockinst_t * blockinst)
+void io_beforeblockinst(blockinst_t * blockinst)
 {
 	mutex_lock(&io_lock);
 	{
@@ -337,7 +337,7 @@ void io_beforeblock(blockinst_t * blockinst)
 	mutex_unlock(&io_lock);
 }
 
-void io_afterblock(blockinst_t * blockinst)
+void io_afterblockinst(blockinst_t * blockinst)
 {
 	mutex_lock(&io_lock);
 	{

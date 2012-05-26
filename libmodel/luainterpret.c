@@ -258,17 +258,19 @@ static int l_newrategroup(lua_State * L)
 
 static int l_newsyscall(lua_State * L)
 {
-	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
-	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be table");
-	luaL_argcheck(L, lua_type(L, 3) == LUA_TUSERDATA || lua_type(L, 3) == LUA_TNIL, 3, "must be userdata or nil");
-	luaL_argcheck(L, lua_type(L, 4) == LUA_TSTRING, 4, "must be string");
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string (syscall name)");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TSTRING, 2, "must be string (syscall signature)");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TTABLE, 3, "must be table (parameters)");
+	luaL_argcheck(L, lua_type(L, 4) == LUA_TUSERDATA || lua_type(L, 4) == LUA_TNIL, 4, "must be userdata or nil (return)");
+	luaL_argcheck(L, lua_type(L, 5) == LUA_TSTRING, 5, "must be string (documentation string)");
 
 	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
 	const char * name = luaL_checkstring(L, 1);
+	const char * sig = luaL_checkstring(L, 2);
 	entry_t * retvalue = NULL;
-	const char * desc = luaL_checkstring(L, 4);
+	const char * desc = luaL_checkstring(L, 5);
 
-	if (!lua_isnil(L, 3))
+	if (!lua_isnil(L, 4))
 	{
 		retvalue = luaL_checkudata(L, 3, ENTRY_METATABLE);
 		if (!model_linkable(retvalue->head->type))
@@ -278,7 +280,7 @@ static int l_newsyscall(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_linkable_t * syscall = model_newsyscall(env->model, env->script, name, desc, &e);
+	model_linkable_t * syscall = model_newsyscall(env->model, env->script, name, sig, desc, &e);
 	if (syscall == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "syscall failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -305,7 +307,7 @@ static int l_newsyscall(lua_State * L)
 
 	// Link all the argument values
 	lua_pushnil(L);
-	while (lua_next(L, 2))
+	while (lua_next(L, 3))
 	{
 		if (!lua_isnil(L, -1))
 		{

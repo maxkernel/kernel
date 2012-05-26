@@ -42,16 +42,17 @@ typedef void (*destructor_f)(void * object);
 typedef char * (*info_f)(void * object);
 typedef void (*handler_f)(void * userdata);
 
-typedef struct __kobject_t
+typedef struct __kobject_t kobject_t;
+struct __kobject_t
 {
 	const char * class_name;
 	char * object_name;
-	struct __kobject_t * parent;
+	kobject_t * parent;
 
 	info_f info;
 	destructor_f destructor;
 	list_t objects_list;
-} kobject_t;
+};
 
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size);
 void kobj_register(kobject_t * object);		// TODO - delete this function!
@@ -141,7 +142,7 @@ typedef void (*calmodechange_f)(void * object, calmode_t mode, calstatus_t statu
 		cal_doregister(domain, #variable, sig, constraint_parse(desc, &__e), constraint_parsepast(desc), &variable, onpreview, onpreview_object); \
 		if (exception_check(&__e))			\
 		{									\
-			LOG(LOG_WARN, "Invalid constraint declaration: %s", __e->message); \
+			LOG(LOG_WARN, "Invalid constraint declaration: %s. Ignoring constraint", __e->message); \
 			exception_free(__e);			\
 		}									\
 	})

@@ -19,7 +19,7 @@ typedef uint64_t version_t;
 
 static inline string_t version_tostring(const version_t version)
 {
-	return string_new("%" PRIu16 ".%" PRIu16 ".%" PRIu32, version_major(version), version_minor(version), version_revision(version));
+    return string_new("%u.%u.%u", (unsigned int)version_major(version), (unsigned int)version_minor(version), (unsigned int)version_revision(version));
 }
 
 #ifdef __cplusplus

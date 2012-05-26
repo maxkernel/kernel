@@ -31,13 +31,15 @@ iterator_t iterator_none()
 
 iterator_t iterator_new(const char * class, itrnext_f next_func, itrfree_f free_func, const void * object, void * itrobject)
 {
-	iterator_t itr = -1;
-
 	// Sanity check
-	if (next_func == NULL)
 	{
-		return -1;
+		if (class == NULL || next_func == NULL)
+		{
+			return iterator_none();
+		}
 	}
+
+	iterator_t itr = -1;
 
 	mutex_lock(&iterators_mutex);
 	{
@@ -64,18 +66,41 @@ iterator_t iterator_new(const char * class, itrnext_f next_func, itrfree_f free_
 	return itr;
 }
 
+/*
+const void * iterator_getobject(iterator_t itr, const char * class)
+{
+	// Sanity check
+	{
+		if (iterators[itr].next_f == NULL || itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
+		{
+			return NULL;
+		}
+
+		// Check class
+		if (class != NULL && strcmp(class, iterators[itr].class) != 0)
+		{
+			return NULL;
+		}
+	}
+
+	return iterators[itr].object;
+}
+*/
+
 const void * iterator_next(iterator_t itr, const char * class)
 {
 	// Sanity check
-	if (iterators[itr].next_f == NULL || itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
 	{
-		return NULL;
-	}
+		if (iterators[itr].next_f == NULL || itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
+		{
+			return NULL;
+		}
 
-	// Check class
-	if (class != NULL && strcmp(class, iterators[itr].class) != 0)
-	{
-		return NULL;
+		// Check class
+		if (class != NULL && strcmp(class, iterators[itr].class) != 0)
+		{
+			return NULL;
+		}
 	}
 
 	return iterators[itr].next_f(iterators[itr].object, &iterators[itr].itrobject);
@@ -84,10 +109,12 @@ const void * iterator_next(iterator_t itr, const char * class)
 void iterator_free(iterator_t itr)
 {
 	// Sanity check
-	if (itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
 	{
-		// Invalid iterator!
-		return;
+		if (itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
+		{
+			// Invalid iterator!
+			return;
+		}
 	}
 
 	if (iterators[itr].free_f != NULL)

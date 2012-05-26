@@ -12,7 +12,8 @@ UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 
-SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c io.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c exec.c
+SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.c rategroup.c link.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c
+#FIXME		= io.c exec.c
 #OLD_SRCS	= meta.c luaenv.c
 OBJS		= $(SRCS:.c=.o)
 PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
@@ -30,7 +31,8 @@ export RELEASE
 
 .PHONY: prepare prereq body all install clean rebuild depend
 
-all: prereq body $(TARGET)
+#all: prereq body $(TARGET)
+all: prereq body
 	$(foreach module,$(MODULES),python makefile.gen.py --module $(module) --defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true
 	( $(foreach module,$(MODULES), echo "In module $(module)" >>buildlog && $(MAKE) -C $(module) all 2>>buildlog &&) true ) || ( cat buildlog && false )
 	( echo "In libmax" >>buildlog && $(MAKE) -C libmax all 2>>buildlog ) || ( cat buildlog && false )

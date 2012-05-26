@@ -536,6 +536,44 @@ bool meta_blocknext(iterator_t itr, const meta_block_t ** block)
 	return false;
 }
 
+bool meta_lookupblockcbs(const meta_t * meta, const meta_block_t * block, const meta_blockcallback_t ** update, const meta_blockcallback_t ** destroy)
+{
+	// Sanity check
+	{
+		if (meta == NULL || block == NULL)
+		{
+			return false;
+		}
+	}
+
+	meta_blockcallback_t * tcb = NULL;
+	meta_foreach(tcb, meta->blockcbs, META_MAX_BLOCKCBS)
+	{
+		if (strcmp(tcb->blockname, block->block_name) == 0)
+		{
+			const metahead_t * head = &tcb->callback.head;
+			switch (head->type)
+			{
+				case meta_blockonupdate:
+				{
+					if (update != NULL)		*update = tcb;
+					break;
+				}
+
+				case meta_blockondestroy:
+				{
+					if (destroy != NULL)	*destroy = tcb;
+					break;
+				}
+
+				default:	break;
+			}
+		}
+	}
+
+	return true;
+}
+
 bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const char * ioname, meta_iotype_t type, const meta_blockio_t ** blockio)
 {
 	// Sanity check
@@ -852,4 +890,36 @@ void meta_getblock(const meta_block_t * block, const char ** block_name, const c
 	if (constructor_sig != NULL)	*constructor_sig = block->constructor_signature;
 	if (constructor_desc != NULL)	*constructor_desc = block->constructor_description;
 	if (constructor != NULL)		*constructor = block->constructor;
+}
+
+void meta_getblockio(const meta_blockio_t * blockio, const char ** block_name, const char ** io_name, meta_iotype_t * io_type, char * io_sig, const char ** io_desc)
+{
+	// Sanity check
+	{
+		if (blockio == NULL)
+		{
+			return;
+		}
+	}
+
+	if (block_name != NULL)			*block_name = blockio->block_name;
+	if (io_name != NULL)			*io_name = blockio->io_name;
+	if (io_type != NULL)			*io_type = blockio->io_type;
+	if (io_sig != NULL)				*io_sig = blockio->io_signature;
+	if (io_desc != NULL)			*io_desc = blockio->io_description;
+}
+
+void meta_getblockcb(const meta_blockcallback_t * blockcb, const char ** block_name, const char ** cb_name, meta_callback_vp_f * callback)
+{
+	// Sanity check
+	{
+		if (blockcb == NULL)
+		{
+			return;
+		}
+	}
+
+	if (block_name != NULL)			*block_name = blockcb->blockname;
+	if (cb_name != NULL)			*cb_name = blockcb->callback.function_name;
+	if (callback != NULL)			*callback = blockcb->function;
 }

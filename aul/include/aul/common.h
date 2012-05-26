@@ -11,14 +11,16 @@
 extern "C" {
 #endif
 
-#undef  MILLIS_PER_SECOND
+//#undef  MILLIS_PER_SECOND
 #define MILLIS_PER_SECOND		1000
 
-#undef  MICROS_PER_SECOND
+//#undef  MICROS_PER_SECOND
 #define MICROS_PER_SECOND		1000000L
 
-#undef  NANOS_PER_SECOND
+//#undef  NANOS_PER_SECOND
 #define NANOS_PER_SECOND		1000000000LL
+
+#define SENTINEL		(1)
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)

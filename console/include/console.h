@@ -11,7 +11,7 @@ extern "C" {
 #define CONSOLE_HEADERSIZE		10
 #define CONSOLE_BUFFERS			5
 
-#define CONSOLE_SOCKFILE		"/var/local/maxkern.sock"
+#define CONSOLE_SOCKFILE		"/var/run/maxkernel.socket"
 #define CONSOLE_TCPPORT			48000
 
 #define CONSOLE_FRAMEING		0xA5A5A5A5

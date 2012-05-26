@@ -4,10 +4,11 @@
 #include <aul/common.h>
 
 
-typedef struct __list_t
+typedef struct __list_t list_t;
+struct __list_t
 {
-	struct __list_t *next, *prev;
-} list_t;
+	list_t * next, * prev;
+};
 
 typedef int (*list_compare_f)(list_t * a, list_t * b);
 
@@ -23,7 +24,7 @@ typedef int (*list_compare_f)(list_t * a, list_t * b);
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
-static inline void __list_append(list_t *new, list_t *prev, list_t *next)
+static inline void __list_append(list_t * prev, list_t * next, list_t * new)
 {
 	new->next = next;
 	new->prev = prev;
@@ -41,7 +42,7 @@ static inline void __list_append(list_t *new, list_t *prev, list_t *next)
  */
 static inline void list_add(list_t * head, list_t * new)
 {
-	__list_append(new, head->prev, head);
+	__list_append(head->prev, head, new);
 }
 
 /**
@@ -54,7 +55,17 @@ static inline void list_add(list_t * head, list_t * new)
  */
 static inline void list_push(list_t * head, list_t * new)
 {
-	__list_append(new, head, head->next);
+	__list_append(head, head->next, new);
+}
+
+static inline list_t * list_next(list_t * item)
+{
+	return item->next;
+}
+
+static inline list_t * list_prev(list_t * item)
+{
+	return item->prev;
 }
 
 #if 0

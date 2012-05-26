@@ -3,10 +3,10 @@
 #include <ctype.h>
 #include <dlfcn.h>
 
-#include <glib.h>
+//#include <glib.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <kernel.h>
+#include <kernel-priv.h>
 
 
 extern list_t modules;
@@ -124,6 +124,20 @@ module_t * module_lookup(const char * name)
 	return NULL;
 }
 
+const meta_t * module_getmeta(const module_t * module)
+{
+	// Sanity check
+	{
+		if (module == NULL)
+		{
+			return NULL;
+		}
+	}
+
+	return module->backing;
+}
+
+#if FIXME
 const block_t * module_getblock(const module_t * module, const char * blockname)
 {
 	list_t * pos;
@@ -138,6 +152,7 @@ const block_t * module_getblock(const module_t * module, const char * blockname)
 
 	return NULL;
 }
+#endif
 
 /*
 const block_inst_t * module_getstaticblockinst(const module_t * module)
@@ -198,6 +213,30 @@ module_t * module_load(meta_t * meta)
 	LIST_INIT(&module->configs);
 	LIST_INIT(&module->blocks);
 	LIST_INIT(&module->blockinsts);
+
+	// TODO - register configs
+
+	// TODO - register syscalls
+
+	// Register blocks
+	{
+		const meta_block_t * block = NULL;
+		iterator_t bitr = meta_blockitr(meta);
+		while (meta_blocknext(bitr, &block))
+		{
+			exception_t * e = NULL;
+			block_t * blk = block_new(module, block, &e);
+
+			if (blk == NULL || exception_check(&e))
+			{
+				LOGK(LOG_FATAL, "Could not create block for module %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+				exception_free(e);
+				// Will exit
+			}
+
+			list_add(&module->blocks, &blk->module_list);
+		}
+	}
 
 
 	list_add(&modules, &module->global_list);
@@ -580,6 +619,7 @@ void module_init(const module_t * module)
 	}
 }
 
+// TODO - rename to module_activate?
 void module_act(const module_t * module, moduleact_t act)
 {
 	// Sanity check

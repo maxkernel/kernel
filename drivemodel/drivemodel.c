@@ -134,6 +134,7 @@ module_dependency("map");
 module_oninitialize(model_init);
 module_ondestroy(model_destroy);
 
+define_block(	static,		"Static instance of the drive model", NULL, "", "");
 block_input(	static, 	throttle, 			'd', 	"Energizes the motor. Value must be between -1.0 to 1.0");
 block_input(	static, 	front, 				'd', 	"Turns the front wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");
 block_input(	static, 	rear, 				'd', 	"Turns the rear wheel. Value must be radians between -5pi/36 to 5pi/36 (-/+ 25 degrees)");

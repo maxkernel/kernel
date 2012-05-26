@@ -96,6 +96,7 @@ typedef enum
 	meta_unknownio		= '?',
 	meta_input			= 'I',
 	meta_output			= 'O',
+	//meta_bothio			= 'B',
 } meta_iotype_t;
 
 typedef struct
@@ -337,6 +338,8 @@ bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_bl
 iterator_t meta_blockitr(const meta_t * meta);
 bool meta_blocknext(iterator_t itr, const meta_block_t ** block);
 
+bool meta_lookupblockcbs(const meta_t * meta, const meta_block_t * block, const meta_blockcallback_t ** update, const meta_blockcallback_t ** destroy);
+
 bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const char * ioname, meta_iotype_t type, const meta_blockio_t ** blockio);
 iterator_t meta_blockioitr(const meta_t * meta);
 bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio);
@@ -357,6 +360,8 @@ void meta_getdependency(const meta_dependency_t * dependency, const char ** name
 void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value);
 void meta_getcallback(const meta_callback_t * callback, const char ** name, const char ** sig, const char ** desc, meta_callback_f * function);
 void meta_getblock(const meta_block_t * block, const char ** block_name, const char ** block_desc, const char ** constructor_name, const char ** constructor_sig, const char ** constructor_desc, meta_callback_f * constructor);
+void meta_getblockio(const meta_blockio_t * blockio, const char ** block_name, const char ** io_name, meta_iotype_t * io_type, char * io_sig, const char ** io_desc);
+void meta_getblockcb(const meta_blockcallback_t * blockcb, const char ** block_name, const char ** cb_name, meta_callback_vp_f * callback);
 
 #ifdef __cplusplus
 }

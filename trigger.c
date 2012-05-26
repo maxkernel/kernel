@@ -1,53 +1,49 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "kernel.h"
-#include "kernel-priv.h"
+#include <aul/common.h>
 
-#define NANO_PER_SEC			1000000000LL
+#include <kernel.h>
+#include <kernel-priv.h>
+
 
 #define MAXIMUM_SLEEP_NANO		50000000	//max sleep 50 milliseconds
 #define WARN_NSEC_TOLLERENCE	5000		//warn if clock overshoot by (5 microseconds)
-
-#define CLOCK_NAME				"clock trigger"
 
 #define VARCLOCK_NAME			"variable trigger"
 #define VARCLOCK_KOBJ_NAME		"variable clock trigger"
 #define VARCLOCK_BLK_NAME		"varclock"
 #define VARCLOCK_BLK_IO			"rate"
 
-#define TRUE_NAME				"true trigger"
 
+//extern module_t * kernel_module;
 
-extern module_t * kernel_module;
-
-#define gettime(ptr)			clock_gettime(CLOCK_REALTIME, ptr)
 
 static inline void addnanos(struct timespec * val, uint64_t add_nanos)
 {
 	uint64_t nanos = val->tv_nsec + add_nanos;
-	val->tv_nsec = nanos % NANO_PER_SEC;
-	val->tv_sec += nanos / NANO_PER_SEC;
+	val->tv_nsec = nanos % NANOS_PER_SECOND;
+	val->tv_sec += nanos / NANOS_PER_SECOND;
 }
 
 static inline int64_t diffnanos(struct timespec * a, struct timespec * b)
 {
-	int64_t diff = (a->tv_sec - b->tv_sec) * NANO_PER_SEC;
+	int64_t diff = (a->tv_sec - b->tv_sec) * NANOS_PER_SECOND;
 	diff += a->tv_nsec - b->tv_nsec;
 	return diff;
 }
 
 static inline uint64_t hz2nanos(double freq_hz)
 {
-	return (1.0 / freq_hz) * NANO_PER_SEC;
+	return (1.0 / freq_hz) * NANOS_PER_SECOND;
 }
 
 static inline struct timespec nanos2timespec(uint64_t nanos)
 {
 	struct timespec tm;
 	memset(&tm, 0, sizeof(struct timespec));
-	tm.tv_nsec = nanos % NANO_PER_SEC;
-	tm.tv_sec = nanos / NANO_PER_SEC;
+	tm.tv_nsec = nanos % NANOS_PER_SECOND;
+	tm.tv_sec = nanos / NANOS_PER_SECOND;
 
 	return tm;
 }
@@ -61,7 +57,7 @@ void * trigger_new(const char * name, info_f info, destructor_f destructor, trig
 	}
 
 	trigger_t * trigger = kobj_new("Trigger", name, info, destructor, malloc_size);
-	trigger->func = trigfunc;
+	trigger->function = trigfunc;
 
 	return trigger;
 }
@@ -90,12 +86,12 @@ static bool trigger_waitclock(void * object)
 	if (clk->last_trigger.tv_sec == 0 && clk->last_trigger.tv_nsec == 0)
 	{
 		// Clock hasn't been init yet
-		gettime(&clk->last_trigger);
+		clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
 		return true;
 	}
 
 	struct timespec now;
-	gettime(&now);
+	clock_gettime(CLOCK_REALTIME, &now);
 
 	int64_t diff = diffnanos(&now, &clk->last_trigger);
 	if (diff >= clk->interval_nsec)
@@ -103,7 +99,7 @@ static bool trigger_waitclock(void * object)
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
 			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", clk->kobject.object_name, (diff - clk->interval_nsec));
-			gettime(&clk->last_trigger);
+			clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
 		}
 		else
 		{
@@ -134,8 +130,8 @@ static bool trigger_waitclock(void * object)
 
 trigger_t * trigger_newclock(const char * name, double freq_hz)
 {
-	string_t str = string_new("%s (@ %0.3fHz) " CLOCK_NAME, name, freq_hz);
-	trigger_clock_t * clk = trigger_new(string_copy(&str), trigger_infoclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
+	string_t str = string_new("%s (@ %0.3fHz) clock trigger", name, freq_hz);
+	trigger_clock_t * clk = trigger_new(str.string, trigger_infoclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
 	clk->interval_nsec = hz2nanos(freq_hz);
 
 	return (trigger_t *)clk;
@@ -161,7 +157,7 @@ static bool trigger_waitvarclock(void * object)
 		clk->interval_nsec = new_interval;
 
 		struct timespec now, trigger;
-		gettime(&now);
+		clock_gettime(CLOCK_REALTIME, &now);
 		memcpy(&trigger, &clk->last_trigger, sizeof(struct timespec));
 
 		int64_t diff = diffnanos(&now, &trigger);
@@ -248,23 +244,4 @@ trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 	clk->blockinst = io_newblockinst(blk, NULL);
 
 	return (trigger_t *)clk;
-}
-
-/* ---------------------------- TRIGGER true ------------------------------- */
-static char * trigger_infotrue(void * obj)
-{
-	char * str = "[PLACEHOLDER TRIGGER INFO]";
-	return strdup(str);
-}
-
-static bool trigger_waittrue(void * object)
-{
-	return true;
-}
-
-trigger_t * trigger_newtrue(const char * name)
-{
-	string_t str = string_new("%s %s", name, TRUE_NAME);
-	trigger_t * trig = trigger_new(str.string, trigger_infotrue, NULL, trigger_waittrue, sizeof(trigger_t));
-	return trig;
 }
