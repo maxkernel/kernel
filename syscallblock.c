@@ -6,8 +6,6 @@
 #include <serialize.h>
 
 
-//extern module_t * kernel_module;
-
 static void syscallblock_dosyscall(void * ret, const void * args[], void * userdata)
 {
 	syscallblock_t * sb = userdata;
@@ -73,7 +71,7 @@ blockinst_t * syscallblock_getblockinst(syscallblock_t * sb)
 	return sb->blockinst;
 }
 
-syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, size_t numparams, const char * desc)
+syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, const char * desc)
 {
 	// Sanity check
 	{
@@ -103,7 +101,7 @@ syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char *
 	}
 
 	size_t argcount = method_numparams(method_params(sig));
-	size_t sb_size = sizeof(syscallblock_t) + (sizeof(biobacking_t *) * argcount);
+	size_t sb_size = sizeof(syscallblock_t) + (sizeof(iobacking_t *) * argcount);
 	syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sb_size);
 	syscall_f func = NULL;
 

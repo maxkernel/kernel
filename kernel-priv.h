@@ -36,24 +36,33 @@ typedef struct __blockinst_t blockinst_t;
 //struct __binput_inst_t;
 typedef struct __trigger_t trigger_t;
 typedef struct __kthread_t kthread_t;
-typedef struct __biobacking_t biobacking_t;
-typedef struct __link_t link_t;
+typedef struct __iobacking_t iobacking_t;
+typedef struct __linkfunc_t linkfunc_t;
 
 typedef void (*blind_f)();
 typedef void (*closure_f)(void * ret, const void * args[], void * userdata);
 typedef void * (*syscall_f)();
 typedef void * (*variable_t);
 //typedef void (*calibration_f)(const char * name, const char type, void * newvalue, void * target);
-typedef bool (*trigger_f)(trigger_t * trigger, void * userdata);
+typedef bool (*trigger_f)(trigger_t * trigger);
 //typedef void * (*blk_constructor_f)();
 //typedef void (*blk_onupdate_f)(void * userdata);
 //typedef void (*blk_destroy_f)(void * userdata);
 //typedef void (*blk_link_f)(const void * output, bool output_isnull, size_t outsize, void * input, bool input_isnull, size_t insize);
-typedef void (*link_f)(const link_t * link, const void * from, bool from_isnull, void * to, bool to_isnull);
+typedef void (*link_f)(const linkfunc_t * link, const void * from, bool from_isnull, void * to, bool to_isnull);
 //typedef bool (*kthread_dotask_f)(kthread_t * thread);
 typedef bool (*runnable_f)(kthread_t * thread, void * userdata);
 typedef void (*blockact_f)(void * userdata);
+typedef iobacking_t * (*portlookup_f)(const model_linksymbol_t * symbol);
 
+
+typedef struct
+{
+	list_t inputs;
+	list_t outputs;
+} linklist_t;
+
+typedef list_t portlist_t;
 
 typedef struct
 {
@@ -159,10 +168,10 @@ typedef struct
 	//block_t * block;
 	blockinst_t * blockinst;
 
-	biobacking_t * retbacking;
+	iobacking_t * retbacking;
 
 	size_t argcount;
-	biobacking_t * argbacking[0];	// Must be last
+	iobacking_t * argbacking[0];	// Must be last
 } syscallblock_t;
 
 typedef struct {
@@ -242,30 +251,20 @@ typedef struct
 struct __trigger_t
 {
 	kobject_t kobject;
-
 	trigger_f function;
-	void * userdata;
 };
 
 typedef struct
 {
-	kobject_t kobject;
-
-	trigger_f func;
-
+	trigger_t trigger;
 	struct timespec last_trigger;
 	uint64_t interval_nsec;
 } trigger_clock_t;
 
 typedef struct
 {
-	kobject_t kobject;
-
-	trigger_f func;
-
-	struct timespec last_trigger;
-	uint64_t interval_nsec;
-	blockinst_t * blockinst;
+	trigger_clock_t clock;
+	linklist_t links;
 } trigger_varclock_t;
 
 struct __block_t
@@ -353,13 +352,15 @@ struct __blockinst_t
 	//block_t * block;
 	//blk_destroy_f ondestroy;
 	//void * userdata;
-	list_t inputs;
-	list_t outputs;
+
+	linklist_t links;
+	//list_t inputs;				// List of all the input (biolink_t) links (not ports)
+	//list_t outputs;				// List of all the output (biolink_t) links (not ports)
 
 	void * userdata;
 };
 
-struct __biobacking_t
+struct __iobacking_t
 {
 	size_t size;		// TODO - delete this field
 	char sig;
@@ -367,7 +368,7 @@ struct __biobacking_t
 	uint8_t data[0];
 };
 
-struct __link_t
+struct __linkfunc_t		// TODO - delete this structure and merge it with link_t
 {
 	link_f function;
 	union
@@ -378,35 +379,45 @@ struct __link_t
 
 typedef struct
 {
-	blockinst_t * blockinst;
-	list_t blockinst_list;
+	list_t link_list;
 
-	model_linksymbol_t * symbol;
-	link_t link;
-	biobacking_t * backing;
-} biolink_t;
+	const model_linksymbol_t * symbol;
+	linkfunc_t link;
+	iobacking_t * backing;
+} link_t;
 
 typedef struct
 {
-	blockinst_t * blockinst;
-	list_t rategroup_list;
+	list_t port_list;
 
 	meta_iotype_t type;
 	char name[MODEL_SIZE_NAME];
-	biobacking_t * backing;			// TODO - rename iobacking or io
-} riobacking_t;
+	iobacking_t * backing;
+} port_t;
+
+
+
+typedef struct
+{
+	list_t rategroup_list;
+
+	blockinst_t * blockinst;
+	portlist_t ports;
+} rategroup_blockinst_t;
 
 typedef struct
 {
 	kobject_t kobject;
 	list_t global_list;
 
-	blockinst_t * active;
-	list_t * activeriobackings;
+	const model_linkable_t * backing;
+	//linklist_t links;		// TODO - this should be defined in the trigger!!
+	//port_t rate_in;
 
-	blockinst_t * group[MODEL_MAX_RATEGROUPELEMS + SENTINEL];
-	list_t riobackings;
+	list_t blockinsts;
+	rategroup_blockinst_t * active;
 } rategroup_t;
+
 
 /*
 typedef struct __boutput_inst_t
@@ -470,6 +481,8 @@ typedef struct
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
 
+
+
 typedef enum
 {
 	act_preact		= 1,
@@ -506,7 +519,7 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
-syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, size_t numparams, const char * desc);
+syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, const char * desc);
 blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #define KTHREAD_SCHED		SCHED_RR
@@ -516,10 +529,11 @@ kthread_t * kthread_self();
 trigger_t * kthread_gettrigger(kthread_t * thread);
 
 void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
-trigger_t * trigger_newclock(const char * name, double freq_hz);
-trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz);
+bool trigger_watch(trigger_t * trigger);
+trigger_clock_t * trigger_newclock(const char * name, double freq_hz);
+trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz);
 //trigger_t * trigger_newtrue(const char * name);
-blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger);
+///blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger);
 ///binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger);
 
 //void * exec_new(const char * name, info_f info, destructor_f destructor, handler_f runfunc, handler_f stopfunc, size_t malloc_size);
@@ -544,15 +558,31 @@ blockinst_t * blockinst_new(block_t * block, const model_linkable_t * backing, c
 const block_t * blockinst_getblock(const blockinst_t * blockinst);
 void blockinst_act(blockinst_t * blockinst, blockact_f callback);
 
-biobacking_t * link_newbacking(char sig, exception_t ** err);
-void link_freebacking(biobacking_t * backing);
-static inline void link_copy(const link_t * link, const biobacking_t * from, biobacking_t * to)
+#define linklist_init(l)		({ LIST_INIT(&(l)->inputs); LIST_INIT(&(l)->outputs); })
+iobacking_t * link_newbacking(char sig, exception_t ** err);
+void link_freebacking(iobacking_t * backing);
+static inline void link_handle(const linkfunc_t * link, const iobacking_t * from, iobacking_t * to)
 {
 	link->function(link, from, from->isnull, to->data, to->isnull);
 	to->isnull = from->isnull;
 }
 
-rategroup_t * rategroup_new(const char * name);
+void link_doinputs(linklist_t * links, portlookup_f lookup);
+void link_dooutputs(linklist_t * links, portlookup_f lookup);
+
+#define portlist_init(l)		({ LIST_INIT(l); })
+#define port_test(port, iotype, ioname)		((port)->type == (iotype) && strcmp((port)->name, (ioname)) == 0)
+port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
+bool port_makeblock(const meta_block_t * block, portlist_t * list, exception_t ** err);
+void port_sort(portlist_t * list);
+static inline void port_add(portlist_t * list, port_t * port)
+{
+	list_add(list, &port->port_list);
+	port_sort(list);
+}
+
+
+rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
 void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err);
 

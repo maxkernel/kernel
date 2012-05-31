@@ -360,7 +360,7 @@ static void * kthread_dothread(void * object)
 	kth->stop = false;
 	while (!kth->stop)
 	{
-		while (kth->trigger != NULL && !trigger_watch(kth->trigger) && !kth->stop)
+		while (!trigger_watch(kth->trigger) && !kth->stop)
 		{
 			// This function will block or return false until triggered
 		}
@@ -1323,7 +1323,7 @@ int main(int argc, char * argv[])
 		};
 
 		LOGK(LOG_DEBUG, "Loading modules...");
-		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_load);
+		model_analyse(model, &f_load);
 
 		void * f_buildmod_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
 		{
@@ -1418,7 +1418,7 @@ int main(int argc, char * argv[])
 		};
 
 		LOGK(LOG_DEBUG, "Building modules...");
-		model_analyse(model, traversal_scripts_modules_configs_linkables_links, &f_buildmod);
+		model_analyse(model, &f_buildmod);
 
 		// Call postact function on all modules
 		{

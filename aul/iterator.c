@@ -1,5 +1,3 @@
-
-
 #include <aul/common.h>
 #include <aul/list.h>
 #include <aul/mutex.h>
@@ -65,27 +63,6 @@ iterator_t iterator_new(const char * class, itrnext_f next_func, itrfree_f free_
 
 	return itr;
 }
-
-/*
-const void * iterator_getobject(iterator_t itr, const char * class)
-{
-	// Sanity check
-	{
-		if (iterators[itr].next_f == NULL || itr < 0 || itr >= AUL_ITERATOR_MAX_ITRS)
-		{
-			return NULL;
-		}
-
-		// Check class
-		if (class != NULL && strcmp(class, iterators[itr].class) != 0)
-		{
-			return NULL;
-		}
-	}
-
-	return iterators[itr].object;
-}
-*/
 
 const void * iterator_next(iterator_t itr, const char * class)
 {

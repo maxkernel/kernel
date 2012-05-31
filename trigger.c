@@ -16,9 +16,6 @@
 #define VARCLOCK_BLK_IO			"rate"
 
 
-//extern module_t * kernel_module;
-
-
 static inline void addnanos(struct timespec * val, uint64_t add_nanos)
 {
 	uint64_t nanos = val->tv_nsec + add_nanos;
@@ -62,6 +59,20 @@ void * trigger_new(const char * name, info_f info, destructor_f destructor, trig
 	return trigger;
 }
 
+bool trigger_watch(trigger_t * trigger)
+{
+	// Sanity check
+	{
+		if (trigger == NULL)
+		{
+			// If the trigger is NULL, just return true to indicate that it has been triggered
+			return true;
+		}
+	}
+
+	return trigger->function(trigger);
+}
+
 /*------------------- CLOCK -------------------------*/
 static char * trigger_infoclock(void * obj)
 {
@@ -69,9 +80,9 @@ static char * trigger_infoclock(void * obj)
 	return strdup(str);
 }
 
-static bool trigger_waitclock(void * object)
+static bool trigger_waitclock(trigger_t * trigger)
 {
-	trigger_clock_t * clk = object;
+	trigger_clock_t * clk = (void *)trigger;
 
 	if (clk->interval_nsec == 0)
 	{
@@ -98,7 +109,10 @@ static bool trigger_waitclock(void * object)
 	{
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
-			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", clk->kobject.object_name, (diff - clk->interval_nsec));
+			const char * object_name = NULL;
+			kobj_getinfo(&clk->trigger.kobject, NULL, &object_name, NULL);
+
+			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", object_name, (diff - clk->interval_nsec));
 			clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
 		}
 		else
@@ -128,13 +142,13 @@ static bool trigger_waitclock(void * object)
 	}
 }
 
-trigger_t * trigger_newclock(const char * name, double freq_hz)
+trigger_clock_t * trigger_newclock(const char * name, double freq_hz)
 {
 	string_t str = string_new("%s (@ %0.3fHz) clock trigger", name, freq_hz);
 	trigger_clock_t * clk = trigger_new(str.string, trigger_infoclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
 	clk->interval_nsec = hz2nanos(freq_hz);
 
-	return (trigger_t *)clk;
+	return clk;
 }
 
 /*----------------------- VARCLOCK ------------------------*/
@@ -144,14 +158,16 @@ static char * trigger_infovarclock(void * obj)
 	return strdup(str);
 }
 
-static bool trigger_waitvarclock(void * object)
+static bool trigger_waitvarclock(trigger_t * trigger)
 {
-	trigger_varclock_t * clk = object;
+	trigger_varclock_t * vclk = (void *)trigger;
+	trigger_clock_t * clk = &vclk->clock;
 
-	io_beforeblock(clk->blockinst);
-	const double * new_freq_hz = io_doinput(clk->blockinst, VARCLOCK_BLK_IO);
+	// TODO IMPORTANT - get block input rate!
+	//io_beforeblock(clk->blockinst);
+	//const double * new_freq_hz = io_doinput(clk->blockinst, VARCLOCK_BLK_IO);
 
-	uint64_t new_interval = new_freq_hz == NULL? clk->interval_nsec : hz2nanos(*new_freq_hz);
+	uint64_t new_interval = clk->interval_nsec; //////new_freq_hz == NULL? clk->interval_nsec : hz2nanos(*new_freq_hz);
 	if (new_interval != clk->interval_nsec)
 	{
 		clk->interval_nsec = new_interval;
@@ -168,9 +184,10 @@ static bool trigger_waitvarclock(void * object)
 		}
 	}
 
-	return trigger_waitclock(clk);
+	return trigger_waitclock(trigger);
 }
 
+/*
 blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger)
 {
 	if (strcmp(trigger->kobject.object_name + (strlen(trigger->kobject.object_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
@@ -212,36 +229,14 @@ binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
 
 	return in;
 }
+*/
 
-trigger_t * trigger_newvarclock(const char * name, double initial_freq_hz)
+trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 {
-	block_t * blk = kobj_new("Block", strdup(VARCLOCK_KOBJ_NAME), io_blockinfo, io_blockfree, sizeof(block_t));
-	blk->name = strdup(VARCLOCK_BLK_NAME);
-	blk->desc = strdup("Variable clock trigger block");
-	LIST_INIT(&blk->inputs);
-	LIST_INIT(&blk->outputs);
-
-	bio_t * in = malloc0(sizeof(bio_t));
-	bio_t * out = malloc0(sizeof(bio_t));
-
-	in->block = blk;
-	in->name = strdup(VARCLOCK_BLK_IO);
-	in->sig = T_DOUBLE;
-	in->desc = strdup("Update rate (in Hz) to execute the rategroup");
-
-	out->block = blk;
-	out->name = strdup(VARCLOCK_BLK_IO);
-	out->sig = T_DOUBLE;
-	out->desc = strdup("The update rate (in Hz) that the rategroup is executed at");
-
-	list_add(&blk->inputs, &in->block_list);
-	list_add(&blk->outputs, &out->block_list);
-
-
 	string_t str = string_new("%s %s", name, VARCLOCK_NAME);
 	trigger_varclock_t * clk = trigger_new(str.string, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
-	clk->interval_nsec = hz2nanos(initial_freq_hz);
-	clk->blockinst = io_newblockinst(blk, NULL);
+	clk->clock.interval_nsec = hz2nanos(initial_freq_hz);
+	linklist_init(&clk->links);
 
-	return (trigger_t *)clk;
+	return clk;
 }

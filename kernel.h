@@ -55,6 +55,7 @@ struct __kobject_t
 };
 
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size);
+bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const char ** object_name, const kobject_t ** parent);
 void kobj_register(kobject_t * object);		// TODO - delete this function!
 void kobj_makechild(kobject_t * parent, kobject_t * child);
 void kobj_destroy(kobject_t * object);

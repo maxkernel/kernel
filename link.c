@@ -2,6 +2,7 @@
 
 #include <aul/string.h>
 #include <aul/exception.h>
+#include <aul/mutex.h>
 
 #include <maxmodel/meta.h>
 #include <maxmodel/model.h>
@@ -11,6 +12,9 @@
 
 #include <kernel.h>
 #include <kernel-priv.h>
+
+
+extern mutex_t io_lock;
 
 
 static size_t link_backingsize(char sig)
@@ -31,7 +35,7 @@ static size_t link_backingsize(char sig)
 	}
 }
 
-biobacking_t * link_newbacking(char sig, exception_t ** err)
+iobacking_t * link_newbacking(char sig, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -49,8 +53,8 @@ biobacking_t * link_newbacking(char sig, exception_t ** err)
 		return NULL;
 	}
 
-	biobacking_t * backing = malloc(sizeof(biobacking_t) + memsize);
-	memset(backing, 0, sizeof(biobacking_t) + memsize);
+	iobacking_t * backing = malloc(sizeof(iobacking_t) + memsize);
+	memset(backing, 0, sizeof(iobacking_t) + memsize);
 	backing->size = memsize;
 	backing->sig = sig;
 	backing->isnull = true;
@@ -58,7 +62,7 @@ biobacking_t * link_newbacking(char sig, exception_t ** err)
 	return backing;
 }
 
-void link_freebacking(biobacking_t * backing)
+void link_freebacking(iobacking_t * backing)
 {
 	// Sanity check
 	{
@@ -71,27 +75,77 @@ void link_freebacking(biobacking_t * backing)
 	free(backing);
 }
 
+void link_doinputs(linklist_t * links, portlookup_f lookup)
+{
+	mutex_lock(&io_lock);
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &links->inputs)
+		{
+			link_t * link = list_entry(pos, link_t, link_list);
+			port_t * port = lookup(link->symbol);
+
+			if (port == NULL)
+			{
+				const char * symbol_name = NULL;
+				model_getlinksymbol(link->symbol, NULL, &symbol_name, NULL, NULL);
+
+				LOGK(LOG_ERR, "Could not resolve link -> port for input symbol %s", symbol_name);
+				continue;
+			}
+
+			link_handle(&link->link, link->backing, port->backing);
+		}
+	}
+	mutex_unlock(&io_lock);
+}
+
+void link_dooutputs(linklist_t * links, portlookup_f lookup)
+{
+	mutex_lock(&io_lock);
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &links->outputs)
+		{
+			link_t * link = list_entry(pos, link_t, link_list);
+			port_t * port = lookup(link->symbol);
+
+			if (port == NULL)
+			{
+				const char * symbol_name = NULL;
+				model_getlinksymbol(link->symbol, NULL, &symbol_name, NULL, NULL);
+
+				LOGK(LOG_ERR, "Could not resolve link -> port for output symbol %s", symbol_name);
+				continue;
+			}
+
+			link_handle(&link->link, port->backing, link->backing);
+		}
+	}
+	mutex_unlock(&io_lock);
+}
 
 
-static void copy_direct(const link_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
+
+static void copy_direct(const linkfunc_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
 	memcpy(to, from, link->data.length);
 }
 
-static void copy_string(const link_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
+static void copy_string(const linkfunc_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
 	strncpy((char *)to, (char *)from, link->data.length);
 	((char *)to)[link->data.length - 1] = '\0';
 }
 
-static void copy_buffer(const link_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
+static void copy_buffer(const linkfunc_t * link, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
 	if (!to_isnull)		buffer_free(*(buffer_t *)to);
 	if (!from_isnull)	*(buffer_t *)to = buffer_dup(*(const buffer_t *)from);
 }
 
 // TODO - make two functions, one for copy out, the other for copy in??
-bool link_getfunction(const model_link_t * model_link, char from_sig, char to_sig, link_t * link)
+bool link_getfunction(const model_link_t * model_link, char from_sig, char to_sig, linkfunc_t * link)
 {
 	switch (from_sig)
 	{

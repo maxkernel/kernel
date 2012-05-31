@@ -20,8 +20,7 @@ static void blockinst_destroy(void * blockinst)
 blockinst_t * blockinst_newempty(const char * name)
 {
 	blockinst_t * inst = kobj_new("Block Instance", name, blockinst_info, blockinst_destroy, sizeof(blockinst_t));
-	LIST_INIT(&inst->inputs);
-	LIST_INIT(&inst->outputs);
+	linklist_init(&inst->links);
 
 	return inst;
 }
