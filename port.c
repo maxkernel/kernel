@@ -36,7 +36,22 @@ port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, 
 	return port;
 }
 
-bool port_makeblock(const meta_block_t * block, portlist_t * list, exception_t ** err)
+port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name)
+{
+	list_t * pos = NULL;
+	list_foreach(pos, ports)
+	{
+		port_t * port = list_entry(pos, port_t, port_list);
+		if (port->type == type && strcmp(port->name, name) == 0)
+		{
+			return port;
+		}
+	}
+
+	return NULL;
+}
+
+bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -61,7 +76,7 @@ bool port_makeblock(const meta_block_t * block, portlist_t * list, exception_t *
 			char sig = '\0';
 			meta_getblockio(blockio, NULL, &name, &type, &sig, NULL);
 
-			iobacking_t * iobacking = link_newbacking(sig, err);
+			iobacking_t * iobacking = iobacking_new(sig, err);
 			if (iobacking == NULL || exception_check(err))
 			{
 				return false;

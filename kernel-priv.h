@@ -165,13 +165,17 @@ typedef struct
 
 	syscall_t * syscall;
 	ffi_closure_t * closure;
+
+	mutex_t lock;
+	linklist_t links;
+	portlist_t ports;
 	//block_t * block;
-	blockinst_t * blockinst;
+	//blockinst_t * blockinst;
 
-	iobacking_t * retbacking;
+	//iobacking_t * retbacking;
 
-	size_t argcount;
-	iobacking_t * argbacking[0];	// Must be last
+	//size_t argcount;
+	//iobacking_t * argbacking[0];	// Must be last
 } syscallblock_t;
 
 typedef struct {
@@ -519,14 +523,16 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
+// TODO rename syscallblock to something like syscallblockinst (because it's really an instance)
 syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, const char * desc);
-blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
+//blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #define KTHREAD_SCHED		SCHED_RR
 kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, runnable_f runfunction, runnable_f stopfunction, void * userdata, exception_t ** err);
 void kthread_schedule(kthread_t * thread);
 kthread_t * kthread_self();
-trigger_t * kthread_gettrigger(kthread_t * thread);
+#define kthread_gettrigger(kth)		((kth)->trigger)
+#define kthread_getuserdata(kth)	((kth)->userdata)
 
 void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
 bool trigger_watch(trigger_t * trigger);
@@ -558,33 +564,35 @@ blockinst_t * blockinst_new(block_t * block, const model_linkable_t * backing, c
 const block_t * blockinst_getblock(const blockinst_t * blockinst);
 void blockinst_act(blockinst_t * blockinst, blockact_f callback);
 
-#define linklist_init(l)		({ LIST_INIT(&(l)->inputs); LIST_INIT(&(l)->outputs); })
-iobacking_t * link_newbacking(char sig, exception_t ** err);
-void link_freebacking(iobacking_t * backing);
-static inline void link_handle(const linkfunc_t * link, const iobacking_t * from, iobacking_t * to)
-{
-	link->function(link, from, from->isnull, to->data, to->isnull);
-	to->isnull = from->isnull;
-}
+iobacking_t * iobacking_new(char sig, exception_t ** err);
+void iobacking_destroy(iobacking_t * backing);
+#define iobacking_sig(backing)	((backing)->sig)
+#define iobacking_isnull(backing)	((backing)->isnull)
+#define iobacking_data(backing)	((void *)(backing)->data)
 
-void link_doinputs(linklist_t * links, portlookup_f lookup);
-void link_dooutputs(linklist_t * links, portlookup_f lookup);
+#define linklist_init(l)		({ LIST_INIT(&(l)->inputs); LIST_INIT(&(l)->outputs); })
+void link_doinputs(portlist_t * ports, linklist_t * links);
+void link_dooutputs(portlist_t * ports, linklist_t * links);
 
 #define portlist_init(l)		({ LIST_INIT(l); })
 #define port_test(port, iotype, ioname)		((port)->type == (iotype) && strcmp((port)->name, (ioname)) == 0)
 port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
-bool port_makeblock(const meta_block_t * block, portlist_t * list, exception_t ** err);
+port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name);
+bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err);
 void port_sort(portlist_t * list);
 static inline void port_add(portlist_t * list, port_t * port)
 {
 	list_add(list, &port->port_list);
 	port_sort(list);
 }
+#define port_getbacking(port)	((port)->backing)
 
 
 rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
 void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err);
+const void * rategroup_input(const char * name);
+void rategroup_output(const char * name, const void * output);
 
 /*
 char * io_blockinfo(void * obj);

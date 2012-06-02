@@ -437,19 +437,6 @@ kthread_t * kthread_self()
 	return kthread_local;
 }
 
-trigger_t * kthread_gettrigger(kthread_t * kth)
-{
-	// Sanity check
-	{
-		if (kth == NULL)
-		{
-			return NULL;
-		}
-	}
-
-	return kth->trigger;
-}
-
 static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
 	mutex_lock(&kthreads_mutex);

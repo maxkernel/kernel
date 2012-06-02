@@ -22,8 +22,8 @@ extern "C" {
 
 #define SENTINEL		(1)
 
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
+#define likely(x)       (__builtin_expect(!!(x), 1))
+#define unlikely(x)     (__builtin_expect(!!(x), 0))
 
 #define max(a, b)  (((a) > (b)) ? (a) : (b))
 #define min(a, b)  (((a) < (b)) ? (a) : (b))

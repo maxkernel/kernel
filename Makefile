@@ -45,7 +45,7 @@ body:
 	echo "In kernel" >>buildlog
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
+	( $(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS) 2>>buildlog ) || ( cat buildlog && false )
 
 install:
 	mkdir -p $(INSTALL) $(LOGDIR) $(INSTALL)/modules $(INSTALL)/stitcher $(INSTALL)/$(MEMFS) /usr/include/maxkernel

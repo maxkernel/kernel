@@ -10,6 +10,17 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 {
 	syscallblock_t * sb = userdata;
 
+	mutex_lock(&sb->lock);
+	{
+		link_doinputs(&sb->ports, &sb->links);
+		{
+
+		}
+		link_dooutputs(&sb->ports, &sb->links);
+	}
+	mutex_unlock(&sb->lock);
+
+	/*
 	io_beforeblock(sb->blockinst);
 	{
 		const char * param;
@@ -52,6 +63,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 		}
 	}
 	io_afterblock(sb->blockinst);
+	*/
 }
 
 char * syscallblock_info(void * object)
@@ -66,10 +78,12 @@ void syscallblock_free(void * object)
 	closure_free(sb->closure);
 }
 
+/*
 blockinst_t * syscallblock_getblockinst(syscallblock_t * sb)
 {
 	return sb->blockinst;
 }
+*/
 
 syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, const char * desc)
 {
@@ -100,9 +114,14 @@ syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char *
 		}
 	}
 
-	size_t argcount = method_numparams(method_params(sig));
-	size_t sb_size = sizeof(syscallblock_t) + (sizeof(iobacking_t *) * argcount);
-	syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sb_size);
+	//size_t argcount = method_numparams(method_params(sig));
+	//size_t sb_size = sizeof(syscallblock_t) + (sizeof(iobacking_t *) * argcount);
+	//syscallblock_t * sb = kobj_new("SyscallBlock", name, syscallblock_info, syscallblock_free, sb_size);
+	syscallblock_t * sb = kobj_new("SyscallBlockinst", name, syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
+	mutex_init(&sb->lock, M_NORMAL);
+	linklist_init(&sb->links);
+	portlist_init(&sb->ports);
+
 	syscall_f func = NULL;
 
 	// Build the closure
@@ -132,31 +151,52 @@ syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char *
 	// Build the biobacking return
 	{
 		exception_t * e = NULL;
-		sb->retbacking = link_newbacking(method_returntype(sig), &e);
-		if (sb->retbacking == NULL || exception_check(&e))
+
+		iobacking_t * backing = iobacking_new(method_returntype(sig), &e);
+		if (backing == NULL || exception_check(&e))
 		{
 			LOGK(LOG_ERR, "Could not create syscall return backing for %s: %s", name, (e == NULL)? "Unknown error" : e->message);
 			exception_free(e);
 			return NULL;
 		}
+
+		port_t * port = port_new(meta_input, "r", backing, &e);
+		if (port == NULL || exception_check(&e))
+		{
+			LOGK(LOG_ERR, "Could not create syscall return port for %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+			exception_free(e);
+			return NULL;
+		}
+
+		port_add(&sb->ports, port);
 	}
 
 	// Build the biobacking arguments
 	{
 		exception_t * e = NULL;
-		sb->argcount = argcount;
 
 		const char * param = NULL;
 		size_t index = 0;
 		foreach_methodparam(method_params(sig), param)
 		{
-			sb->argbacking[index] = link_newbacking(*param, &e);
-			if (sb->argbacking[index] == NULL || exception_check(&e))
+			iobacking_t * backing = iobacking_new(*param, &e);
+			if (backing == NULL || exception_check(&e))
 			{
 				LOGK(LOG_ERR, "Could not create syscall arg[%zu] backing for %s: %s", index, name, (e == NULL)? "Unknown error" : e->message);
 				exception_free(e);
 				return NULL;
 			}
+
+			string_t port_name = string_new("a%zu", index);
+			port_t * port = port_new(meta_output, port_name.string, backing, &e);
+			if (port == NULL || exception_check(&e))
+			{
+				LOGK(LOG_ERR, "Could not create syscall arg[%zu] port for %s: %s", index, name, (e == NULL)? "Unknown error" : e->message);
+				exception_free(e);
+				return NULL;
+			}
+
+			port_add(&sb->ports, port);
 
 			index += 1;
 		}
@@ -205,7 +245,7 @@ syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char *
 
 	// Create block instance
 	//sb->blockinst = io_newblockinst(sb->block, NULL);
-	sb->blockinst = blockinst_new(NULL, syscall, name);
+	//sb->blockinst = blockinst_new(NULL, syscall, name);
 
 	// Route the data
 	/* TODO - finish me!
