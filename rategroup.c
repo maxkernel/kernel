@@ -169,7 +169,7 @@ const void * rategroup_input(const char * name)
 		return NULL;
 	}
 
-	return iobacking_data(port_getbacking(port));
+	return iobacking_data(port_iobacking(port));
 }
 
 void rategroup_output(const char * name, const void * output)
@@ -200,61 +200,9 @@ void rategroup_output(const char * name, const void * output)
 	port_t * port = port_lookup(&rg_blockinst->ports, meta_output, name);
 	if unlikely(port == NULL)
 	{
-		LOGK(LOG_WARN, "Could not find input '%s' in block instance!", name);
+		LOGK(LOG_WARN, "Could not find output '%s' in block instance!", name);
 		return;
 	}
 
-	iobacking_t * backing = port_getbacking(port);
-	switch (iobacking_sig(backing))
-	{
-		case T_BOOLEAN:
-		{
-			*(bool *)iobacking_data(backing) = *(const bool *)output;
-			break;
-		}
-
-		case T_INTEGER:
-		{
-			*(int *)iobacking_data(backing) = *(const int *)output;
-			break;
-		}
-
-		case T_DOUBLE:
-		{
-			*(double *)iobacking_data(backing) = *(const double *)output;
-			break;
-		}
-
-		case T_CHAR:
-		{
-			*(char *)iobacking_data(backing) = *(const char *)output;
-			break;
-		}
-
-		case T_STRING:
-		{
-			strncpy(*(char **)iobacking_data(backing), *(const char **)output, AUL_STRING_MAXLEN - 1);
-			break;
-		}
-
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:
-		{
-			*(array_t *)iobacking_data(backing) = array_dup(*(const array_t *)output);
-			break;
-		}
-
-		case T_BUFFER:
-		{
-			*(buffer_t *)iobacking_data(backing) = buffer_dup(*(const buffer_t *)output);
-			break;
-		}
-
-		default:
-		{
-			LOGK(LOG_ERR, "Unknown output signature for output '%s'", name);
-			break;
-		}
-	}
+	iobacking_copy(port_iobacking(port), output);
 }

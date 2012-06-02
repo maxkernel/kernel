@@ -14,7 +14,65 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 	{
 		link_doinputs(&sb->ports, &sb->links);
 		{
+			const char * param;
+			size_t index = 0;
 
+			foreach_methodparam(method_params(sb->syscall->sig), param)
+			{
+				if unlikely(*param == T_VOID)
+				{
+					continue;
+				}
+
+				string_t name = string_new("a%zu", index);
+
+				port_t * port = port_lookup(&sb->ports, meta_output, name.string);
+				if unlikely(port == NULL)
+				{
+					LOGK(LOG_WARN, "Could not find argument '%s' port in syscall block instance '%s'!", name.string, sb->syscall->name);
+					continue;
+				}
+
+				iobacking_copy(port_iobacking(port), args[index]);
+
+				index += 1;
+			}
+
+			if (method_returntype(sb->syscall->sig) != T_VOID)
+			{
+				port_t * port = port_lookup(&sb->ports, meta_input, "r");
+				if likely(port != NULL)
+				{
+					iobacking_t * backing = port_iobacking(port);
+					if (!iobacking_isnull(backing))
+					{
+						const void * r = iobacking_data(backing);
+						switch (method_returntype(sb->syscall->sig))
+						{
+							case T_BOOLEAN:		memcpy(ret, r, sizeof(bool));	break;
+							case T_INTEGER:		memcpy(ret, r, sizeof(int));	break;
+							case T_DOUBLE:		memcpy(ret, r, sizeof(double));	break;
+							case T_CHAR:		memcpy(ret, r, sizeof(char));	break;
+							case T_STRING:		memcpy(ret, r, sizeof(char *));	break;
+						}
+					}
+					else
+					{
+						switch (method_returntype(sb->syscall->sig))
+						{
+							case T_BOOLEAN:		*(bool *)ret = false;		break;
+							case T_INTEGER:		*(int *)ret = 0;			break;
+							case T_DOUBLE:		*(double *)ret = 0.0;		break;
+							case T_CHAR:		*(char *)ret = '\0';		break;
+							case T_STRING:		*(char **)ret = "";			break;
+						}
+					}
+				}
+				else
+				{
+					LOGK(LOG_WARN, "Could not find return port in syscall block instance '%s'!", sb->syscall->name);
+				}
+			}
 		}
 		link_dooutputs(&sb->ports, &sb->links);
 	}

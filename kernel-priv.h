@@ -566,6 +566,7 @@ void blockinst_act(blockinst_t * blockinst, blockact_f callback);
 
 iobacking_t * iobacking_new(char sig, exception_t ** err);
 void iobacking_destroy(iobacking_t * backing);
+void iobacking_copy(iobacking_t * backing, const void * data);
 #define iobacking_sig(backing)	((backing)->sig)
 #define iobacking_isnull(backing)	((backing)->isnull)
 #define iobacking_data(backing)	((void *)(backing)->data)
@@ -585,7 +586,7 @@ static inline void port_add(portlist_t * list, port_t * port)
 	list_add(list, &port->port_list);
 	port_sort(list);
 }
-#define port_getbacking(port)	((port)->backing)
+#define port_iobacking(port)	((port)->backing)
 
 
 rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable);

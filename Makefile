@@ -12,7 +12,7 @@ UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 
-SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.c rategroup.c port.c link.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c
+SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.c rategroup.c port.c link.c iobacking.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c
 #FIXME		= io.c exec.c
 #OLD_SRCS	= meta.c luaenv.c
 OBJS		= $(SRCS:.c=.o)

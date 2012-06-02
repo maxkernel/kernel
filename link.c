@@ -16,84 +16,6 @@
 
 extern mutex_t io_lock;
 
-
-static size_t iobacking_size(char sig)
-{
-	switch (sig)
-	{
-		case T_VOID:			return 0;
-		case T_BOOLEAN:			return sizeof(bool);
-		case T_INTEGER:			return sizeof(int);
-		case T_DOUBLE:			return sizeof(double);
-		case T_CHAR:			return sizeof(char);
-		case T_STRING:			return sizeof(char *) + sizeof(char) * AUL_STRING_MAXLEN;
-		case T_ARRAY_BOOLEAN:
-		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:	return sizeof(array_t);
-		case T_BUFFER:			return sizeof(buffer_t);
-		default:				return -1;
-	}
-}
-
-iobacking_t * iobacking_new(char sig, exception_t ** err)
-{
-	// Sanity check
-	{
-		if (exception_check(err))
-		{
-			return NULL;
-		}
-	}
-
-	// Get the payload size
-	ssize_t memsize = iobacking_size(sig);
-	if (memsize == -1)
-	{
-		exception_set(err, EINVAL, "Could not determine backing size for sig '%c'", sig);
-		return NULL;
-	}
-
-	iobacking_t * backing = malloc(sizeof(iobacking_t) + memsize);
-	memset(backing, 0, sizeof(iobacking_t) + memsize);
-	backing->size = memsize;
-	backing->sig = sig;
-	backing->isnull = true;
-
-
-	// Handle type-specific initialization
-	switch (sig)
-	{
-		case T_STRING:
-		{
-			// Set up the buffer so that it looks like this:
-			//  [  char *  |   string...      ]
-			// First member points to the rest of the string
-			//   we use this so that when we return the data chunk pointer, its of type pointer to char *
-			*(char **)&backing->data[0] = (char *)&backing->data[sizeof(char *)];
-			break;
-		}
-
-		default: break;
-	}
-
-
-	return backing;
-}
-
-void iobacking_destroy(iobacking_t * backing)
-{
-	// Sanity check
-	{
-		if unlikely(backing == NULL)
-		{
-			return;
-		}
-	}
-
-	free(backing);
-}
-
-
 static inline void link_handle(const linkfunc_t * link, const iobacking_t * from, iobacking_t * to)
 {
 	link->function(link, from, from->isnull, to->data, to->isnull);
@@ -244,7 +166,7 @@ bool link_getfunction(const model_link_t * model_link, char from_sig, char to_si
 			}
 
 			link->function = copy_direct;
-			link->data.length = iobacking_size(to_sig);
+			link->data.length = sizeof(bool);
 			return true;
 		}
 
@@ -255,7 +177,7 @@ bool link_getfunction(const model_link_t * model_link, char from_sig, char to_si
 				case T_INTEGER:
 				{
 					link->function = copy_direct;
-					link->data.length = iobacking_size(to_sig);
+					link->data.length = sizeof(int);
 					return true;
 				}
 
@@ -273,7 +195,7 @@ bool link_getfunction(const model_link_t * model_link, char from_sig, char to_si
 				case T_DOUBLE:
 				{
 					link->function = copy_direct;
-					link->data.length = iobacking_size(to_sig);
+					link->data.length = sizeof(double);
 					return true;
 				}
 
