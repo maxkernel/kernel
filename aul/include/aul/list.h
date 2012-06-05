@@ -130,6 +130,7 @@ static inline void list_move_tail(list_t *list, list_t *head)
 #define list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-offsetof(type, member)))
 //(unsigned long)(&((type *)0)->member)
+// TODO - change char * to void * and see if it still works (I think it should, right?)
 
 /**
  * list_foreach	-	iterate over a list

@@ -105,10 +105,10 @@ void property_clear(const char * name);
 const char * property_get(const char * name);
 bool property_isset(const char * name);
 
-const void * io_input(const char * name);
-void io_output(const char * name, const void * value);
-#define INPUT(name)					io_input(#name)
-#define OUTPUT(name, value)			io_output(#name, value)
+const void * rategroup_input(const char * name);
+void rategroup_output(const char * name, const void * output);
+#define INPUT(name)					rategroup_input(#name)
+#define OUTPUT(name, value)			rategroup_output(#name, value)
 
 const char * max_model();
 const char * kernel_id();

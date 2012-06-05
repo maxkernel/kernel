@@ -272,7 +272,7 @@ static int l_newsyscall(lua_State * L)
 
 	if (!lua_isnil(L, 4))
 	{
-		retvalue = luaL_checkudata(L, 3, ENTRY_METATABLE);
+		retvalue = luaL_checkudata(L, 4, ENTRY_METATABLE);
 		if (!model_linkable(retvalue->head->type))
 		{
 			return luaL_error(L, "Invalid linkable for item #r");

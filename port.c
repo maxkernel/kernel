@@ -98,7 +98,7 @@ bool port_makeblockports(const block_t * block, portlist_t * list, exception_t *
 	return true;
 }
 
-void port_sort(portlist_t * list)
+void port_sort(portlist_t * ports)
 {
 	int port_compare(list_t * a, list_t * b)
 	{
@@ -116,5 +116,5 @@ void port_sort(portlist_t * list)
 		return (pa->type == meta_input)? ((pb->type == meta_input)? 0 : -1) : ((pb->type == meta_output)? 0 : 1);
 	}
 
-	list_sort(list, port_compare);
+	list_sort(ports, port_compare);
 }

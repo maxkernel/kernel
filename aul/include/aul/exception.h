@@ -37,6 +37,7 @@ static inline void exception_set(exception_t ** err, int code, const char * fmt,
 	}
 }
 
+// TODO - make #define??
 static inline bool exception_check(exception_t ** err)
 {
 	return ((err) != NULL && *(err) != NULL && (*(err))->code != 0);

@@ -46,7 +46,6 @@ iobacking_t * iobacking_new(char sig, exception_t ** err)
 
 	iobacking_t * backing = malloc(sizeof(iobacking_t) + memsize);
 	memset(backing, 0, sizeof(iobacking_t) + memsize);
-	backing->size = memsize;
 	backing->sig = sig;
 	backing->isnull = true;
 

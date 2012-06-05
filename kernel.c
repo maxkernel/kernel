@@ -672,6 +672,8 @@ int main(int argc, char * argv[])
 		{
 			LOGK(LOG_FATAL, "Failed bool size runtime check!");
 		}
+
+		// TODO IMPORTANT - check for threadlocal support
 	}
 
 	// Set up the working directory to the install dir
@@ -1159,11 +1161,11 @@ int main(int argc, char * argv[])
 		cfg_free(cfg);
 	}
 
-	// Now start building the kernel from the model_t
+	// Now start building the kernel from the model
 	{
 		void * f_load_modules(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script)
 		{
-			// TODO - handle circular dependencies, somehow... (IMPORTANT)
+			// TODO IMPORTANT - handle circular dependencies, somehow... (IMPORTANT)
 			void load_module(const meta_t * meta)
 			{
 				// Sanity check
@@ -1361,32 +1363,20 @@ int main(int argc, char * argv[])
 			return udata;
 		}
 
-		void * f_buildmod_syscalls(void * udata, const model_t * model, const model_linkable_t * syscall, const model_script_t * script)
+		void * f_buildmod_syscalls(void * udata, const model_t * model, const model_linkable_t * linkable, const model_syscall_t * syscall, const model_script_t * script)
 		{
-			char r = 'v';
-			string_t args = string_blank();
+			const char * name = NULL, * sig = NULL, * desc = NULL;
+			model_getsyscall(linkable, &name, &sig, &desc);
 
-			iterator_t litr = model_linkitr(model, script, syscall);
-			const model_linksymbol_t * out = NULL, * in = NULL;
-			while (model_linknext(litr, &out, &in))
+			exception_t * e = NULL;
+			syscallblock_t * sb = syscallblock_new(name, sig, desc, &e);
+			if (sb == NULL || exception_check(&e))
 			{
-				const model_linkable_t * linkable = NULL;
-				const char * name = NULL;
-
-				// Process output
-				{
-					model_getlinksymbol(out, &linkable, &name, NULL, NULL);
-					LOGK(LOG_INFO, "Out %s", name);
-				}
-
-				// Process input
-				{
-					model_getlinksymbol(in, &linkable, &name, NULL, NULL);
-					LOGK(LOG_INFO, "In %s", name);
-				}
+				LOGK(LOG_FATAL, "Could not create syscall %s(%s): %s", name, sig, (e == NULL)? "Unknown error" : e->message);
+				// Will exit
 			}
 
-			return udata;
+			return sb;
 		}
 
 		// Call preact function on all modules

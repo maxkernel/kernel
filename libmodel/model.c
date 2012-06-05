@@ -38,13 +38,13 @@ static void * model_malloc(model_t * model, modeltype_t type, size_t size)
 {
 	// Sanity check
 	{
-		if (unlikely(model == NULL || size < sizeof(modelhead_t)))
+		if unlikely(model == NULL || size < sizeof(modelhead_t))
 		{
 			return NULL;
 		}
 	}
 
-	if (unlikely(model->numids >= MODEL_MAX_IDS))
+	if (model->numids >= MODEL_MAX_IDS)
 	{
 		// No memory for new ID
 		return NULL;
@@ -317,7 +317,7 @@ void * model_setuserdata(modelhead_t * head, void * newuserdata)
 {
 	// Sanity check
 	{
-		if (head == NULL)
+		if unlikely(head == NULL)
 		{
 			return NULL;
 		}
@@ -332,7 +332,7 @@ void model_clearalluserdata(model_t * model)
 {
 	// Sanity check
 	{
-		if (model == NULL)
+		if unlikely(model == NULL)
 		{
 			return;
 		}
@@ -348,7 +348,7 @@ void model_destroy(model_t * model, const modelhead_t * item, const model_analys
 {
 	// Sanity check
 	{
-		if (model == NULL)
+		if unlikely(model == NULL)
 		{
 			return;
 		}
@@ -389,18 +389,18 @@ model_script_t * model_newscript(model_t * model, const char * path, exception_t
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || path == NULL)
+		if unlikely(model == NULL || path == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (strlen(path) >= MODEL_SIZE_PATH)
+		if unlikely(strlen(path) >= MODEL_SIZE_PATH)
 		{
 			// Path is too large and will truncate
 			exception_set(err, ENOMEM, "Path is too long! (MODEL_SIZE_PATH = %d)", MODEL_SIZE_PATH);
@@ -444,24 +444,24 @@ model_module_t * model_newmodule(model_t * model, model_script_t * script, meta_
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || script == NULL || meta == NULL)
+		if unlikely(model == NULL || script == NULL || meta == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (meta->path[0] == '\0')
+		if unlikely(meta->path[0] == '\0')
 		{
 			exception_set(err, EINVAL, "Bad meta argument!");
 			return NULL;
 		}
 
-		if (strlen(meta->path) >= MODEL_SIZE_PATH)
+		if unlikely(strlen(meta->path) >= MODEL_SIZE_PATH)
 		{
 			// Path is too large and will truncate
 			exception_set(err, ENOMEM, "Path is too long! (MODEL_SIZE_PATH = %d)", MODEL_SIZE_PATH);
@@ -578,30 +578,30 @@ model_config_t * model_newconfig(model_t * model, model_module_t * module, const
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || module == NULL || configname == NULL || value == NULL)
+		if unlikely(model == NULL || module == NULL || configname == NULL || value == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (strlen(configname) >= MODEL_SIZE_NAME)
+		if unlikely(strlen(configname) >= MODEL_SIZE_NAME)
 		{
 			exception_set(err, ENOMEM, "Config name is too long! (MODEL_SIZE_NAME = %d)", MODEL_SIZE_NAME);
 			return NULL;
 		}
 
-		if (strlen(value) >= MODEL_SIZE_VALUE)
+		if unlikely(strlen(value) >= MODEL_SIZE_VALUE)
 		{
 			exception_set(err, ENOMEM, "Config value is too long! (MODEL_SIZE_VALUE = %d)", MODEL_SIZE_VALUE);
 			return NULL;
 		}
 
-		if (module->backing == NULL)
+		if unlikely(module->backing == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return NULL;
@@ -673,42 +673,42 @@ model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, 
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || module == NULL || script == NULL || blockname == NULL)
+		if unlikely(model == NULL || module == NULL || script == NULL || blockname == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (strlen(blockname) >= MODEL_SIZE_NAME)
+		if unlikely(strlen(blockname) >= MODEL_SIZE_NAME)
 		{
 			exception_set(err, ENOMEM, "Block name is too long! (MODEL_SIZE_NAME = %d)", MODEL_SIZE_NAME);
 			return NULL;
 		}
 
-		if (args_length > 0 && args == NULL)
+		if unlikely(args_length > 0 && args == NULL)
 		{
 			exception_set(err, EINVAL, "Bad args argument!");
 			return NULL;
 		}
 
-		if (args_length > MODEL_MAX_ARGS)
+		if unlikely(args_length > MODEL_MAX_ARGS)
 		{
 			exception_set(err, ENOMEM, "Block instance argument list too long! (MODEL_MAX_ARGS = %d)", MODEL_MAX_ARGS);
 			return NULL;
 		}
 
-		if (strcmp(blockname, "static") == 0 && args_length > 0)
+		if unlikely(strcmp(blockname, "static") == 0 && args_length > 0)
 		{
 			exception_set(err, EINVAL, "Bad args_length argument (static blocks have no arguments)!");
 			return NULL;
 		}
 
-		if (module->backing == NULL)
+		if unlikely(module->backing == NULL)
 		{
 			exception_set(err, EINVAL, "Module is unbound to meta object!");
 			return NULL;
@@ -794,30 +794,30 @@ model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, 
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || script == NULL || groupname == NULL)
+		if unlikely(model == NULL || script == NULL || groupname == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (strlen(groupname) >= MODEL_SIZE_NAME)
+		if unlikely(strlen(groupname) >= MODEL_SIZE_NAME)
 		{
 			exception_set(err, ENOMEM, "Rategroup name is too long! (MODEL_SIZE_NAME = %d)", MODEL_SIZE_NAME);
 			return NULL;
 		}
 
-		if (elems_length > MODEL_MAX_RATEGROUPELEMS)
+		if unlikely(elems_length > MODEL_MAX_RATEGROUPELEMS)
 		{
 			exception_set(err, ENOMEM, "Block instance argument list too long! (MODEL_MAX_RATEGROUPELEMS = %d)", MODEL_MAX_RATEGROUPELEMS);
 			return NULL;
 		}
 
-		if (hertz <= 0)
+		if unlikely(hertz <= 0)
 		{
 			exception_set(err, EINVAL, "Invalid update frequency! (%f)", hertz);
 			return NULL;
@@ -864,30 +864,30 @@ model_linkable_t * model_newsyscall(model_t * model, model_script_t * script, co
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || script == NULL || funcname == NULL)
+		if unlikely(model == NULL || script == NULL || funcname == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 
-		if (strlen(funcname) >= MODEL_SIZE_NAME)
+		if unlikely(strlen(funcname) >= MODEL_SIZE_NAME)
 		{
 			exception_set(err, ENOMEM, "Syscall name is too long! (MODEL_SIZE_NAME = %d)", MODEL_SIZE_NAME);
 			return NULL;
 		}
 
-		if (strlen(sig) >= MODEL_SIZE_SIGNATURE)
+		if unlikely(strlen(sig) >= MODEL_SIZE_SIGNATURE)
 		{
 			exception_set(err, ENOMEM, "Syscall signature too long! (MODEL_SIZE_SIGNATURE = %d)", MODEL_SIZE_SIGNATURE);
 			return NULL;
 		}
 
-		if (desc != NULL && strlen(desc) >= MODEL_SIZE_DESCRIPTION)
+		if unlikely(desc != NULL && strlen(desc) >= MODEL_SIZE_DESCRIPTION)
 		{
 			exception_set(err, ENOMEM, "Syscall description is too long! (MODEL_SIZE_SHORTDESCRIPTION = %d)", MODEL_SIZE_DESCRIPTION);
 			return NULL;
@@ -939,12 +939,12 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model == NULL || script == NULL || out == NULL || in == NULL)
+		if unlikely(model == NULL || script == NULL || out == NULL || in == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
@@ -956,18 +956,18 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 	{
 		// Sanity check
 		{
-			if (exception_check(err))
+			if unlikely(exception_check(err))
 			{
 				return false;
 			}
 
-			if (linkable == NULL || name == NULL)
+			if unlikely(linkable == NULL || name == NULL)
 			{
 				exception_set(err, EINVAL, "Bad arguments!");
 				return false;
 			}
 
-			if (strlen(name) >= MODEL_SIZE_BLOCKIONAME)
+			if unlikely(strlen(name) >= MODEL_SIZE_BLOCKIONAME)
 			{
 				exception_set(err, EINVAL, "Block io name (%s) too long! (MODEL_SIZE_BLOCKIONAME = %d)", name, MODEL_SIZE_BLOCKIONAME);
 				return false;
@@ -1140,7 +1140,7 @@ void model_analyse(model_t * model, const model_analysis_t * funcs)
 {
 	// Sanity check
 	{
-		if (model == NULL || funcs == NULL)
+		if unlikely(model == NULL || funcs == NULL)
 		{
 			return;
 		}
@@ -1153,7 +1153,7 @@ bool model_lookupscript(const model_t * model, const char * path, const model_sc
 {
 	// Sanity check
 	{
-		if (model == NULL || path == NULL)
+		if unlikely(model == NULL || path == NULL)
 		{
 			return false;
 		}
@@ -1176,7 +1176,7 @@ iterator_t model_scriptitr(const model_t * model)
 {
 	// Sanity check
 	{
-		if (model == NULL)
+		if unlikely(model == NULL)
 		{
 			return iterator_none();
 		}
@@ -1210,7 +1210,7 @@ bool model_lookupmeta(const model_t * model, const char * path, const meta_t ** 
 {
 	// Sanity check
 	{
-		if (model == NULL || path == NULL)
+		if unlikely(model == NULL || path == NULL)
 		{
 			return false;
 		}
@@ -1236,7 +1236,7 @@ bool model_lookupmodule(const model_t * model, model_script_t * script, const ch
 {
 	// Sanity check
 	{
-		if (model == NULL || script == NULL || path == NULL)
+		if unlikely(model == NULL || script == NULL || path == NULL)
 		{
 			return false;
 		}
@@ -1266,7 +1266,7 @@ iterator_t model_moduleitr(const model_t * model, const model_script_t * script)
 {
 	// Sanity check
 	{
-		if (model == NULL || script == NULL)
+		if unlikely(model == NULL || script == NULL)
 		{
 			return iterator_none();
 		}
@@ -1300,7 +1300,7 @@ bool model_lookupconfig(const model_t * model, const model_module_t * module, co
 {
 	// Sanity check
 	{
-		if (model == NULL || module == NULL || name == NULL)
+		if unlikely(model == NULL || module == NULL || name == NULL)
 		{
 			return false;
 		}
@@ -1323,7 +1323,7 @@ iterator_t model_configitr(const model_t * model, const model_module_t * module)
 {
 	// Sanity check
 	{
-		if (model == NULL || module == NULL)
+		if unlikely(model == NULL || module == NULL)
 		{
 			return iterator_none();
 		}
@@ -1357,7 +1357,7 @@ iterator_t model_linkableitr(const model_t * model, const model_script_t * scrip
 {
 	// Sanity check
 	{
-		if (model == NULL || script == NULL)
+		if unlikely(model == NULL || script == NULL)
 		{
 			return iterator_none();
 		}
@@ -1389,16 +1389,11 @@ bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, mode
 	return false;
 }
 
-
-
-
-
-
 iterator_t model_linkitr(const model_t * model, const model_script_t * script, const model_linkable_t * linkable)
 {
 	// Sanity check
 	{
-		if (model == NULL || script == NULL || linkable == NULL)
+		if unlikely(model == NULL || script == NULL || linkable == NULL)
 		{
 			return iterator_none();
 		}
@@ -1439,22 +1434,11 @@ bool model_linknext(iterator_t itr, const model_linksymbol_t ** out, const model
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 void model_getscript(const model_script_t * script, const char ** path)
 {
 	// Sanity check
 	{
-		if (script == NULL)
+		if unlikely(script == NULL)
 		{
 			return;
 		}
@@ -1467,7 +1451,7 @@ void model_getmodule(const model_module_t * module, const char ** path, const me
 {
 	// Sanity check
 	{
-		if (module == NULL)
+		if unlikely(module == NULL)
 		{
 			return;
 		}
@@ -1481,7 +1465,7 @@ void model_getconfig(const model_config_t * config, const char ** name, char * s
 {
 	// Sanity check
 	{
-		if (config == NULL)
+		if unlikely(config == NULL)
 		{
 			return;
 		}
@@ -1497,7 +1481,7 @@ void model_getblockinst(const model_linkable_t * linkable, const char ** name, c
 {
 	// Sanity check
 	{
-		if (linkable == NULL || model_type(model_object(linkable)) != model_blockinst)
+		if unlikely(linkable == NULL || model_type(model_object(linkable)) != model_blockinst)
 		{
 			return;
 		}
@@ -1515,7 +1499,7 @@ void model_getsyscall(const model_linkable_t * linkable, const char ** name, con
 {
 	// Sanity check
 	{
-		if (linkable == NULL || model_type(model_object(linkable)) != model_syscall)
+		if unlikely(linkable == NULL || model_type(model_object(linkable)) != model_syscall)
 		{
 			return;
 		}
@@ -1531,7 +1515,7 @@ void model_getrategroup(const model_linkable_t * linkable, const char ** name, d
 {
 	// Sanity check
 	{
-		if (linkable == NULL || model_type(model_object(linkable)) != model_rategroup)
+		if unlikely(linkable == NULL || model_type(model_object(linkable)) != model_rategroup)
 		{
 			return;
 		}
@@ -1542,11 +1526,25 @@ void model_getrategroup(const model_linkable_t * linkable, const char ** name, d
 	if (hertz != NULL)			*hertz = rategroup->hertz;
 }
 
+void model_getlink(const model_link_t * link, const model_linksymbol_t ** out, const model_linksymbol_t ** in)
+{
+	// Sanity check
+	{
+		if unlikely(link == NULL)
+		{
+			return;
+		}
+	}
+
+	if (out != NULL)			*out = &link->out;
+	if (in != NULL)				*in = &link->in;
+}
+
 void model_getlinksymbol(const model_linksymbol_t * symbol, const model_linkable_t ** linkable, const char ** name, bool * hasindex, size_t * index)
 {
 	// Sanity check
 	{
-		if (symbol == NULL)
+		if unlikely(symbol == NULL)
 		{
 			return;
 		}

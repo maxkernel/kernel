@@ -37,7 +37,7 @@ typedef struct __blockinst_t blockinst_t;
 typedef struct __trigger_t trigger_t;
 typedef struct __kthread_t kthread_t;
 typedef struct __iobacking_t iobacking_t;
-typedef struct __linkfunc_t linkfunc_t;
+//typedef struct __linkfunc_t linkfunc_t;
 
 typedef void (*blind_f)();
 typedef void (*closure_f)(void * ret, const void * args[], void * userdata);
@@ -49,7 +49,7 @@ typedef bool (*trigger_f)(trigger_t * trigger);
 //typedef void (*blk_onupdate_f)(void * userdata);
 //typedef void (*blk_destroy_f)(void * userdata);
 //typedef void (*blk_link_f)(const void * output, bool output_isnull, size_t outsize, void * input, bool input_isnull, size_t insize);
-typedef void (*link_f)(const linkfunc_t * link, const void * from, bool from_isnull, void * to, bool to_isnull);
+typedef void (*link_f)(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull);
 //typedef bool (*kthread_dotask_f)(kthread_t * thread);
 typedef bool (*runnable_f)(kthread_t * thread, void * userdata);
 typedef void (*blockact_f)(void * userdata);
@@ -366,12 +366,12 @@ struct __blockinst_t
 
 struct __iobacking_t
 {
-	size_t size;		// TODO - delete this field
 	char sig;
 	bool isnull;
 	uint8_t data[0];
 };
 
+/*
 struct __linkfunc_t		// TODO - delete this structure and merge it with link_t
 {
 	link_f function;
@@ -380,14 +380,16 @@ struct __linkfunc_t		// TODO - delete this structure and merge it with link_t
 		size_t length;
 	} data;
 };
+*/
 
 typedef struct
 {
 	list_t link_list;
 
 	const model_linksymbol_t * symbol;
-	linkfunc_t link;
 	iobacking_t * backing;
+	link_f linkfunction;
+	void * linkdata;
 } link_t;
 
 typedef struct
@@ -524,7 +526,7 @@ syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
 // TODO rename syscallblock to something like syscallblockinst (because it's really an instance)
-syscallblock_t * syscallblock_new(const model_linkable_t * syscall, const char * name, const char * sig, const char * desc);
+syscallblock_t * syscallblock_new(const char * name, const char * sig, const char * desc, exception_t ** err);
 //blockinst_t * syscallblock_getblockinst(syscallblock_t * sb);
 
 #define KTHREAD_SCHED		SCHED_RR
@@ -572,15 +574,19 @@ void iobacking_copy(iobacking_t * backing, const void * data);
 #define iobacking_data(backing)	((void *)(backing)->data)
 
 #define linklist_init(l)		({ LIST_INIT(&(l)->inputs); LIST_INIT(&(l)->outputs); })
+iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * outlinks, char insig, linklist_t * inlinks, exception_t ** err);
+link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, char to_sig, void ** linkdata);
 void link_doinputs(portlist_t * ports, linklist_t * links);
 void link_dooutputs(portlist_t * ports, linklist_t * links);
+void link_sort(linklist_t * links);
+#define link_symbol(link)		((link)->symbol)
 
 #define portlist_init(l)		({ LIST_INIT(l); })
 #define port_test(port, iotype, ioname)		((port)->type == (iotype) && strcmp((port)->name, (ioname)) == 0)
 port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
 port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name);
 bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err);
-void port_sort(portlist_t * list);
+void port_sort(portlist_t * ports);
 static inline void port_add(portlist_t * list, port_t * port)
 {
 	list_add(list, &port->port_list);
@@ -592,8 +598,6 @@ static inline void port_add(portlist_t * list, port_t * port)
 rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
 void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err);
-const void * rategroup_input(const char * name);
-void rategroup_output(const char * name, const void * output);
 
 /*
 char * io_blockinfo(void * obj);
