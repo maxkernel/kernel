@@ -28,22 +28,29 @@ static void block_destroy(void * block)
 	}
 }
 
-block_t * block_new(module_t * module, const meta_block_t * backing, exception_t ** err)
+block_t * block_new(module_t * module, const char * name, const char * newsig, blockconstructor_f new, blockact_f onupdate, blockact_f ondestroy, exception_t ** err)
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (module == NULL || backing == NULL)
+		if unlikely(module == NULL || name == NULL || newsig == NULL)
 		{
-			exception_set(err, EINVAL, "Invalid arguments!");
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+
+		if unlikely(strlen(newsig) != 0 && new == NULL)
+		{
+			exception_set(err, EINVAL, "Bad constructor for block '%s'", name);
 			return NULL;
 		}
 	}
 
+	/*
 	const char * name = NULL;
 	meta_getblock(backing, &name, NULL, NULL, NULL, NULL, NULL);
 
@@ -53,31 +60,23 @@ block_t * block_new(module_t * module, const meta_block_t * backing, exception_t
 		exception_set(err, EFAULT, "Could not lookup meta block callbacks on block %s", name);
 		return NULL;
 	}
+	*/
 
 	block_t * blk = kobj_new("Block", name, block_info, block_destroy, sizeof(block_t));
-	blk->backing = backing;
 	blk->module = module;
-	meta_getblockcb(onupdate, NULL, NULL, &blk->onupdate);
-	meta_getblockcb(ondestroy, NULL, NULL, &blk->ondestroy);
+	blk->name = strdup(name);
+	blk->newsig = strdup(newsig);
+	blk->new = new;
+	blk->onupdate = onupdate;
+	blk->ondestroy = ondestroy;
+	//meta_getblockcb(onupdate, NULL, NULL, &blk->onupdate);
+	//meta_getblockcb(ondestroy, NULL, NULL, &blk->ondestroy);
 	LIST_INIT(&blk->insts);
 
 	return blk;
 }
 
-void block_getonupdate(const block_t * block, blockact_f * onupdate)
-{
-	// Sanity check
-	{
-		if (block == NULL)
-		{
-			return;
-		}
-	}
-
-	if (onupdate != NULL)		*onupdate = block->onupdate;
-}
-
-void block_addinst(block_t * block, blockinst_t * blockinst)
+void block_add(block_t * block, blockinst_t * blockinst)
 {
 	list_add(&block->insts, &blockinst->block_list);
 	kobj_makechild(&block->kobject, &blockinst->kobject);
@@ -128,15 +127,12 @@ iterator_t block_ioitr(const block_t * block)
 	}
 
 	iterator_t * meta_bitr = malloc(sizeof(iterator_t));
-	*meta_bitr = meta_blockioitr(module_getmeta(block->module));
+	*meta_bitr = meta_blockioitr(module_meta(block->module));
 
-	const char * block_name = NULL;
-	meta_getblock(block->backing, &block_name, NULL, NULL, NULL, NULL, NULL);
-
-	return iterator_new("block_io", ioitr_next, ioitr_free, block_name, meta_bitr);
+	return iterator_new("block_io", ioitr_next, ioitr_free, block->name, meta_bitr);
 }
 
-bool block_ioitrnext(iterator_t itr, const meta_blockio_t ** blockio)
+bool block_ionext(iterator_t itr, const meta_blockio_t ** blockio)
 {
 	const meta_blockio_t * nextblockio = iterator_next(itr, "block_io");
 	if (nextblockio != NULL)

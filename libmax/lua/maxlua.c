@@ -91,7 +91,7 @@ static int l_dosyscall(lua_State * L)
 	char buffer[max_getheadersize(hand) + max_getbuffersize(hand)];
 	void ** header = (void **)buffer;
 
-	ssize_t wrote = serialize_2array_fromcb_wheader(header, sizeof(buffer), sig, copyarg);
+	ssize_t wrote = serialize_2array_fromcb_wheader(header, sizeof(buffer), NULL, sig, copyarg);
 	if (wrote < 0)
 	{
 		return luaL_error(L, "Could not serialize syscall %s parameters: %s", syscall->name, strerror(errno));

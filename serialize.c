@@ -11,18 +11,16 @@
 #if defined(KERNEL)
 	#include <kernel.h>
 	#include <kernel-priv.h>
-#else
-	#define LOGK(...)	// Undefine LOGK (we are not compiling in kernel space here
 #endif
 
 static size_t headersize(const char * sig)
 {
 	size_t header_size = 0;
-	unsigned int i = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_BOOLEAN:
 			case T_INTEGER:
@@ -34,9 +32,10 @@ static size_t headersize(const char * sig)
 			case T_STRING:
 				header_size += sizeof(char *) + sizeof(char **);
 				break;
-		}
 
-		i++;
+			default:
+				break;
+		}
 	}
 
 	return header_size;
@@ -45,11 +44,11 @@ static size_t headersize(const char * sig)
 static size_t numparams(const char * sig)
 {
 	size_t params = 0;
-	unsigned int i = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch(sig[i])
+		switch(*param)
 		{
 			case T_BOOLEAN:
 			case T_INTEGER:
@@ -58,9 +57,10 @@ static size_t numparams(const char * sig)
 			case T_STRING:
 				params += 1;
 				break;
-		}
 
-		i++;
+			default:
+				break;
+		}
 	}
 
 	return params;
@@ -72,19 +72,18 @@ int signature_headerlen(const char * sig)
 }
 
 #if defined(KERNEL)
-ssize_t serialize_2buffer(buffer_t buffer, const char * sig, ...)
+ssize_t serialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	ssize_t ret = vserialize_2buffer(buffer, sig, args);
+	ssize_t ret = vserialize_2buffer(buffer, err, sig, args);
 	va_end(args);
 
 	return ret;
 }
 
-ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
+ssize_t vserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, va_list args)
 {
-	unsigned int i = 0;
 	ssize_t wrote = 0;
 
 	void copy(const void * ptr, size_t s)
@@ -93,9 +92,10 @@ ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
 		wrote += s;
 	}
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -136,16 +136,21 @@ ssize_t vserialize_2buffer(buffer_t buffer, const char * sig, va_list args)
 				copy(v, strlen(v) + 1);
 				break;
 			}
+
+			default:
+			{
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
+				return -1;
+			}
 		}
-		i++;
 	}
 
 	return wrote;
 }
 
-ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
+ssize_t aserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, void ** args)
 {
-	unsigned int i = 0;
+	size_t index = 0;
 	ssize_t wrote = 0;
 
 	void copy(const void * ptr, size_t s)
@@ -154,9 +159,10 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 		wrote += s;
 	}
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -165,43 +171,43 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 
 			case T_BOOLEAN:
 			{
-				copy(args[i], sizeof(bool));
+				copy(args[index], sizeof(bool));
 				break;
 			}
 
 			case T_INTEGER:
 			{
-				copy(args[i], sizeof(int));
+				copy(args[index], sizeof(int));
 				break;
 			}
 
 			case T_DOUBLE:
 			{
-				copy(args[i], sizeof(double));
+				copy(args[index], sizeof(double));
 				break;
 			}
 
 			case T_CHAR:
 			{
-				copy(args[i], sizeof(char));
+				copy(args[index], sizeof(char));
 				break;
 			}
 
 			case T_STRING:
 			{
-				const char * str = *(const char **)args[i];
+				const char * str = *(const char **)args[index];
 				copy(str, strlen(str) + 1);
 				break;
 			}
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
-		i++;
+
+		index += 1;
 	}
 
 	return wrote;
@@ -209,21 +215,20 @@ ssize_t aserialize_2buffer(buffer_t buffer, const char * sig, void ** args)
 
 #endif
 
-ssize_t serialize_2array(void * array, size_t arraylen, const char * sig, ...)
+ssize_t serialize_2array(void * array, size_t arraylen, exception_t ** err, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	ssize_t ret = vserialize_2array(array, arraylen, sig, args);
+	ssize_t ret = vserialize_2array(array, arraylen, err, sig, args);
 	va_end(args);
 
 	return ret;
 }
 
-ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_list args)
+ssize_t vserialize_2array(void * array, size_t arraylen, exception_t ** err, const char * sig, va_list args)
 {
 	labels(err_nomem);
 
-	unsigned int i = 0;
 	ssize_t wrote = 0;
 
 	void copy(const void * ptr, size_t s)
@@ -236,9 +241,10 @@ ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_li
 		wrote += s;
 	}
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -279,23 +285,27 @@ ssize_t vserialize_2array(void * array, size_t arraylen, const char * sig, va_li
 				copy(v, strlen(v) + 1);
 				break;
 			}
+
+			default:
+			{
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
+				return -1;
+			}
 		}
-		i++;
 	}
 
 	return wrote;
 
 err_nomem:
-	LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig);
-	errno = ENOBUFS;
+	exception_set(err, ENOBUFS, "Could not serialize sig %s, array too small!", sig);
 	return -1;
 }
 
-ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void ** args)
+ssize_t aserialize_2array(void * array, size_t arraylen, exception_t ** err, const char * sig, void ** args)
 {
 	labels(err_nomem);
 
-	unsigned int i = 0;
+	size_t index = 0;
 	ssize_t wrote = 0;
 
 	void copy(const void * ptr, size_t s)
@@ -308,9 +318,10 @@ ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void 
 		wrote += s;
 	}
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -319,71 +330,69 @@ ssize_t aserialize_2array(void * array, size_t arraylen, const char * sig, void 
 
 			case T_BOOLEAN:
 			{
-				copy(args[i], sizeof(bool));
+				copy(args[index], sizeof(bool));
 				break;
 			}
 
 			case T_INTEGER:
 			{
-				copy(args[i], sizeof(int));
+				copy(args[index], sizeof(int));
 				break;
 			}
 
 			case T_DOUBLE:
 			{
-				copy(args[i], sizeof(double));
+				copy(args[index], sizeof(double));
 				break;
 			}
 
 			case T_CHAR:
 			{
-				copy(args[i], sizeof(char));
+				copy(args[index], sizeof(char));
 				break;
 			}
 
 			case T_STRING:
 			{
-				const char * str = *(const char **)args[i];
+				const char * str = *(const char **)args[index];
 				copy(str, strlen(str) + 1);
 				break;
 			}
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
-		i++;
+
+		index += 1;
 	}
 
 	return wrote;
 
 err_nomem:
-	LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig);
-	errno = ENOBUFS;
+	exception_set(err, ENOBUFS, "Could not serialize sig %s, array too small!", sig);
 	return -1;
 }
 
-ssize_t serialize_2array_wheader(void ** array, size_t arraylen, const char * sig, ...)
+ssize_t serialize_2array_wheader(void ** array, size_t arraylen, exception_t ** err, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
-	ssize_t ret = vserialize_2array_wheader(array, arraylen, sig, args);
+	ssize_t ret = vserialize_2array_wheader(array, arraylen, err, sig, args);
 	va_end(args);
 
 	return ret;
 }
 
-ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, const char * sig, va_list args)
+ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, exception_t ** err, const char * sig, va_list args)
 {
 	// Get the header size
 	size_t header_size = headersize(sig);
 	if (header_size > arraylen)
 	{
-		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
-		errno = ENOBUFS;
+		exception_set(err, ENOBUFS, "Could not serialize sig %s, array too small!", sig);
 		return -1;
 	}
 
@@ -392,94 +401,97 @@ ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 	void ** ptrs = head + numparams(sig);
 	char * body = (char *)head + header_size;
 
-	unsigned int i = 0, p = 0;
+	size_t index = 0, pindex = 0;
 	size_t length = 0;
 
 	va_list cargs;
 	va_copy(cargs, args);
-
-	while (sig[i] != '\0')
 	{
-		head[i] = &body[length];
-
-		switch (sig[i])
+		const char * param = NULL;
+		method_foreachparam(param, sig)
 		{
-			case T_VOID:
+			head[index] = &body[length];
+
+			switch (*param)
 			{
-				break;
+				case T_VOID:
+				{
+					break;
+				}
+
+				case T_BOOLEAN:
+				{
+					va_arg(cargs, int);
+					length += sizeof(bool);
+					break;
+				}
+
+				case T_INTEGER:
+				{
+					va_arg(cargs, int);
+					length += sizeof(int);
+					break;
+				}
+
+				case T_DOUBLE:
+				{
+					va_arg(cargs, double);
+					length += sizeof(double);
+					break;
+				}
+
+				case T_CHAR:
+				{
+					va_arg(cargs, int);
+					length += sizeof(char);
+					break;
+				}
+
+				case T_STRING:
+				{
+					head[index] = &ptrs[pindex];
+					ptrs[pindex] = &body[length];
+					pindex += 1;
+
+					const char * str = va_arg(cargs, const char *);
+					length += strlen(str) + 1;
+
+					break;
+				}
+
+				default:
+				{
+					exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
+					return -1;
+				}
 			}
 
-			case T_BOOLEAN:
-			{
-				va_arg(cargs, int);
-				length += sizeof(bool);
-				break;
-			}
-
-			case T_INTEGER:
-			{
-				va_arg(cargs, int);
-				length += sizeof(int);
-				break;
-			}
-
-			case T_DOUBLE:
-			{
-				va_arg(cargs, double);
-				length += sizeof(double);
-				break;
-			}
-
-			case T_CHAR:
-			{
-				va_arg(cargs, int);
-				length += sizeof(char);
-				break;
-			}
-
-			case T_STRING:
-			{
-				head[i] = &ptrs[p];
-				ptrs[p] = &body[length];
-				p++;
-
-				const char * str = va_arg(cargs, const char *);
-				length += strlen(str) + 1;
-
-				break;
-			}
-
-			default:
-			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
-				return -1;
-			}
+			index += 1;
 		}
-
-		i++;
 	}
-
 	va_end(cargs);
 
-	ssize_t ret = vserialize_2array(body, arraylen-header_size, sig, args);
+	ssize_t ret = vserialize_2array(body, arraylen-header_size, err, sig, args);
 	if (ret != length)
 	{
-		LOGK(LOG_ERR, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
-		return ret;
+		if (!exception_check(err))
+		{
+			exception_set(err, EFAULT, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
+		}
+
+		return -1;
 	}
 
 	return ret + header_size;
 }
 
-ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * sig, void ** args)
+ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, exception_t ** err, const char * sig, void ** args)
 {
 	// Get the header size
 	size_t header_size = headersize(sig);
 	if (header_size > arraylen)
 	{
-		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
-		errno = ENOBUFS;
+		exception_set(err, ENOBUFS, "Could not serialize sig %s, array too small!", sig);
 		return -1;
 	}
 
@@ -488,14 +500,15 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 	void ** ptrs = head + numparams(sig);
 	char * body = (char *)head + header_size;
 
-	unsigned int i = 0, p = 0;
+	size_t index = 0, pindex = 0;
 	size_t length = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		head[i] = &body[length];
+		head[index] = &body[length];
 
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -528,11 +541,11 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 			case T_STRING:
 			{
-				head[i] = &ptrs[p];
-				ptrs[p] = &body[length];
-				p++;
+				head[index] = &ptrs[pindex];
+				ptrs[pindex] = &body[length];
+				pindex += 1;
 
-				const char * str = *(const char **)args[i];
+				const char * str = *(const char **)args[index];
 				length += strlen(str) + 1;
 
 				break;
@@ -540,34 +553,37 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, const char * s
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
 
-		i++;
+		index += 1;
 	}
 
-	ssize_t ret = aserialize_2array(body, arraylen-header_size, sig, args);
+	ssize_t ret = aserialize_2array(body, arraylen-header_size, err, sig, args);
 	if (ret != length)
 	{
-		LOGK(LOG_ERR, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
-		return ret;
+		if (!exception_check(err))
+		{
+			exception_set(err, EFAULT, "Header serialization mismatch. Expected body of length %zd, got %zd", length, ret);
+		}
+
+		return -1;
 	}
 
 	return ret + header_size;
 }
 
-ssize_t serialize_2array_fromcb(void * array, size_t arraylen, const char * sig, args_f args)
+ssize_t serialize_2array_fromcb(void * array, size_t arraylen, exception_t ** err, const char * sig, args_f args)
 {
-
-	unsigned int i = 0;
+	size_t index = 0;
 	ssize_t wrote = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -580,12 +596,9 @@ ssize_t serialize_2array_fromcb(void * array, size_t arraylen, const char * sig,
 			case T_CHAR:
 			case T_STRING:
 			{
-				exception_t * err = NULL;
-				ssize_t w = args((char *)array + wrote, arraylen - wrote, &err, sig, i);
-				if (exception_check(&err) || w <= 0)
+				ssize_t w = args((char *)array + wrote, arraylen - wrote, err, sig, index);
+				if (exception_check(err) || w <= 0)
 				{
-					LOGK(LOG_ERR, "Could not serialize index %d (type %c): %s", i, sig[i], err == NULL? "Unknown error" : err->message);
-					errno = EINVAL;
 					return -1;
 				}
 
@@ -595,8 +608,7 @@ ssize_t serialize_2array_fromcb(void * array, size_t arraylen, const char * sig,
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
@@ -604,25 +616,23 @@ ssize_t serialize_2array_fromcb(void * array, size_t arraylen, const char * sig,
 		if (wrote > arraylen)
 		{
 			// Buffer overflow
-			LOGK(LOG_ERR, "Could not serialize sig %s, body array too small!", sig);
-			errno = ENOBUFS;
+			exception_set(err, ENOBUFS, "Could not serialize sig %s, body array too small!", sig);
 			return -1;
 		}
 
-		i++;
+		index += 1;
 	}
 
 	return wrote;
 }
 
-ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const char * sig, args_f args)
+ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, exception_t ** err, const char * sig, args_f args)
 {
 	// Get the header size
 	size_t header_size = headersize(sig);
 	if (header_size > arraylen)
 	{
-		LOGK(LOG_ERR, "Could not serialize sig %s, array too small!", sig); \
-		errno = ENOBUFS;
+		exception_set(err, ENOBUFS, "Could not serialize sig %s, array too small!", sig);
 		return -1;
 	}
 
@@ -631,14 +641,15 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 	void ** ptrs = head + numparams(sig);
 	char * body = (char *)head + header_size;
 
-	unsigned int i = 0, p = 0;
+	size_t index = 0, pindex = 0;
 	ssize_t wrote = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		head[i] = &body[wrote];
+		head[index] = &body[wrote];
 
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -647,9 +658,9 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 
 			case T_STRING:
 			{
-				head[i] = &ptrs[p];
-				ptrs[p] = &body[wrote];
-				p++;
+				head[index] = &ptrs[pindex];
+				ptrs[pindex] = &body[wrote];
+				pindex += 1;
 
 				// No break here, we want to fall into the next case statement
 			}
@@ -659,12 +670,9 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 			case T_DOUBLE:
 			case T_CHAR:
 			{
-				exception_t * err = NULL;
-				ssize_t w = args((char *)body + wrote, arraylen - header_size - wrote, &err, sig, i);
-				if (exception_check(&err) || w <= 0)
+				ssize_t w = args((char *)body + wrote, arraylen - header_size - wrote, err, sig, index);
+				if (exception_check(err) || w <= 0)
 				{
-					LOGK(LOG_ERR, "Could not serialize index %d (type %c): %s", i, sig[i], err == NULL? "Unknown error" : err->message);
-					errno = EINVAL;
 					return -1;
 				}
 
@@ -674,8 +682,7 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
@@ -683,40 +690,39 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, const ch
 		if (wrote > (arraylen - header_size))
 		{
 			// Buffer overflow
-			LOGK(LOG_ERR, "Could not serialize sig %s, body array too small!", sig);
-			errno = ENOBUFS;
+			exception_set(err, ENOBUFS, "Could not serialize sig %s, body array too small!", sig);
 			return -1;
 		}
 
-		i++;
+		index += 1;
 	}
 
 	return header_size + wrote;
 }
 
-ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
+ssize_t deserialize_2args(void * array, size_t arraylen, exception_t ** err, const char * sig, ...)
 {
 	labels(err_nomem);
 
 	va_list args;
-	va_start(args, arraylen);
+	va_start(args, sig);
 
-	unsigned int i = 0;
-	size_t length = 0;
+	size_t wrote = 0;
 
 	void copy(void * ptr, size_t s)
 	{
-		if ((length + s) > arraylen)
+		if ((wrote + s) > arraylen)
 		{
 			goto err_nomem;
 		}
-		memcpy(ptr, (char *)array + length, s);
-		length += s;
+		memcpy(ptr, (char *)array + wrote, s);
+		wrote += s;
 	}
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -754,10 +760,10 @@ ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
 			case T_STRING:
 			{
 				char ** ptr = va_arg(args, char **);
-				*ptr = (char *)array + length;
-				length += strlen(*ptr) + 1;
+				*ptr = (char *)array + wrote;
+				wrote += strlen(*ptr) + 1;
 
-				if (length > arraylen)
+				if (wrote > arraylen)
 				{
 					goto err_nomem;
 				}
@@ -767,26 +773,22 @@ ssize_t deserialize_2args(const char * sig, void * array, size_t arraylen, ...)
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not deserialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not deserialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
-
-		i++;
 	}
 
 	va_end(args);
 
-	return length;
+	return wrote;
 
 err_nomem:
-	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
-	errno = ENOBUFS;
+	exception_set(err, ENOBUFS, "Could not deserialize sig %s, array too small!", sig);
 	return -1;
 }
 
-ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, void * array, size_t arraylen)
+ssize_t deserialize_2header(void ** header, size_t headerlen, exception_t ** err, const char * sig, void * array, size_t arraylen)
 {
 	labels(err_nomem);
 
@@ -794,22 +796,22 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 	size_t header_size = headersize(sig);
 	if (header_size > headerlen)
 	{
-		LOGK(LOG_ERR, "Could not deserialize sig %s, header too small!", sig);
-		errno = ENOBUFS;
+		exception_set(err, ENOBUFS, "Could not deserialize sig %s, header too small!", sig);
 		return -1;
 	}
 
 	// Create the header bit first
 	void ** ptrs = header + numparams(sig);
 
-	unsigned int i = 0, p = 0;
+	size_t index = 0, pindex = 0;
 	size_t length = 0;
 
-	while (sig[i] != '\0')
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		header[i] = (char *)array + length;
+		header[index] = (char *)array + length;
 
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -842,11 +844,11 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 
 			case T_STRING:
 			{
-				header[i] = &ptrs[p];
-				ptrs[p] = (char *)array + length;
-				p++;
+				header[index] = &ptrs[pindex];
+				ptrs[pindex] = (char *)array + length;
+				pindex += 1;
 
-				const char * str = *(const char **)header[i];
+				const char * str = *(const char **)header[index];
 				length += strlen(str) + 1;
 
 				break;
@@ -854,8 +856,7 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not deserialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not deserialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
@@ -865,20 +866,20 @@ ssize_t deserialize_2header(void ** header, size_t headerlen, const char * sig, 
 			goto err_nomem;
 		}
 
-		i++;
+		index += 1;
 	}
 
 	return length;
 
 err_nomem:
-	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
-	errno = ENOBUFS;
+	exception_set(err, ENOBUFS, "Could not deserialize sig %s, array too small!", sig);
 	return -1;
 }
 
+
 #if defined(KERNEL)
 
-ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char * sig, buffer_t buffer)		// TODO - This function sucks! Make it better
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t ** err, const char * sig, buffer_t buffer)		// TODO - This function sucks! Make it better
 {
 	labels(err_nomem, err_bufsize);
 
@@ -890,8 +891,6 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 	}
 
 	char * body = (char *)header + header_size;
-
-	unsigned int i = 0;
 	size_t read = 0;
 
 	void copy(size_t s)
@@ -910,9 +909,12 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 		read += s;
 	}
 
-	while (sig[i] != '\0')
+	size_t index = 0;
+
+	const char * param = NULL;
+	method_foreachparam(param, sig)
 	{
-		switch (sig[i])
+		switch (*param)
 		{
 			case T_VOID:
 			{
@@ -945,7 +947,7 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 
 			case T_STRING:
 			{
-				char byte;
+				char byte = 0;
 				do
 				{
 					size_t r = buffer_read(buffer, &byte, read, sizeof(byte));
@@ -959,7 +961,8 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 						goto err_nomem;
 					}
 
-					body[read++] = byte;
+					body[read] = byte;
+					read += 1;
 
 				} while (byte != '\0');
 				break;
@@ -967,32 +970,33 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, const char *
 
 			default:
 			{
-				LOGK(LOG_ERR, "Could not serialize invalid type (%c) in signature %s", sig[i], sig);
-				errno = EINVAL;
+				exception_set(err, EINVAL, "Could not serialize invalid type '%c' in sig %s", *param, sig);
 				return -1;
 			}
 		}
 
-		i++;
+		index += 1;
 	}
 
-	ssize_t ret = deserialize_2header(header, header_size, sig, body, read);
+	ssize_t ret = deserialize_2header(header, header_size, err, sig, body, read);
 	if (ret != header_size)
 	{
-		LOGK(LOG_ERR, "Header deserialization mismatch. Expected header of length %zd, got %zd", header_size, ret);
-		return ret;
+		if (!exception_check(err))
+		{
+			exception_set(err, EFAULT, "Header deserialization mismatch. Expected header of length %zd, got %zd", header_size, ret);
+		}
+
+		return -1;
 	}
 
 	return header_size + read;
 
 err_nomem:
-	LOGK(LOG_ERR, "Could not deserialize sig %s, array too small!", sig);
-	errno = ENOBUFS;
+	exception_set(err, ENOBUFS, "Could not deserialize sig %s, array too small!", sig);
 	return -1;
 
 err_bufsize:
-	LOGK(LOG_ERR, "Could not deserialize sig %s, buffer length error!", sig);
-	errno = ENOSPC;
+	exception_set(err, ENOBUFS, "Could not deserialize sig %s, buffer length error!", sig);
 	return -1;
 }
 

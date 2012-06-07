@@ -65,7 +65,7 @@ msgstate_t message_readfd(int fd, msgbuffer_t * buf)
 			void * n_buffer = &buf->buffer[buf->index];
 			size_t n_size = buf->size - buf->index;
 
-			if ((buf->msg.headersize = deserialize_2args("css", n_buffer, n_size, &buf->msg.type, &buf->msg.name, &buf->msg.sig)) == -1)
+			if ((buf->msg.headersize = deserialize_2args(n_buffer, n_size, NULL, "css", &buf->msg.type, &buf->msg.name, &buf->msg.sig)) < 0)
 			{
 				// Couldn't parse out the header, wait until next pass
 				break;
@@ -82,7 +82,7 @@ msgstate_t message_readfd(int fd, msgbuffer_t * buf)
 			void * n_buffer = &buf->buffer[buf->index];
 			size_t n_size = buf->size - buf->index;
 
-			if ((buf->msg.bodysize = deserialize_2header(buf->msg.body, sizeof(buf->msg.body), method_params(buf->msg.sig), n_buffer, n_size)) == -1)
+			if ((buf->msg.bodysize = deserialize_2header(buf->msg.body, sizeof(buf->msg.body), NULL, method_params(buf->msg.sig), n_buffer, n_size)) < 0)
 			{
 				// Couldn't parse out body, wait until next pass
 				break;
@@ -120,14 +120,14 @@ bool message_vwritefd(int fd, char msgtype, const char * name, const char * sig,
 	char buffer[CONSOLE_BUFFERMAX];
 	errno = 0;
 
-	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), "icss", CONSOLE_FRAMEING, msgtype, name, sig);
-	if (hlen == -1)
+	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), NULL, "icss", CONSOLE_FRAMEING, msgtype, name, sig);
+	if (hlen < 0)
 	{
 		return false;
 	}
 
-	ssize_t blen = vserialize_2array(buffer + hlen, sizeof(buffer) - hlen, method_params(sig), args);
-	if (blen == -1)
+	ssize_t blen = vserialize_2array(buffer + hlen, sizeof(buffer) - hlen, NULL, method_params(sig), args);
+	if (blen < 0)
 	{
 		return false;
 	}
@@ -146,14 +146,14 @@ bool message_awritefd(int fd, char msgtype, const char * name, const char * sig,
 	char buffer[CONSOLE_BUFFERMAX];
 	errno = 0;
 
-	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), "icss", CONSOLE_FRAMEING, msgtype, name, sig);
-	if (hlen == -1)
+	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), NULL, "icss", CONSOLE_FRAMEING, msgtype, name, sig);
+	if (hlen < 0)
 	{
 		return false;
 	}
 
-	ssize_t blen = aserialize_2array(buffer + hlen, sizeof(buffer) - hlen, method_params(sig), args);
-	if (blen == -1)
+	ssize_t blen = aserialize_2array(buffer + hlen, sizeof(buffer) - hlen, NULL, method_params(sig), args);
+	if (blen < 0)
 	{
 		return false;
 	}

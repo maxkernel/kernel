@@ -52,7 +52,9 @@ typedef bool (*trigger_f)(trigger_t * trigger);
 typedef void (*link_f)(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull);
 //typedef bool (*kthread_dotask_f)(kthread_t * thread);
 typedef bool (*runnable_f)(kthread_t * thread, void * userdata);
-typedef void (*blockact_f)(void * userdata);
+typedef meta_callback_vp_f blockact_f;
+typedef meta_callback_f blockconstructor_f;
+typedef meta_t * (*metalookup_f)(const char * filename);
 typedef iobacking_t * (*portlookup_f)(const model_linksymbol_t * symbol);
 
 
@@ -276,12 +278,17 @@ struct __block_t
 	kobject_t kobject;
 	list_t module_list;
 
-	const meta_block_t * backing;
+	module_t * module;
+	const char * name;
+
+	const char * newsig;
+	blockconstructor_f new;
+
+	//const meta_block_t * backing;
 	blockact_f onupdate;
 	blockact_f ondestroy;
 
-	module_t * module;
-	//const char * name;
+
 	//const char * desc;
 	//const char * new_name;
 	//const char * new_sig;
@@ -346,8 +353,11 @@ struct __blockinst_t
 	list_t block_list;
 
 	//model_blockinst_t * backing;
-	const model_linkable_t * backing;
+	//const model_linkable_t * backing;
 	block_t * block;
+	const char * name;
+
+	const char * const * args;		// TODO - make this a copy of the backing args (somehow!)
 
 	//handler_f runfunc;
 	//handler_f stopfunc;
@@ -416,9 +426,11 @@ typedef struct
 	kobject_t kobject;
 	list_t global_list;
 
-	const model_linkable_t * backing;
+	//const model_linkable_t * backing;
 	//linklist_t links;		// TODO - this should be defined in the trigger!!
 	//port_t rate_in;
+	const char * name;
+	trigger_t * trigger;
 
 	list_t blockinsts;
 	rategroup_blockinst_t * active;
@@ -497,14 +509,15 @@ typedef enum
 //meta_t * meta_parse(const char * path);
 //module_t * module_get(const char * name);
 module_t * module_lookup(const char * name);
-const meta_t * module_getmeta(const module_t * module);
 ///const block_t * module_getblock(const module_t * module, const char * blockname);
 //const blockinst_t * module_getstaticblockinst(const module_t * module);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
 void module_act(const module_t * module, moduleact_t act);
-module_t * module_load(meta_t * meta);
+module_t * module_load(meta_t * meta, metalookup_f lookup, exception_t ** err);
+block_t * module_lookupblock(module_t * module, const char * blockname);
 //void module_kernelinit();
+#define module_meta(module)		((module)->backing)
 
 // Memfs functions
 // TODO - clean these up and determine which ones to keep
@@ -533,13 +546,14 @@ syscallblock_t * syscallblock_new(const char * name, const char * sig, const cha
 kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, runnable_f runfunction, runnable_f stopfunction, void * userdata, exception_t ** err);
 void kthread_schedule(kthread_t * thread);
 kthread_t * kthread_self();
-#define kthread_gettrigger(kth)		((kth)->trigger)
-#define kthread_getuserdata(kth)	((kth)->userdata)
+#define kthread_trigger(kth)		((kth)->trigger)
+#define kthread_userdata(kth)	((kth)->userdata)
 
 void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
 bool trigger_watch(trigger_t * trigger);
 trigger_clock_t * trigger_newclock(const char * name, double freq_hz);
 trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz);
+#define trigger_cast(trigger)			((trigger_t *)(trigger))
 //trigger_t * trigger_newtrue(const char * name);
 ///blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger);
 ///binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger);
@@ -555,16 +569,18 @@ void function_call(ffi_function_t * ffi, void * ret, void ** args);
 ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err);
 void closure_free(ffi_closure_t * ci);
 
-block_t * block_new(module_t * module, const meta_block_t * backing, exception_t ** err);
-void block_getonupdate(const block_t * block, blockact_f * onupdate);
-void block_addinst(block_t * block, blockinst_t * blockinst);
+block_t * block_new(module_t * module, const char * name, const char * newsig, blockconstructor_f new, blockact_f onupdate, blockact_f ondestroy, exception_t ** err);
+void block_add(block_t * block, blockinst_t * blockinst);
 iterator_t block_ioitr(const block_t * block);
-bool block_ioitrnext(iterator_t itr, const meta_blockio_t ** blockio);
+bool block_ionext(iterator_t itr, const meta_blockio_t ** blockio);
+#define block_cbupdate(block)	((block)->onupdate)
+#define block_newsig(block)		((block)->newsig)
 
-blockinst_t * blockinst_newempty(const char * name);
-blockinst_t * blockinst_new(block_t * block, const model_linkable_t * backing, const char * name);
-const block_t * blockinst_getblock(const blockinst_t * blockinst);
+#define BLOCKINST_BUFFERMAX		256
+blockinst_t * blockinst_new(block_t * block, const char * name, const char * const * args, exception_t ** err);
+bool blockinst_create(blockinst_t * blockinst, exception_t ** err);
 void blockinst_act(blockinst_t * blockinst, blockact_f callback);
+#define blockinst_block(blockinst)		((blockinst)->block)
 
 iobacking_t * iobacking_new(char sig, exception_t ** err);
 void iobacking_destroy(iobacking_t * backing);
@@ -594,10 +610,10 @@ static inline void port_add(portlist_t * list, port_t * port)
 }
 #define port_iobacking(port)	((port)->backing)
 
-
-rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable);
+#define RATEGROUP_PRIO		(1)
+rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** err);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
-void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err);
+bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err);
 
 /*
 char * io_blockinfo(void * obj);

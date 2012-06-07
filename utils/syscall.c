@@ -91,10 +91,10 @@ int main(int argc, char ** argv)
 	}
 
 	void * syscall_args[numparams];
-	const char * param;
 	size_t index = 0;
 	
-	foreach_methodparam(syscall_params, param)
+	const char * param = NULL;
+	method_foreachparam(param, syscall_params)
 	{
 		switch (*param)
 		{

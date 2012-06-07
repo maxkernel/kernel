@@ -105,11 +105,16 @@ bool vsyscall_exec(const char * name, exception_t ** err, void * ret, va_list ar
 	}
 	
 	char array[SYSCALL_BUFFERMAX];
-	ssize_t result = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, method_params(syscall->sig), args);
-	if (result == -1)
+
 	{
-		exception_set(err, ENOMEM, "Could not pack all arguments for syscall %s, consider increasing SYSCALL_BUFSIZE (currently %d)", name, SYSCALL_BUFFERMAX);
-		return false;
+		exception_t * e = NULL;
+		ssize_t wrote = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, &e, method_params(syscall->sig), args);
+		if (wrote <= 0 || exception_check(&e))
+		{
+
+			exception_set(err, ENOMEM, "Could not pack '%s' syscall args: %s (SYSCALL_BUFSIZE = %d)", name, (e == NULL)? "Unknown error" : e->message, SYSCALL_BUFFERMAX);
+			return false;
+		}
 	}
 
 	return asyscall_exec(name, err, ret, (void **)array);

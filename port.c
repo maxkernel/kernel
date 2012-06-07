@@ -69,7 +69,7 @@ bool port_makeblockports(const block_t * block, portlist_t * list, exception_t *
 	iterator_t ioitr = block_ioitr(block);
 	{
 		const meta_blockio_t * blockio = NULL;
-		while (block_ioitrnext(ioitr, &blockio))
+		while (block_ionext(ioitr, &blockio))
 		{
 			const char * name = NULL;
 			meta_iotype_t type = meta_unknownio;

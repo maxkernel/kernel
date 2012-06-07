@@ -124,22 +124,16 @@ module_t * module_lookup(const char * name)
 	return NULL;
 }
 
-const meta_t * module_getmeta(const module_t * module)
+block_t * module_lookupblock(module_t * module, const char * blockname)
 {
 	// Sanity check
 	{
-		if (module == NULL)
+		if unlikely(module == NULL || blockname == NULL)
 		{
 			return NULL;
 		}
 	}
 
-	return module->backing;
-}
-
-#if FIXME
-const block_t * module_getblock(const module_t * module, const char * blockname)
-{
 	list_t * pos;
 	list_foreach(pos, &module->blocks)
 	{
@@ -152,7 +146,6 @@ const block_t * module_getblock(const module_t * module, const char * blockname)
 
 	return NULL;
 }
-#endif
 
 /*
 const block_inst_t * module_getstaticblockinst(const module_t * module)
@@ -176,8 +169,22 @@ bool module_exists(const char * name)
 	return module_lookup(name) != NULL;
 }
 
-module_t * module_load(meta_t * meta)
+module_t * module_load(meta_t * meta, metalookup_f lookup, exception_t ** err)
 {
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
+		if unlikely(meta == NULL || lookup == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+	}
+
 	const char * path = NULL;
 	const char * name = NULL;
 	const version_t * version = NULL;
@@ -199,12 +206,85 @@ module_t * module_load(meta_t * meta)
 		LOGK(LOG_DEBUG, "Loading module %s v%s", path, version_str.string);
 	}
 
-	// Try loading it
-	exception_t * e = NULL;
-	if (!meta_loadmodule(meta, &e))
+	// Handle dependencies
+	// TODO IMPORTANT - handle circular dependencies, somehow...
 	{
-		LOGK(LOG_FATAL, "%s", (e == NULL)? "Unknown error" : e->message);
-		// Will exit
+		iterator_t ditr = meta_dependencyitr(meta);
+		{
+			const meta_dependency_t * dependency = NULL;
+			while (meta_dependencynext(ditr, &dependency))
+			{
+				const char * depname = NULL;
+				meta_getdependency(dependency, &depname);
+
+				meta_t * depmeta = lookup(depname);
+				if (depmeta == NULL)
+				{
+					exception_set(err, ENOENT, "Module dependency resolve failed for %s", depname);
+					return NULL;
+				}
+
+				module_t * depmodule = module_load(depmeta, lookup, err);
+				if (depmodule == NULL || exception_check(err))
+				{
+					return NULL;
+				}
+
+				/*
+				LOGK(LOG_DEBUG, "Resolving dependency %s", depname);
+
+				const char * prefix = path_resolve(depname, P_MODULE);
+				if (prefix == NULL)
+				{
+					exception_set(err, NOENT, "Could not resolve dependency %s for module %s", depname, path);
+					return NULL;
+				}
+
+				string_t path = path_join(prefix, depname);
+				if (!strsuffix(path.string, ".mo"))
+				{
+					string_append(&path, ".mo");
+				}
+
+				const meta_t * depmeta = NULL;
+				if (!model_lookupmeta(model, path.string, &depmeta))
+				{
+					// Meta not in model, load it in manually
+					exception_t * e = NULL;
+					meta_t * parsemeta = meta_parseelf(path.string, &e);
+					if (parsemeta == NULL || exception_check(&e))
+					{
+						LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+						// Will exit
+					}
+
+					model_addmeta((model_t *)model, parsemeta, &e);
+					if (exception_check(&e))
+					{
+						LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+						// Will exit
+					}
+
+					meta_destroy(parsemeta);
+
+					if (!model_lookupmeta(model, path.string, &depmeta))
+					{
+						LOGK(LOG_FATAL, "Could not find meta just added to model!");
+						// Will exit
+					}
+				}
+				*/
+
+				//load_module(depmeta);
+			}
+		}
+		iterator_free(ditr);
+	}
+
+	// Try loading it
+	if (!meta_loadmodule(meta, err))
+	{
+		return NULL;
 	}
 
 	module_t * module = kobj_new("Module", name, module_info, module_destroy, sizeof(module_t));
@@ -214,33 +294,82 @@ module_t * module_load(meta_t * meta)
 	LIST_INIT(&module->blocks);
 	LIST_INIT(&module->blockinsts);
 
-	// TODO - register configs
+	// Create configs
+	{
+		iterator_t citr = meta_configitr(meta);
+		{
+			const meta_variable_t * variable = NULL;
+			while (meta_confignext(citr, &variable))
+			{
+				config_t * config = config_new(meta, variable, err);
+				if (config == NULL || exception_check(err))
+				{
+					return NULL;
+				}
 
-	// TODO - register syscalls
+				list_add(&module->configs, &config->module_list);
+			}
+		}
+		iterator_free(citr);
+	}
 
-	// Register blocks
+	// Create syscalls
+	{
+		iterator_t sitr = meta_syscallitr(meta);
+		{
+			const meta_callback_t * callback = NULL;
+			while(meta_syscallnext(sitr, &callback))
+			{
+				const char * name = NULL, * sig = NULL, * desc = NULL;
+				syscall_f func = NULL;
+				meta_getcallback(callback, &name, &sig, &desc, &func);
+
+				syscall_t * syscall = syscall_new(name, sig, func, desc, err);
+				if (syscall == NULL || exception_check(err))
+				{
+					return NULL;
+				}
+
+				list_add(&module->syscalls, &syscall->module_list);
+			}
+		}
+		iterator_free(sitr);
+	}
+
+	// Create blocks
 	{
 		const meta_block_t * block = NULL;
 		iterator_t bitr = meta_blockitr(meta);
-		while (meta_blocknext(bitr, &block))
 		{
-			exception_t * e = NULL;
-			block_t * blk = block_new(module, block, &e);
-
-			if (blk == NULL || exception_check(&e))
+			while (meta_blocknext(bitr, &block))
 			{
-				LOGK(LOG_FATAL, "Could not create block for module %s: %s", name, (e == NULL)? "Unknown error" : e->message);
-				exception_free(e);
-				// Will exit
-			}
+				const char * block_name = NULL, *new_sig;
+				meta_callback_f new = NULL;
+				meta_getblock(block, &block_name, NULL, NULL, &new_sig, NULL, &new);
 
-			list_add(&module->blocks, &blk->module_list);
+				const meta_blockcallback_t * onupdate = NULL, * ondestroy = NULL;
+				meta_lookupblockcbs(meta, block, &onupdate, &ondestroy);
+
+				meta_callback_vp_f onupdate_cb = NULL, ondestroy_cb = NULL;
+				meta_getblockcb(onupdate, NULL, NULL, &onupdate_cb);
+				meta_getblockcb(ondestroy, NULL, NULL, &ondestroy_cb);
+
+				block_t * blk = block_new(module, block_name, new_sig, new, onupdate_cb, ondestroy_cb, err);
+				if (blk == NULL || exception_check(err))
+				{
+					return NULL;
+				}
+
+				list_add(&module->blocks, &blk->module_list);
+			}
 		}
+		iterator_free(bitr);
 	}
 
 
 	list_add(&modules, &module->global_list);
 	return module;
+
 	/*
 	const char * prefix = path_resolve(name, P_MODULE);
 	if (prefix == NULL)

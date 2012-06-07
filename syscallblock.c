@@ -14,10 +14,10 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 	{
 		link_doinputs(&sb->ports, &sb->links);
 		{
-			const char * param;
 			size_t index = 0;
 
-			foreach_methodparam(method_params(sb->syscall->sig), param)
+			const char * param = NULL;
+			method_foreachparam(param, method_params(sb->syscall->sig))
 			{
 				if unlikely(*param == T_VOID)
 				{
@@ -173,9 +173,10 @@ syscallblock_t * syscallblock_new(const char * name, const char * sig, const cha
 
 	// Build the biobacking arguments
 	{
-		const char * param = NULL;
 		size_t index = 0;
-		foreach_methodparam(method_params(sig), param)
+
+		const char * param = NULL;
+		method_foreachparam(param, method_params(sig))
 		{
 			iobacking_t * backing = iobacking_new(*param, err);
 			if (backing == NULL || exception_check(err))

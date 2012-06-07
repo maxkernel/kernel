@@ -173,13 +173,13 @@ static bool model_linkable_destroy(model_t * model, modelhead_t * self, const mo
 	{
 		for (size_t i = 0; i < MODEL_MAX_RATEGROUPELEMS; i++)
 		{
-			const model_linkable_t * item = linkable->backing.rategroup->blocks[i];
+			const model_linkable_t * item = linkable->backing.rategroup->blockinsts[i];
 			if (item != NULL && model_id(model_object(item)) == model_id(target))
 			{
-				linkable->backing.rategroup->blocks[i] = NULL;
+				linkable->backing.rategroup->blockinsts[i] = NULL;
 			}
 		}
-		compact((void **)linkable->backing.rategroup->blocks, MODEL_MAX_RATEGROUPELEMS);
+		compact((void **)linkable->backing.rategroup->blockinsts, MODEL_MAX_RATEGROUPELEMS);
 	}
 
 	if (isself)
@@ -854,7 +854,7 @@ model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, 
 	rategroup->hertz = hertz;
 	for (size_t i = 0; i < elems_length; i++)
 	{
-		rategroup->blocks[i] = elems[i];
+		rategroup->blockinsts[i] = elems[i];
 	}
 
 	return linkable;
@@ -1378,11 +1378,44 @@ iterator_t model_linkableitr(const model_t * model, const model_script_t * scrip
 bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type)
 {
 	const model_linkable_t * nextlinkable = iterator_next(itr, "model_linkable");
-
 	if (nextlinkable != NULL)
 	{
 		if (linkable != NULL)		*linkable = nextlinkable;
 		if (type != NULL)			*type = model_type(model_object(nextlinkable));
+		return true;
+	}
+
+	return false;
+}
+
+iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkable_t * rategroup)
+{
+	// Sanity check
+	{
+		if unlikely(model == NULL || rategroup == NULL || model_type(model_object(rategroup)) != model_blockinst)
+		{
+			return iterator_none();
+		}
+	}
+
+	const void * rgbiitr_next(const void * object, void ** itrobject)
+	{
+		const model_rategroup_t * rategroup = object;
+		model_blockinst_t ** insts = (model_blockinst_t **)*itrobject;
+		*itrobject = (*insts == NULL)? (void *)&rategroup->blockinsts[0] : (void *)&insts[1];
+
+		return *insts;
+	}
+
+	return iterator_new("model_rategroupblockinst", rgbiitr_next, NULL, &rategroup->backing.rategroup, (void *)&rategroup->backing.rategroup->blockinsts[0]);
+}
+
+bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** blockinst)
+{
+	const model_linkable_t * nextblockinst = iterator_next(itr, "model_rategroupblockinst");
+	if (nextblockinst != NULL)
+	{
+		if (blockinst != NULL)		*blockinst = nextblockinst;
 		return true;
 	}
 

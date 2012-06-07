@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 #include <argp.h>
 #include <malloc.h>
@@ -14,8 +15,6 @@
 #include <bfd.h>
 #include <confuse.h>
 #include <sqlite3.h>
-
-#include <glib.h>
 
 #include <aul/common.h>
 #include <aul/list.h>
@@ -31,6 +30,7 @@
 
 #include <compiler.h>
 #include <buffer.h>
+#include <method.h>
 #include <kernel.h>
 #include <kernel-priv.h>
 
@@ -41,9 +41,7 @@ list_t rategroups;
 //list_t calentries;
 hashtable_t properties;
 hashtable_t syscalls;
-//module_t * kernel_module = NULL;
 list_t kthreads;
-//GHashTable * kthreads = NULL;
 
 mutex_t io_lock;
 sqlite3 * database = NULL;
@@ -1161,241 +1159,337 @@ int main(int argc, char * argv[])
 		cfg_free(cfg);
 	}
 
-	// Now start building the kernel from the model
+	// Now start building and instantiating the kernel structure from the model
 	{
-		void * f_load_modules(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script)
+		// Load the modules
 		{
-			// TODO IMPORTANT - handle circular dependencies, somehow... (IMPORTANT)
-			void load_module(const meta_t * meta)
+			void * f_load_modules(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script)
 			{
 				// Sanity check
 				{
-					if (meta == NULL)
+					if unlikely(udata != NULL)
 					{
-						LOGK(LOG_FATAL, "Attempt to call load_module with NULL meta!");
+						LOGK(LOG_WARN, "Module model userdata already set! (Will overwrite)");
+					}
+				}
+
+				meta_t * meta_lookup(const char * filename)
+				{
+					LOGK(LOG_DEBUG, "Resolving dependency %s", filename);
+
+					const char * prefix = path_resolve(filename, P_MODULE);
+					if (prefix == NULL)
+					{
+						return NULL;
+					}
+
+					string_t path = path_join(prefix, filename);
+					if (!strsuffix(path.string, ".mo"))
+					{
+						string_append(&path, ".mo");
+					}
+
+					const meta_t * meta = NULL;
+					if (!model_lookupmeta(model, path.string, &meta))
+					{
+						// Meta not in model, load it in manually
+						exception_t * e = NULL;
+						meta = meta_parseelf(path.string, &e);
+						if (meta == NULL || exception_check(&e))
+						{
+							LOGK(LOG_ERR, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+							exception_free(e);
+							return NULL;
+						}
+					}
+
+					// Remove const qualifier (see below)
+					return (meta_t *)meta;
+				}
+
+				const meta_t * meta = NULL;
+				model_getmodule(module, NULL, &meta);
+				if (meta == NULL)
+				{
+					LOGK(LOG_FATAL, "Could not get module meta from model");
+					// Will exit
+				}
+
+				exception_t * e = NULL;
+
+				// Loading the module *will* change the underlying struct (ptrs will resolve),
+				// so we must cast to get rid of const qualifier
+				module_t * m = module_load((meta_t *)meta, meta_lookup, &e);
+				if (m == NULL || exception_check(&e))
+				{
+					LOGK(LOG_FATAL, "Module loading failed: %s", (e == NULL)? "Unknown error" : e->message);
+					// Will exit
+				}
+
+				return m;
+			}
+
+			model_analysis_t f_load = {
+				.modules = f_load_modules,
+			};
+
+			LOGK(LOG_DEBUG, "Loading kernel modules...");
+			model_analyse(model, &f_load);
+		}
+
+		// Build the kernel elements
+		{
+			void * f_build_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
+			{
+				// Sanity check
+				{
+					if unlikely(udata != NULL)
+					{
+						LOGK(LOG_WARN, "Config model userdata already set! (Will overwrite)");
+					}
+				}
+
+				const meta_t * meta = NULL;
+				model_getmodule(module, NULL, &meta);
+
+				const char * path = NULL;
+				meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
+
+				const char * name = NULL;
+				model_getconfig(config, &name, NULL, NULL, NULL);
+
+				module_t * mod = module_lookup(path);
+				if (mod == NULL)
+				{
+					LOGK(LOG_FATAL, "Could not apply config %s to module %s, module doesn't exist!", name, path);
+					// Will exit
+				}
+
+				list_t * pos = NULL;
+				config_t * modconfig = NULL;
+				list_foreach(pos, &mod->configs)
+				{
+					config_t * test = list_entry(pos, config_t, module_list);
+					const char * testname = NULL;
+					meta_getvariable(test->variable, &testname, NULL, NULL, NULL);
+
+					if (strcmp(name, testname) == 0)
+					{
+						modconfig = test;
+						break;
+					}
+				}
+
+				if (modconfig == NULL)
+				{
+					LOGK(LOG_FATAL, "Could not apply config %s to module %s, config item doesn't exist!", name, path);
+					// Will exit
+				}
+
+				exception_t * e = NULL;
+				if (!config_apply(modconfig, config, &e))
+				{
+					LOGK(LOG_FATAL, "Could not apply config %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+					// Will exit
+				}
+
+				return modconfig;
+			}
+
+			void * f_build_blockinsts(void * udata, const model_t * model, const model_linkable_t * linkable, const model_blockinst_t * blockinst, const model_script_t * script)
+			{
+				// Sanity check
+				{
+					if unlikely(udata != NULL)
+					{
+						LOGK(LOG_WARN, "Blockinst model userdata already set! (Will overwrite)");
+					}
+				}
+
+				const char * block_name = NULL;
+				const model_module_t * module = NULL;
+				const char * sig = NULL;
+				const char * const * args = NULL;
+				size_t argslen = 0;
+				model_getblockinst(linkable, &block_name, &module, &sig, &args, &argslen);
+
+				const char * module_path = NULL;
+				const meta_t * meta = NULL;
+				model_getmodule(module, &module_path, &meta);
+
+				const char * module_name = NULL;
+				meta_getinfo(meta, NULL, &module_name, NULL, NULL, NULL);
+
+				LOGK(LOG_DEBUG, "Creating block instance '%s' in module %s", block_name, module_path);
+
+				if (method_numparams(sig) != argslen)
+				{
+					LOGK(LOG_FATAL, "Bad constructor arguments given to block '%s' in module %s", block_name, module_path);
+					// Will exit
+				}
+
+				string_t name = string_new("%s.%s", module_name, block_name);
+
+				module_t * m = model_userdata(model_object(module));
+				block_t * b = module_lookupblock(m, block_name);
+
+				exception_t * e = NULL;
+				blockinst_t * bi = blockinst_new(b, name.string, args, &e);
+				if (bi == NULL || exception_check(&e))
+				{
+					LOGK(LOG_FATAL, "Could not create block '%s': %s", block_name, (e == NULL)? "Unknown error" : e->message);
+					// Will exit
+				}
+
+				return bi;
+			}
+
+			void * f_build_syscalls(void * udata, const model_t * model, const model_linkable_t * linkable, const model_syscall_t * syscall, const model_script_t * script)
+			{
+				// Sanity check
+				{
+					if unlikely(udata != NULL)
+					{
+						LOGK(LOG_WARN, "Syscall model userdata already set! (Will overwrite)");
+					}
+				}
+
+				const char * name = NULL, * sig = NULL, * desc = NULL;
+				model_getsyscall(linkable, &name, &sig, &desc);
+
+				LOGK(LOG_DEBUG, "Creating syscall %s(%s)", name, sig);
+
+				exception_t * e = NULL;
+				syscallblock_t * sb = syscallblock_new(name, sig, desc, &e);
+				if (sb == NULL || exception_check(&e))
+				{
+					LOGK(LOG_FATAL, "Could not create syscall %s(%s): %s", name, sig, (e == NULL)? "Unknown error" : e->message);
+					// Will exit
+				}
+
+				return sb;
+			}
+
+			void * f_build_rategroups(void * udata, const model_t * model, const model_linkable_t * linkable, const model_rategroup_t * rategroup, const model_script_t * script)
+			{
+				// Sanity check
+				{
+					if unlikely(udata != NULL)
+					{
+						LOGK(LOG_WARN, "Rategroup model userdata already set! (Will overwrite)");
+					}
+				}
+
+				const char * name = NULL;
+				double hertz = 0.0;
+				model_getrategroup(linkable, &name, &hertz);
+
+				LOGK(LOG_DEBUG, "Creating rategroup %s with update at %f Hz", name, hertz);
+
+				rategroup_t * rg = NULL;
+
+				// Create the rategroup
+				{
+					exception_t * e = NULL;
+					rg = rategroup_new(linkable, &e);
+					if (rg == NULL || exception_check(&e))
+					{
+						LOGK(LOG_FATAL, "Could not create rategroup %s at %f Hz: %s", name, hertz, (e == NULL)? "Unknown error" : e->message);
 						// Will exit
 					}
 				}
 
-				// Print diagnostic info
-				const char * path = NULL;
-				meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
-
-				// Handle dependencies
+				// Iterator over the blockinsts and add them to the rategroup
 				{
-					iterator_t ditr = meta_dependencyitr(meta);
+					iterator_t bitr = model_rategroupblockinstitr(model, linkable);
 					{
-						const meta_dependency_t * dependency = NULL;
-						while (meta_dependencynext(ditr, &dependency))
+						const model_linkable_t * blockinst = NULL;
+						while (model_rategroupblockinstnext(bitr, &blockinst))
 						{
-							const char * depname = NULL;
-							meta_getdependency(dependency, &depname);
+							blockinst_t * bi = model_userdata(model_object(blockinst));
 
-							LOGK(LOG_DEBUG, "Resolving dependency %s", depname);
-
-							const char * prefix = path_resolve(depname, P_MODULE);
-							if (prefix == NULL)
+							exception_t * e = NULL;
+							bool success = rategroup_addblockinst(rg, bi, &e);
+							if (!success || exception_check(&e))
 							{
-								LOGK(LOG_FATAL, "Could not resolve dependency %s for module %s", depname, path);
+								LOGK(LOG_FATAL, "Could not add block instance to rategroup '%s'", name);
 								// Will exit
 							}
-
-							string_t path = path_join(prefix, depname);
-							if (!strsuffix(path.string, ".mo"))
-							{
-								string_append(&path, ".mo");
-							}
-
-							const meta_t * depmeta = NULL;
-							if (!model_lookupmeta(model, path.string, &depmeta))
-							{
-								// Meta not in model, load it in manually
-								exception_t * e = NULL;
-								meta_t * parsemeta = meta_parseelf(path.string, &e);
-								if (parsemeta == NULL || exception_check(&e))
-								{
-									LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
-									// Will exit
-								}
-
-								model_addmeta((model_t *)model, parsemeta, &e);
-								if (exception_check(&e))
-								{
-									LOGK(LOG_FATAL, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
-									// Will exit
-								}
-
-								meta_destroy(parsemeta);
-
-								if (!model_lookupmeta(model, path.string, &depmeta))
-								{
-									LOGK(LOG_FATAL, "Could not find meta just added to model!");
-									// Will exit
-								}
-							}
-
-							load_module(depmeta);
 						}
 					}
-					iterator_free(ditr);
+					iterator_free(bitr);
 				}
 
-				// Loading the module *will* change the underlying struct (ptrs will resolve),
-				// so we must cast to get rid of const qualifier
-				module_t * rmodule = module_load((meta_t *)meta);
-				if (rmodule == NULL)
+				return rg;
+			}
+
+
+			// Call preact function on all modules
+			{
+				list_t * pos;
+				list_foreach(pos, &modules)
 				{
-					LOGK(LOG_FATAL, "Module loading failed.");
+					module_t * module = list_entry(pos, module_t, global_list);
+					module_act(module, act_preact);
+				}
+			}
+
+			model_analysis_t f_build1 = {
+				.configs = f_build_configs,
+				.blockinsts = f_build_blockinsts,
+				.syscalls = f_build_syscalls,
+			};
+
+			model_analysis_t f_build2 = {
+				.rategroups = f_build_rategroups,
+			};
+
+			LOGK(LOG_DEBUG, "Building the kernel structure...");
+			model_analyse(model, &f_build1);
+			model_analyse(model, &f_build2);
+		}
+
+		// Create the kernel objects
+		{
+			void * f_create_blockinsts(void * udata, const model_t * model, const model_linkable_t * linkable, const model_blockinst_t * blockinst, const model_script_t * script)
+			{
+				exception_t * e = NULL;
+				bool success = blockinst_create(udata, &e);
+				if (!success || exception_check(&e))
+				{
+					LOGK(LOG_FATAL, "Could not create block instance: %s", (e == NULL)? "Unknown error" : e->message);
 					// Will exit
 				}
 
-				// Create the config variables
+				return udata;
+			}
+
+			void * f_create_rategroups(void * udata, const model_t * model, const model_linkable_t * linkable, const model_rategroup_t * rategroup, const model_script_t * script)
+			{
+				exception_t * e = NULL;
+				bool success = rategroup_schedule(udata, RATEGROUP_PRIO, &e);
+				if (!success || exception_check(&e))
 				{
-					exception_t * e = NULL;
-
-					iterator_t citr = meta_configitr(meta);
-					const meta_variable_t * variable = NULL;
-					while (meta_confignext(citr, &variable))
-					{
-						config_t * config = config_new(meta, variable, &e);
-						if (config == NULL || exception_check(&e))
-						{
-							LOGK(LOG_FATAL, "Create config failed: %s", (e == NULL)? "Unknown error" : e->message);
-							// Will exit
-						}
-
-						list_add(&rmodule->configs, &config->module_list);
-					}
-					iterator_free(citr);
+					LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
+					// Will exit
 				}
 
-				// Create the syscalls
-				{
-					exception_t * e = NULL;
-
-					iterator_t sitr = meta_syscallitr(meta);
-					const meta_callback_t * callback = NULL;
-					while(meta_syscallnext(sitr, &callback))
-					{
-						const char * name = NULL, * sig = NULL, * desc = NULL;
-						syscall_f func = NULL;
-						meta_getcallback(callback, &name, &sig, &desc, &func);
-
-						syscall_t * syscall = syscall_new(name, sig, func, desc, &e);
-						if (syscall == NULL || exception_check(&e))
-						{
-							LOGK(LOG_FATAL, "Create syscall failed: %s", (e == NULL)? "Unknown error" : e->message);
-							// Will exit
-						}
-
-						list_add(&rmodule->syscalls, &syscall->module_list);
-					}
-					iterator_free(sitr);
-				}
+				return udata;
 			}
 
-			const meta_t * meta = NULL;
-			model_getmodule(module, NULL, &meta);
-			if (meta == NULL)
-			{
-				LOGK(LOG_FATAL, "Could not get module meta from model");
-				// Will exit
-			}
 
-			load_module(meta);
+			model_analysis_t f_create1 = {
+				.blockinsts = f_create_blockinsts,
+			};
 
-			return udata;
+			model_analysis_t f_create2 = {
+				.rategroups = f_create_rategroups,
+			};
+
+			LOGK(LOG_DEBUG, "Creating the kernel objects...");
+			model_analyse(model, &f_create1);
+			model_analyse(model, &f_create2);
 		}
-
-		model_analysis_t f_load = {
-			.modules = f_load_modules,
-		};
-
-		LOGK(LOG_DEBUG, "Loading modules...");
-		model_analyse(model, &f_load);
-
-		void * f_buildmod_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
-		{
-			const meta_t * meta = NULL;
-			model_getmodule(module, NULL, &meta);
-
-			const char * path = NULL;
-			meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
-
-			const char * name = NULL;
-			model_getconfig(config, &name, NULL, NULL, NULL);
-
-			module_t * mod = module_lookup(path);
-			if (mod == NULL)
-			{
-				LOGK(LOG_FATAL, "Could not apply config %s to module %s, module doesn't exist!", name, path);
-				// Will exit
-			}
-
-			list_t * pos = NULL;
-			config_t * modconfig = NULL;
-			list_foreach(pos, &mod->configs)
-			{
-				config_t * test = list_entry(pos, config_t, module_list);
-				const char * testname = NULL;
-				meta_getvariable(test->variable, &testname, NULL, NULL, NULL);
-
-				if (strcmp(name, testname) == 0)
-				{
-					modconfig = test;
-					break;
-				}
-			}
-
-			if (modconfig == NULL)
-			{
-				LOGK(LOG_FATAL, "Could not apply config %s to module %s, config item doesn't exist!", name, path);
-				// Will exit
-			}
-
-			exception_t * e = NULL;
-			if (!config_apply(modconfig, config, &e))
-			{
-				LOGK(LOG_FATAL, "Could not apply config %s: %s", name, (e == NULL)? "Unknown error" : e->message);
-				// Will exit
-			}
-
-			return udata;
-		}
-
-		void * f_buildmod_syscalls(void * udata, const model_t * model, const model_linkable_t * linkable, const model_syscall_t * syscall, const model_script_t * script)
-		{
-			const char * name = NULL, * sig = NULL, * desc = NULL;
-			model_getsyscall(linkable, &name, &sig, &desc);
-
-			exception_t * e = NULL;
-			syscallblock_t * sb = syscallblock_new(name, sig, desc, &e);
-			if (sb == NULL || exception_check(&e))
-			{
-				LOGK(LOG_FATAL, "Could not create syscall %s(%s): %s", name, sig, (e == NULL)? "Unknown error" : e->message);
-				// Will exit
-			}
-
-			return sb;
-		}
-
-		// Call preact function on all modules
-		{
-			list_t * pos;
-			list_foreach(pos, &modules)
-			{
-				module_t * module = list_entry(pos, module_t, global_list);
-				module_act(module, act_preact);
-			}
-		}
-
-		model_analysis_t f_buildmod = {
-			.configs = f_buildmod_configs,
-			.syscalls = f_buildmod_syscalls,
-		};
-
-		LOGK(LOG_DEBUG, "Building modules...");
-		model_analyse(model, &f_buildmod);
 
 		// Call postact function on all modules
 		{

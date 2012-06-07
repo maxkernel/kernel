@@ -26,12 +26,12 @@ static void rategroup_destroy(void * rategroup)
 static inline rategroup_t * rategroup_getrunning()
 {
 	kthread_t * self = kthread_self();
-	if (unlikely(self == NULL))
+	if unlikely(self == NULL)
 	{
 		return NULL;
 	}
 
-	return kthread_getuserdata(self);
+	return kthread_userdata(self);
 }
 
 static bool rategroup_run(kthread_t * thread, void * userdata)
@@ -51,11 +51,7 @@ static bool rategroup_run(kthread_t * thread, void * userdata)
 
 		// Call the onupdate function
 		{
-			const block_t * block = blockinst_getblock(rg_blockinst->blockinst);
-
-			blockact_f onupdate = NULL;
-			block_getonupdate(block, &onupdate);
-
+			blockact_f onupdate = block_cbupdate(blockinst_block(rg_blockinst->blockinst));
 			if (onupdate != NULL)
 			{
 				blockinst_act(rg_blockinst->blockinst, onupdate);
@@ -72,23 +68,32 @@ static bool rategroup_run(kthread_t * thread, void * userdata)
 	return true;
 }
 
-rategroup_t * rategroup_new(const char * name, const model_linkable_t * linkable)
+rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** err)
 {
 	// Sanity check
 	{
-		if (name == NULL)
+		if unlikely(exception_check(err))
 		{
 			return NULL;
 		}
 
-		if (model_type(model_object(linkable)) != model_rategroup)
+		if unlikely(model_type(model_object(linkable)) != model_rategroup)
 		{
+			exception_set(err, EINVAL, "Bad arguments (not a rategroup linkable)");
 			return NULL;
 		}
 	}
 
+	const char * name = NULL;
+	double hertz = 0;
+	model_getrategroup(linkable, &name, &hertz);
+
+	string_t trigger_name = string_new("%s trigger", name);
+	trigger_varclock_t * t = trigger_newvarclock(trigger_name.string, hertz);
+
 	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_info, rategroup_destroy, sizeof(rategroup_t));
-	rg->backing = linkable;
+	rg->trigger = trigger_cast(t);
+	rg->name = strdup(name);
 	LIST_INIT(&rg->blockinsts);
 
 	list_add(&rategroups, &rg->global_list);
@@ -99,7 +104,7 @@ bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, ex
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
 			return false;
 		}
@@ -117,7 +122,7 @@ bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, ex
 	portlist_init(&backing->ports);
 
 	// Create the ports
-	if (!port_makeblockports(blockinst_getblock(blockinst), &backing->ports, err))
+	if (!port_makeblockports(blockinst_block(blockinst), &backing->ports, err))
 	{
 		return false;
 	}
@@ -128,20 +133,38 @@ bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, ex
 	return true;
 }
 
-void rategroup_schedule(rategroup_t * rategroup, trigger_t * trigger, int priority, exception_t ** err)
+bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err)
 {
-	static int rid = 1;
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
 
-	string_t name = string_new("Rategroup (%d)", rid++);
-	kthread_t * thread = kthread_new(name.string, priority, trigger, rategroup_run, NULL, rategroup, err);
+		if unlikely(rategroup == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
+	}
+
+	string_t name = string_new("%s thread", rategroup->name);
+	kthread_t * thread = kthread_new(name.string, priority, rategroup->trigger, rategroup_run, NULL, rategroup, err);
+	if (thread == NULL || exception_check(err))
+	{
+		return false;
+	}
+
 	kthread_schedule(thread);
+	return true;
 }
 
 const void * rategroup_input(const char * name)
 {
 	// Sanity check
 	{
-		if (unlikely(name == NULL))
+		if unlikely(name == NULL)
 		{
 			return NULL;
 		}
@@ -149,27 +172,33 @@ const void * rategroup_input(const char * name)
 
 
 	rategroup_t * rg = rategroup_getrunning();
-	if (unlikely(rg == NULL))
+	if unlikely(rg == NULL)
 	{
 		LOGK(LOG_WARN, "Could not get executing rategroup. Invalid operating context!");
 		return NULL;
 	}
 
 	rategroup_blockinst_t * rg_blockinst = rg->active;
-	if (unlikely(rg_blockinst == NULL))
+	if unlikely(rg_blockinst == NULL)
 	{
 		LOGK(LOG_WARN, "Rategroup is not currently executing a block instance!");
 		return NULL;
 	}
 
 	port_t * port = port_lookup(&rg_blockinst->ports, meta_input, name);
-	if (unlikely(port == NULL))
+	if unlikely(port == NULL)
 	{
 		LOGK(LOG_WARN, "Could not find input '%s' in block instance!", name);
 		return NULL;
 	}
 
-	return iobacking_data(port_iobacking(port));
+	iobacking_t * backing = port_iobacking(port);
+	if (iobacking_isnull(backing))
+	{
+		return NULL;
+	}
+
+	return iobacking_data(backing);
 }
 
 void rategroup_output(const char * name, const void * output)

@@ -82,7 +82,7 @@ void kthread_newinterval(const char * name, int priority, double rate_hz, handle
 void kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata);
 bool kthread_requeststop();
 
-#define SYSCALL_BUFFERMAX		128		// TODO - move this constant to a private define in console.c
+#define SYSCALL_BUFFERMAX		256		// TODO - move this constant to a private define in console.c
 typedef union
 {
 	bool t_bool;

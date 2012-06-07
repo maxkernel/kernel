@@ -24,9 +24,10 @@ static ffi_type type_pointer		= ffi_define(sizeof(void *),	FFI_TYPE_POINTER);
 
 static bool ffi_prep(const char * sig, ffi_type ** ret, ffi_type *** args, exception_t ** err)
 {
-	int index = 0;
-	const char * param;
-	foreach_methodparam(method_params(sig), param)
+	size_t index = 0;
+
+	const char * param = NULL;
+	method_foreachparam(param, method_params(sig))
 	{
 		switch (*param)
 		{

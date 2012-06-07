@@ -100,6 +100,7 @@ int max_gettimeout(maxhandle_t * hand);
 void max_setuserdata(maxhandle_t * hand, void * userdata);
 void * max_getuserdata(maxhandle_t * hand);
 
+// TODO - make some of these #defines or at lease inlines
 size_t max_getbuffersize(maxhandle_t * hand);
 size_t max_getheadersize(maxhandle_t * hand);
 

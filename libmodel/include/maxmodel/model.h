@@ -116,7 +116,7 @@ typedef struct
 {
 	char name[MODEL_SIZE_NAME];
 	double hertz;
-	const struct __model_linkable_t * blocks[MODEL_MAX_RATEGROUPELEMS + MODEL_SENTINEL];
+	const struct __model_linkable_t * blockinsts[MODEL_MAX_RATEGROUPELEMS + MODEL_SENTINEL];
 } model_rategroup_t;
 
 typedef struct __model_linkable_t
@@ -240,6 +240,9 @@ bool model_confignext(iterator_t itr, const model_config_t ** config);
 
 iterator_t model_linkableitr(const model_t * model, const model_script_t * script);
 bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type);
+
+iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkable_t * rategroup);
+bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** blockinst);
 
 iterator_t model_linkitr(const model_t * model, const model_script_t * script, const model_linkable_t * linkable);
 bool model_linknext(iterator_t itr, const model_linksymbol_t ** out, const model_linksymbol_t ** in);

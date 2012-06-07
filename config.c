@@ -147,6 +147,7 @@ static bool config_updatebacking(const meta_variable_t * variable, const char * 
 	return true;
 }
 
+// TODO IMPORTANT - don't pass in the meta)variable, pull all the info out in the caller and pass it in raw!!
 config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err)
 {
 	// Sanity check

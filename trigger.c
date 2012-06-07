@@ -233,8 +233,7 @@ binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
 
 trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz)
 {
-	string_t str = string_new("%s %s", name, VARCLOCK_NAME);
-	trigger_varclock_t * clk = trigger_new(str.string, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
+	trigger_varclock_t * clk = trigger_new(name, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	clk->clock.interval_nsec = hz2nanos(initial_freq_hz);
 	linklist_init(&clk->links);
 
