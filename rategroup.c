@@ -94,10 +94,10 @@ rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** er
 	model_getrategroup(linkable, &name, &hertz);
 
 	string_t trigger_name = string_new("%s trigger", name);
-	trigger_varclock_t * t = trigger_newvarclock(trigger_name.string, hertz);
+	trigger_varclock_t * trigger = trigger_newvarclock(trigger_name.string, hertz);
 
 	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_info, rategroup_destroy, sizeof(rategroup_t));
-	rg->trigger = trigger_cast(t);
+	rg->trigger = trigger;
 	rg->name = strdup(name);
 	LIST_INIT(&rg->blockinsts);
 
@@ -155,7 +155,7 @@ bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** er
 	}
 
 	string_t name = string_new("%s thread", rategroup->name);
-	kthread_t * thread = kthread_new(name.string, priority, rategroup->trigger, kobj_cast(rategroup), rategroup_run, NULL, err);
+	kthread_t * thread = kthread_new(name.string, priority, trigger_cast(rategroup->trigger), kobj_cast(rategroup), rategroup_run, NULL, err);
 	if (thread == NULL || exception_check(err))
 	{
 		return false;

@@ -133,7 +133,7 @@ void send_data(service_h service_handle, client_h client_handle, stream_t * stre
 	}
 }
 
-void send_startthread(void * userdata)
+bool send_startthread(void * userdata)
 {
 	while (!stop)
 	{
@@ -176,9 +176,11 @@ void send_startthread(void * userdata)
 			} while (data != NULL);
 		}
 	}
+
+	return false;
 }
 
-void send_stopthread(void * userdata)
+bool send_stopthread(void * userdata)
 {
 	stop = true;
 
@@ -187,4 +189,6 @@ void send_stopthread(void * userdata)
 		cond_broadcast(&barrier);
 	}
 	mutex_unlock(&listlock);
+
+	return true;
 }

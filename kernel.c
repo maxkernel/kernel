@@ -97,7 +97,7 @@ static void daemonize()
 	open("/dev/null", O_WRONLY);
 }
 
-/*------------ SIGNALS -------------*/
+// --------------------- Signal functions -----------------------
 static void signal_int(int signo)
 {
 	unused(signo);
@@ -159,7 +159,7 @@ static void signal_init()
 	signal(SIGPIPE, SIG_IGN);
 }
 
-/*-----------  ARGS ---------------*/
+// --------------------- Arg functions -----------------------
 static error_t parse_args(int key, char * arg, struct argp_state * state)
 {
 	unused(arg);
@@ -184,7 +184,7 @@ static struct argp argp = { arg_opts, parse_args, 0,0,0,0,0 };
 
 
 
-/*------------- LOGGING ------------------*/
+// --------------------- Log functions -----------------------
 static void log_appendbuf(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
 	unused(userdata);
@@ -221,7 +221,7 @@ string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseco
 	return string_new("%s (%-5s) %" PRIu64 " - %s\n", domain, levelstr, milliseconds, message);
 }
 
-/*---------------- KOBJECT FUNCTIONS --------------------*/
+// --------------------- KObject functions -----------------------
 void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size)
 {
 	// Sanity check
@@ -310,7 +310,7 @@ void kobj_destroy(kobject_t * object)
 	mutex_unlock(&kobj_mutex);
 }
 
-/*---------------- THREAD FUNCTIONS ---------------------*/
+// --------------------- KThread functions -----------------------
 static char * kthread_info(void * kthread)
 {
 	unused(kthread);
@@ -422,7 +422,7 @@ kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, ko
 			return NULL;
 		}
 
-		if (name == NULL || trigger == NULL || runfunction == NULL)
+		if (name == NULL || runfunction == NULL)
 		{
 			exception_set(err, EINVAL, "Invalid arguments!");
 			return NULL;
@@ -473,61 +473,82 @@ static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * user
 	return true;
 }
 
-/* TODO - finish me!
-static void kthread_dosinglepass(void * userdata)
+static bool kthread_dopass(kthread_t * thread, kobject_t * object)
 {
-	runfunction_t * rfunc = userdata;
-	rfunc->dorunfunc(rfunc->userdata);
-
-	kthread_t * kth = kthread_self();
-	kth->stop = true;
-	free(rfunc);
+	kthreaddata_t * data = (kthreaddata_t *)object;
+	return data->run(data->userdata);
 }
 
-static void kthread_stopsinglepass(void * userdata)
+static bool kthread_dostop(kthread_t * thread, kobject_t * object)
 {
-	runfunction_t * rfunc = userdata;
-	if (rfunc->dostopfunc != NULL)
+	kthreaddata_t * data = (kthreaddata_t *)object;
+	return data->stop(data->userdata);
+}
+
+bool kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata, exception_t ** err)
+{
+	// Sanity check
 	{
-		rfunc->dostopfunc(rfunc->userdata);
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
+		if unlikely(name == NULL || rate_hz <= 0 || threadfunc == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
 	}
-}
 
-void kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata)
-{
-	string_t str = string_new("%s interval thread", name);
+	kthreaddata_t * data = kobj_new("Thread Data", name, NULL, NULL, sizeof(kthreaddata_t));
+	data->run = threadfunc;
+	data->stop = NULL;
+	data->userdata = userdata;
 
-	trigger_t * trigger = trigger_newclock(name, rate_hz);
-	runnable_t * runnable = exec_newfunction(name, threadfunc, NULL, userdata);
-	kthread_t * kth = kthread_new(string_copy(&str), trigger, runnable, priority);
-
-	kthread_schedule(kth);
-}
-
-void kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata)
-{
-	runfunction_t * rfunc = malloc0(sizeof(runfunction_t));
-	rfunc->dorunfunc = threadfunc;
-	rfunc->dostopfunc = stopfunc;
-	rfunc->userdata = userdata;
-
-	string_t str = string_new("%s thread", name);
-
-	trigger_t * trigger = trigger_newtrue(name);
-	runnable_t * runnable = exec_newfunction(name, kthread_dosinglepass, kthread_stopsinglepass, rfunc);
-	kthread_t * kth = kthread_new(string_copy(&str), trigger, runnable, priority);
+	trigger_clock_t * trigger = trigger_newclock(name, rate_hz);
+	kthread_t * kth = kthread_new(name, priority, trigger_cast(trigger), kobj_cast(data), kthread_dopass, NULL, err);
+	if (kth == NULL || exception_check(err))
+	{
+		return false;
+	}
 
 	kthread_schedule(kth);
+	return true;
 }
 
-bool kthread_requeststop()
+bool kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata, exception_t ** err)
 {
-	kthread_t * kth = kthread_self();
-	return kth == NULL? false : kth->stop;
-}
-*/
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
 
-/*---------------- KERN FUNCTIONS -----------------------*/
+		if unlikely(name == NULL || threadfunc == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
+	}
+
+	kthreaddata_t * data = kobj_new("Thread Data", name, NULL, NULL, sizeof(kthreaddata_t));
+	data->run = threadfunc;
+	data->stop = stopfunc;
+	data->userdata = userdata;
+
+	kthread_t * kth = kthread_new(name, priority, NULL, kobj_cast(data), kthread_dopass, kthread_dostop, err);
+	if (kth == NULL || exception_check(err))
+	{
+		return false;
+	}
+
+	kthread_schedule(kth);
+	return true;
+}
+
+// --------------------- Kernel functions -----------------------
 const char * max_model() { return property_get("model"); }
 const char * kernel_id() { return property_get("id"); }
 int kernel_installed()
@@ -674,7 +695,7 @@ static void itr_free(int itr)
 }
 
 
-/*-------------------- MAIN -----------------------*/
+// --------------------- Main function -----------------------
 int main(int argc, char * argv[])
 {
 	// Make sure i'm root
@@ -1497,21 +1518,47 @@ int main(int argc, char * argv[])
 						case model_blockinst:
 						{
 							blockinst_t * bi = model_userdata(model_object(out_linkable));
+							char sig = 0;
+
+							block_iolookup(blockinst_block(bi), out_name, meta_output, &sig, NULL);
+							if (sig == 0)
+							{
+								LOGK(LOG_FATAL, "Could not find output '%s' in block", out_name);
+								// Will exit
+							}
+
+							out_sig = sig;
 							out_links = blockinst_links(bi);
-							block_iolookup(blockinst_block(bi), out_name, meta_output, &out_sig, NULL);
 							break;
 						}
 
 						case model_syscall:
 						{
 							syscallblock_t * sb = model_userdata(model_object(out_linkable));
+							port_t * port = port_lookup(syscallblock_ports(sb), meta_output, out_name);
+							if (port == NULL)
+							{
+								LOGK(LOG_FATAL, "Output port '%s' in syscall block instance doesn't exist!", out_name);
+								// Will exit
+							}
+
+							out_sig = iobacking_sig(port_iobacking(port));
 							out_links = syscallblock_links(sb);
 							break;
 						}
 
 						case model_rategroup:
 						{
+							rategroup_t * rg = model_userdata(model_object(out_linkable));
+							port_t * port = port_lookup(rategroup_ports(rg), meta_output, out_name);
+							if (port == NULL)
+							{
+								LOGK(LOG_FATAL, "Output port '%s' in rategroup doesn't exist!", out_name);
+								// Will exit
+							}
 
+							out_sig = iobacking_sig(port_iobacking(port));
+							out_links = rategroup_links(rg);
 							break;
 						}
 
@@ -1532,20 +1579,47 @@ int main(int argc, char * argv[])
 						case model_blockinst:
 						{
 							blockinst_t * bi = model_userdata(model_object(in_linkable));
+							char sig = 0;
+
+							block_iolookup(blockinst_block(bi), in_name, meta_input, &sig, NULL);
+							if (sig == 0)
+							{
+								LOGK(LOG_FATAL, "Could not find input '%s' in block", in_name);
+								// Will exit
+							}
+
+							in_sig = sig;
 							in_links = blockinst_links(bi);
-							block_iolookup(blockinst_block(bi), in_name, meta_input, &in_sig, NULL);
 							break;
 						}
 
 						case model_syscall:
 						{
+							syscallblock_t * sb = model_userdata(model_object(in_linkable));
+							port_t * port = port_lookup(syscallblock_ports(sb), meta_input, in_name);
+							if (port == NULL)
+							{
+								LOGK(LOG_FATAL, "Input port '%s' in syscall doesn't exist!", in_name);
+								// Will exit
+							}
 
+							in_sig = iobacking_sig(port_iobacking(port));
+							in_links = syscallblock_links(sb);
 							break;
 						}
 
 						case model_rategroup:
 						{
+							rategroup_t * rg = model_userdata(model_object(in_linkable));
+							port_t * port = port_lookup(rategroup_ports(rg), meta_input, in_name);
+							if (port == NULL)
+							{
+								LOGK(LOG_FATAL, "Input port '%s' in rategroup doesn't exist!", in_name);
+								// Will exit
+							}
 
+							in_sig = iobacking_sig(port_iobacking(port));
+							in_links = rategroup_links(rg);
 							break;
 						}
 
@@ -1615,7 +1689,7 @@ int main(int argc, char * argv[])
 				}
 
 				blockinst_t * bi = udata;
-				LOGK(LOG_DEBUG, "Creating block instance '%s'", block_name(blockinst_block(bi)));
+				LOGK(LOG_DEBUG, "Creating block instance %s", block_name(blockinst_block(bi)));
 
 				exception_t * e = NULL;
 				bool success = blockinst_create(bi, &e);
@@ -1630,8 +1704,11 @@ int main(int argc, char * argv[])
 
 			void * f_create_rategroups(void * udata, const model_t * model, const model_linkable_t * linkable, const model_rategroup_t * rategroup, const model_script_t * script)
 			{
+				rategroup_t * rg = udata;
+				LOGK(LOG_DEBUG, "Scheduling rategroup %s", rategroup_name(rg));
+
 				exception_t * e = NULL;
-				bool success = rategroup_schedule(udata, RATEGROUP_PRIO, &e);
+				bool success = rategroup_schedule(rg, RATEGROUP_PRIO, &e);
 				if (!success || exception_check(&e))
 				{
 					LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
@@ -1666,118 +1743,31 @@ int main(int argc, char * argv[])
 		}
 	}
 
-
-	//mainloop = g_main_loop_new(NULL, false);
-	/*
+	// TODO - Verify the kernel configuration
 	{
 		//analyze inputs and outputs on all blocks and make sure everything is kosher
-		GHashTableIter itr;
-		module_t * module;
-
-		g_hash_table_iter_init(&itr, modules);
-		while (g_hash_table_iter_next(&itr, NULL, (void **)&module))
-		{
-			GSList * next = module->block_inst;
-			while (next != NULL)
-			{
-				block_inst_t * blk_inst = next->data;
-				io_newcomplete(blk_inst);
-
-				next = next->next;
-			}
-		}
-	}
-
-	{
-		//analyze block instances and execution groups (kthreads with block execs) and make sure everything is good
-
-		GHashTableIter itr;
-		GSList * next;
-		module_t * module;
-
-		//build list of all block instances
-		GSList * allblockinst = NULL;
-		g_hash_table_iter_init(&itr, modules);
-		while (g_hash_table_iter_next(&itr, NULL, (gpointer *)&module))
-		{
-			next = module->block_inst;
-			while (next != NULL)
-			{
-				allblockinst = g_slist_append(allblockinst, next->data);
-				next = next->next;
-			}
-		}
-
 		//now loop through all kthreads and delete each block_inst_t from the list
-		next = tmp_kthreads;
-		while (next != NULL)
-		{
-			kthread_t * kth = next->data;
-			exec_f * exec = kth->exec;
-
-			if (exec_isblockinst(exec))
-			{
-				exec_block_t * eblk = (exec_block_t *)exec;
-
-				GSList * next2 = eblk->inst_list;
-				if (next2 == NULL)
-				{
-					LOGK(LOG_WARN, "Execution group has no block instance elements!");
-					next = next->next;
-					continue;
-				}
-
-				while (next2 != NULL)
-				{
-					block_inst_t * inst = next2->data;
-
-					GSList * list_input = g_slist_find(allblockinst, inst);
-					if (list_input != NULL)
-					{
-						list_input->data = NULL;
-					}
-					else
-					{
-						LOGK(LOG_FATAL, "Block instance %s:%s has been added to more than one execution group!", inst->block->module->path, inst->block->name);
-						//will exit
-					}
-
-					next2 = next2->next;
-				}
-			}
-
-			next = next->next;
-		}
-
 		//now iterate over list and warn on each non-null value
-		next = allblockinst;
-		while (next != NULL)
+	}
+
+	// Run post-build functions
+	{
+		// Sort the modules
 		{
-			block_inst_t * blk_inst = next->data;
-			if (blk_inst != NULL)
+			int module_compare(list_t * a, list_t * b)
 			{
-				LOGK(LOG_WARN, "Block instance %s.%s has not been added to any execution group", blk_inst->block->module->path, blk_inst->block->name);
+				module_t * ma = list_entry(a, module_t, global_list);
+				module_t * mb = list_entry(b, module_t, global_list);
+				return strcmp(ma->kobject.object_name, mb->kobject.object_name);
 			}
 
-			next = next->next;
+			list_sort(&modules, module_compare);
 		}
 
-		g_slist_free(allblockinst);
-	}
-	*/
-
-	// Call post-build functions
-	{
-
-		int module_compare(list_t * a, list_t * b)
+		// Sort the calibration entries
 		{
-			module_t * ma = list_entry(a, module_t, global_list);
-			module_t * mb = list_entry(b, module_t, global_list);
-			return strcmp(ma->kobject.object_name, mb->kobject.object_name);
+			cal_sort();
 		}
-
-
-		list_sort(&modules, module_compare);
 
 		// Call init function on all modules
 		{
@@ -1788,10 +1778,6 @@ int main(int argc, char * argv[])
 				module_init(module);
 			}
 		}
-
-
-		// Sort some lists
-		cal_sort();
 
 		// Check for new kernel thread tasks every second
 		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);

@@ -11,50 +11,39 @@
 #define SIGNAL_LINK			"wireless/link"
 #define SIGNAL_MAX			100.0
 
-static const char * sigpath = NULL;
-
-void block_update(void * object)
+void * wifi_new(const char * name)
 {
-	if (sigpath == NULL)
+	string_t path = string_new("%s/%s/%s", SIGNAL_DIR, name, SIGNAL_LINK);
+
+	struct stat statbuf;
+	memset(&statbuf, 0, sizeof(statbuf));
+	if (stat(path.string, &statbuf) != 0 || !S_ISREG(statbuf.st_mode))
+	{
+		LOG(LOG_ERR, "No such wifi device %s", name);
+		return NULL;
+	}
+
+	return string_copy(&path);
+}
+
+void wifi_update(void * object)
+{
+	const char * path = object;
+	if (path == NULL)
 	{
 		return;
 	}
 
-	FILE * sigfd = fopen(sigpath, "r");
-	if (sigfd != NULL)
+	FILE * fp = fopen(path, "r");
+	if (fp != NULL)
 	{
 		double strength = 0.0;
-		fscanf(sigfd, "%lf", &strength);
-		fclose(sigfd);
+		fscanf(fp, "%lf", &strength);
+		fclose(fp);
 
 		strength /= SIGNAL_MAX;
 		OUTPUT(strength, &strength);
 	}
-}
-
-bool module_init()
-{
-	DIR * dirp = opendir(SIGNAL_DIR);
-	if (dirp != NULL)
-	{
-		struct dirent * ent;
-		while ((ent = readdir(dirp)) != NULL)
-		{
-			string_t path = string_new(SIGNAL_DIR "/%s/" SIGNAL_LINK, ent->d_name);
-
-			struct stat statbuf;
-			memset(&statbuf, 0, sizeof(statbuf));
-
-			if (stat(path.string, &statbuf) == 0 && S_ISREG(statbuf.st_mode))
-			{
-				sigpath = string_copy(&path);
-				break;
-			}
-		}
-	}
-	closedir(dirp);
-
-	return true;
 }
 
 
@@ -62,7 +51,7 @@ module_name("Network Health Monitor");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Network utility tools to measure signal strength, etc.");
-module_oninitialize(module_init);
 
-block_output(	static, 	strength, 		'd', 	"The strength of the wireless link (0-100)");
-block_onupdate(	static, 	block_update);
+define_block(wifi, "Wifi device utility", wifi_new, "s", "(1) Wifi device [eg. wlan0]");
+block_output(	wifi, 	strength, 		'd', 	"The strength of the wireless link (0-100)");
+block_onupdate(	wifi, 	wifi_update);

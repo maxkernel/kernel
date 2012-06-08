@@ -40,7 +40,7 @@ extern "C" {
 
 typedef void (*destructor_f)(void * object);
 typedef char * (*info_f)(void * object);
-typedef void (*handler_f)(void * userdata);
+typedef bool (*handler_f)(void * userdata);
 
 typedef struct __kobject_t kobject_t;
 struct __kobject_t
@@ -78,9 +78,8 @@ string_t path_join(const char * prefix, const char * file);
 #define KTH_PRIO_MEDIUM			40
 #define KTH_PRIO_HIGH			80
 #define KTH_PRIO_MAX			99
-void kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata);
-void kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata);
-bool kthread_requeststop();
+bool kthread_newinterval(const char * name, int priority, double rate_hz, handler_f threadfunc, void * userdata, exception_t ** err);
+bool kthread_newthread(const char * name, int priority, handler_f threadfunc, handler_f stopfunc, void * userdata, exception_t ** err);
 
 #define SYSCALL_BUFFERMAX		256		// TODO - move this constant to a private define in console.c
 typedef union

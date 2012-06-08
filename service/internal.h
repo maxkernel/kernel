@@ -143,8 +143,8 @@ extern mutex_t service_lock;
 
 void send_init();
 void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp, const buffer_t buffer);
-void send_startthread(void * userdata);
-void send_stopthread(void * userdata);
+bool send_startthread(void * userdata);
+bool send_stopthread(void * userdata);
 
 void tcp_init();
 void udp_init();

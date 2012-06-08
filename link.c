@@ -18,7 +18,7 @@ extern mutex_t io_lock;
 
 static inline void link_handle(const link_f function, const void * data, const iobacking_t * from, iobacking_t * to)
 {
-	function(data, from, from->isnull, to->data, to->isnull);
+	function(data, from->data, from->isnull, to->data, to->isnull);
 	to->isnull = from->isnull;
 }
 

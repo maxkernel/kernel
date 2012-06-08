@@ -202,15 +202,3 @@ syscallblock_t * syscallblock_new(const char * name, const char * sig, const cha
 	return sb;
 }
 
-bool syscallblock_iolookup(syscallblock_t * sb, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc)
-{
-	// Sanity check
-	{
-		if unlikely(sb == NULL || ioname == NULL)
-		{
-			return false;
-		}
-	}
-
-	return false;
-}

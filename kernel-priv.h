@@ -194,6 +194,7 @@ typedef struct
 {
 	trigger_clock_t clock;
 	linklist_t links;
+	portlist_t ports;
 } trigger_varclock_t;
 
 struct __block_t
@@ -268,7 +269,7 @@ typedef struct
 	list_t global_list;
 
 	const char * name;
-	trigger_t * trigger;
+	trigger_varclock_t * trigger;
 
 	list_t blockinsts;
 	rategroup_blockinst_t * active;
@@ -291,6 +292,15 @@ struct __kthread_t
 	// TODO - rename this destroyfunction (because it is called in all cased of threaddeath)
 	runnable_f stopfunction;
 };
+
+typedef struct
+{
+	kobject_t kobject;
+
+	handler_f run;
+	handler_f stop;
+	void * userdata;
+} kthreaddata_t;
 
 
 #define LOGFILE					"maxkernel.log"
@@ -333,8 +343,8 @@ void syscall_destroy(void * syscall);
 
 // TODO rename syscallblock to something like syscallblockinst (because it's really an instance)
 syscallblock_t * syscallblock_new(const char * name, const char * sig, const char * desc, exception_t ** err);
-bool syscallblock_iolookup(syscallblock_t * sb, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc);
 #define syscallblock_links(sb)	(&(sb)->links)
+#define syscallblock_ports(sb)	(&(sb)->ports)
 
 #define KTHREAD_SCHED		SCHED_RR
 kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, kobject_t * object, runnable_f runfunction, runnable_f stopfunction, exception_t ** err);
@@ -347,7 +357,9 @@ void * trigger_new(const char * name, info_f info, destructor_f destructor, trig
 bool trigger_watch(trigger_t * trigger);
 trigger_clock_t * trigger_newclock(const char * name, double freq_hz);
 trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz);
-#define trigger_cast(trigger)	((trigger_t *)(trigger))
+#define trigger_cast(t)			((trigger_t *)(t))
+#define trigger_varclock_links(t)	(&(t)->links)
+#define trigger_varclock_ports(t)	(&(t)->ports)
 
 ffi_function_t * function_build(void * function, const char * sig, exception_t ** err);
 void function_free(ffi_function_t * ffi);
@@ -406,6 +418,9 @@ static inline void port_add(portlist_t * list, port_t * port)
 rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** err);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
 bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err);
+#define rategroup_name(rg)		((rg)->name)
+#define rategroup_links(rg)		(trigger_varclock_links((rg)->trigger))
+#define rategroup_ports(rg)		(trigger_varclock_ports((rg)->trigger))
 
 config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err);
 bool config_apply(config_t * config, const model_config_t * config_newvalue, exception_t ** err);

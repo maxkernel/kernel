@@ -217,14 +217,16 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 	return true;
 }
 
-static void service_runloop()
+static bool service_runloop(void * userdata)
 {
 	mainloop_run(serviceloop);
+	return false;
 }
 
-static void service_stoploop()
+static bool service_stoploop(void * userdata)
 {
 	mainloop_stop(serviceloop);
+	return true;
 }
 
 const char * service_getstreamconfig()
@@ -255,14 +257,21 @@ bool module_init()
 	serviceloop = malloc0(sizeof(mainloop_t));
 	mainloop_new("Service network loop", serviceloop);
 	mainloop_addtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL);
-	kthread_newthread("Service server", 5, service_runloop, service_stoploop, NULL);
+	if (!kthread_newthread("Service server", KTH_PRIO_MEDIUM, service_runloop, service_stoploop, NULL, NULL))
+	{
+		LOG(LOG_ERR, "Could not start service server thread!");
+		return false;
+	}
 
 	send_init();
 	{
 		size_t i=0;
 		for (; i<SERVICE_SENDER_THREADS; i++)
 		{
-			kthread_newthread("Service sender", KTH_PRIO_MEDIUM, send_startthread, send_stopthread, NULL);
+			if (!kthread_newthread("Service sender", KTH_PRIO_MEDIUM, send_startthread, send_stopthread, NULL, NULL))
+			{
+				LOG(LOG_ERR, "Could not start service sender thread!");
+			}
 		}
 	}
 

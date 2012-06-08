@@ -240,6 +240,7 @@ trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_
 	trigger_varclock_t * clk = trigger_new(name, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	clk->clock.interval_nsec = hz2nanos(initial_freq_hz);
 	linklist_init(&clk->links);
+	portlist_init(&clk->ports);
 
 	return clk;
 }
