@@ -61,7 +61,7 @@ bool path_append(const char * path, exception_t ** err)
 	{
 		// Get the length of the next path segment
 		char * end = strchr(start, ':');
-		size_t plen = (end == NULL)? length : end - start;
+		ssize_t plen = (end == NULL)? length : end - start;
 
 		// Make sure there is enough room in the path list
 		if (pathlist_next >= PATH_MAXPATHS)

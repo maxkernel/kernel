@@ -12,7 +12,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <pthread.h>
-#include <bfd.h>
 #include <confuse.h>
 #include <sqlite3.h>
 
@@ -49,7 +48,7 @@ calibration_t calibration;
 uint64_t starttime = 0;
 threadlocal kthread_t * kthread_local = NULL;
 
-static list_t kobjects = {0};
+static list_t kobjects = {0,0};
 static mutex_t kobj_mutex;
 
 static mutex_t kthreads_mutex;
@@ -101,6 +100,8 @@ static void daemonize()
 /*------------ SIGNALS -------------*/
 static void signal_int(int signo)
 {
+	unused(signo);
+
 	mainloop_stop(NULL);
 }
 
@@ -136,11 +137,15 @@ static void signal_coredump(const char * name, const char * code)
 
 static void signal_segv(int signo)
 {
+	unused(signo);
+
 	signal_coredump("Segmentation fault", "segv");
 }
 
 static void signal_abrt(int signo)
 {
+	unused(signo);
+
 	signal_coredump("Abort", "abrt");
 }
 
@@ -157,6 +162,9 @@ static void signal_init()
 /*-----------  ARGS ---------------*/
 static error_t parse_args(int key, char * arg, struct argp_state * state)
 {
+	unused(arg);
+	unused(state);
+
 	switch (key)
 	{
 		case 'd': args.forkdaemon = true;		break;
@@ -169,16 +177,18 @@ static error_t parse_args(int key, char * arg, struct argp_state * state)
 
 static struct argp_option arg_opts[] = {
 	{ "daemon",     'd',    0,          0, "start program as daemon", 0 },
-	{ 0 }
+	{ 0,0,0,0,0,0 }
 };
 
-static struct argp argp = { arg_opts, parse_args, 0, 0 };
+static struct argp argp = { arg_opts, parse_args, 0,0,0,0,0 };
 
 
 
 /*------------- LOGGING ------------------*/
 static void log_appendbuf(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
+	unused(userdata);
+
 	string_t msg = kernel_logformat(level, domain, milliseconds, message);
 
 	if (loglen + msg.length + 1 >= LOGBUF_SIZE)
@@ -266,17 +276,15 @@ bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const cha
 
 void kobj_makechild(kobject_t * parent, kobject_t * child)
 {
-	child->parent = parent;
-}
-
-// TODO - remove this function! Merge with kobject_new
-void kobj_register(kobject_t * object)
-{
-	mutex_lock(&kobj_mutex);
+	// Sanity check
 	{
-		list_add(&kobjects, &object->objects_list);
+		if unlikely(child == NULL)
+		{
+			return;
+		}
 	}
-	mutex_unlock(&kobj_mutex);
+
+	child->parent = parent;
 }
 
 void kobj_destroy(kobject_t * object)
@@ -305,6 +313,8 @@ void kobj_destroy(kobject_t * object)
 /*---------------- THREAD FUNCTIONS ---------------------*/
 static char * kthread_info(void * kthread)
 {
+	unused(kthread);
+
 	char * str = "[PLACEHOLDER KTHREAD INFO]";
 	return strdup(str);
 }
@@ -314,7 +324,7 @@ static void kthread_destroy(void * kthread)
 	kthread_t * kth = kthread;
 	kth->stop = true;
 
-	if (kth->stopfunction != NULL && !kth->stopfunction(kth, kth->userdata))
+	if (kth->stopfunction != NULL && !kth->stopfunction(kth, kth->object))
 	{
 		LOGK(LOG_WARN, "KThread stop function returned failure");
 	}
@@ -324,6 +334,9 @@ static void kthread_destroy(void * kthread)
 		// TODO - read thread return (2nd parameter)
 		pthread_join(kth->thread, NULL);
 	}
+
+	kobj_destroy(kth->object);
+	kobj_destroy(kobj_cast(kth->trigger));
 }
 
 static void * kthread_dothread(void * object)
@@ -365,7 +378,7 @@ static void * kthread_dothread(void * object)
 
 		if (!kth->stop)
 		{
-			if (!kth->runfunction(kth, kth->userdata))		// This function will do the thread execution
+			if (!kth->runfunction(kth, kth->object))		// This function will do the thread execution
 			{
 				break;
 			}
@@ -376,8 +389,6 @@ static void * kthread_dothread(void * object)
 	}
 
 	kth->running = false;
-	kobj_destroy(&kth->kobject);
-
 	return NULL;
 }
 
@@ -402,7 +413,7 @@ void kthread_schedule(kthread_t * thread)
 	mutex_unlock(&kthreads_mutex);
 }
 
-kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, runnable_f runfunction, runnable_f stopfunction, void * userdata, exception_t ** err)
+kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, kobject_t * object, runnable_f runfunction, runnable_f stopfunction, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -425,8 +436,10 @@ kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, ru
 	kth->trigger = trigger;
 	kth->runfunction = runfunction;
 	kth->stopfunction = stopfunction;
-	kth->userdata = userdata;
+	kth->object = object;
 
+	kobj_makechild(&kth->kobject, kobj_cast(trigger));
+	kobj_makechild(&kth->kobject, object);
 	return kth;
 }
 
@@ -437,17 +450,22 @@ kthread_t * kthread_self()
 
 static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
+	unused(loop);
+	unused(nanoseconds);
+	unused(userdata);
+
 	mutex_lock(&kthreads_mutex);
 	{
-		list_t * pos, * q;
+		list_t * pos = NULL, * q = NULL;
 		list_foreach_safe(pos, q, &kthreads)
 		{
 			kthread_t * kth = list_entry(pos, kthread_t, schedule_list);
-			list_remove(pos);
+			list_remove(&kth->schedule_list);
 
 			const char * object_name = NULL;
 			kobj_getinfo(&kth->kobject, NULL, &object_name, NULL);
 			LOGK(LOG_DEBUG, "Starting thread %s", object_name);
+
 			kthread_start(kth);
 		}
 	}
@@ -512,14 +530,14 @@ bool kthread_requeststop()
 /*---------------- KERN FUNCTIONS -----------------------*/
 const char * max_model() { return property_get("model"); }
 const char * kernel_id() { return property_get("id"); }
-const int kernel_installed()
+int kernel_installed()
 {
 	const char * installed = property_get("installed");
 	return (installed != NULL)? parse_int(installed, NULL) : 0;
 }
 
 // Microseconds since epoch
-const int64_t kernel_timestamp()
+int64_t kernel_timestamp()
 {
 	static struct timeval now;
 	gettimeofday(&now, NULL);
@@ -531,7 +549,7 @@ const int64_t kernel_timestamp()
 }
 
 // Microseconds since kernel startup
-const int64_t kernel_elapsed()
+int64_t kernel_elapsed()
 {
 	return kernel_timestamp() - starttime;
 }
@@ -558,6 +576,8 @@ static int modules_itr()
 {
 	const void * mods_next(const void * object, void ** itrobject)
 	{
+		unused(object);
+
 		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 
 		if (list == &modules)
@@ -592,6 +612,8 @@ static int syscalls_itr()
 {
 	const void * scs_next(const void * object, void ** itrobject)
 	{
+		unused(object);
+
 		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 		return (list == hashtable_itr(&syscalls))? NULL : hashtable_itrentry(list, syscall_t, global_entry)->name;
 	}
@@ -631,6 +653,8 @@ static int properties_itr()
 {
 	const void * ps_next(const void * object, void ** itrobject)
 	{
+		unused(object);
+
 		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 		return (list == hashtable_itr(&properties))? NULL : hashtable_itrentry(list, property_t, entry)->name;
 	}
@@ -702,9 +726,6 @@ int main(int argc, char * argv[])
 	// Set up buffers
 	buffer_init();
 
-	// Initialize library functions
-	bfd_init();
-
 	// Initialize global variables
 	model = model_new();
 	LIST_INIT(&modules);
@@ -772,7 +793,7 @@ int main(int argc, char * argv[])
 		else
 		{
 			string_t data = string_new("%u\n", getpid());
-			if (write(pfd, data.string, data.length) != data.length)
+			if (write(pfd, data.string, data.length) != (ssize_t)data.length)
 			{
 				LOGK(LOG_WARN, "Could not write all data to pid file %s", PIDFILE);
 			}
@@ -879,10 +900,24 @@ int main(int argc, char * argv[])
 			return 0;
 		}
 
-		int cfg_loginfo(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)		{	return cfg_log(cfg, LOG_INFO, argc, argv);	}
-		int cfg_logwarn(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)		{	return cfg_log(cfg, LOG_WARN, argc, argv);	}
+		int cfg_loginfo(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			unused(opt);
+
+			return cfg_log(cfg, LOG_INFO, argc, argv);
+		}
+
+		int cfg_logwarn(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
+		{
+			unused(opt);
+
+			return cfg_log(cfg, LOG_WARN, argc, argv);
+		}
+
 		int cfg_logerror(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			cfg_log(cfg, LOG_ERR, argc, argv);
 			cfg_error(cfg, "Script aborted.");
 			return -1;
@@ -890,6 +925,8 @@ int main(int argc, char * argv[])
 
 		int cfg_setpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc != 1)
 			{
 				cfg_error(cfg, "Invalid argument length for setpath function");
@@ -909,6 +946,8 @@ int main(int argc, char * argv[])
 
 		int cfg_appendpath(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc < 1)
 			{
 				cfg_error(cfg, "Invalid argument length for appendpath function");
@@ -931,6 +970,8 @@ int main(int argc, char * argv[])
 
 		int cfg_loadmodule(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc < 1)
 			{
 				cfg_error(cfg, "Invalid argument length for loadmodule function");
@@ -964,6 +1005,8 @@ int main(int argc, char * argv[])
 
 		int cfg_config(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc != 3)
 			{
 				cfg_error(cfg, "Invalid argument length for config function");
@@ -1008,6 +1051,8 @@ int main(int argc, char * argv[])
 
 		int cfg_execfile(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc < 1)
 			{
 				cfg_error(cfg, "Invalid argument length for execfile function");
@@ -1060,6 +1105,8 @@ int main(int argc, char * argv[])
 
 		int cfg_execdir(cfg_t * cfg, cfg_opt_t * opt, int argc, const char ** argv)
 		{
+			unused(opt);
+
 			if (argc < 1)
 			{
 				cfg_error(cfg, "Invalid argument length for execdirectory function");
@@ -1219,7 +1266,7 @@ int main(int argc, char * argv[])
 
 				// Loading the module *will* change the underlying struct (ptrs will resolve),
 				// so we must cast to get rid of const qualifier
-				module_t * m = module_load((meta_t *)meta, meta_lookup, &e);
+				module_t * m = module_load((model_t *)model, (meta_t *)meta, meta_lookup, &e);
 				if (m == NULL || exception_check(&e))
 				{
 					LOGK(LOG_FATAL, "Module loading failed: %s", (e == NULL)? "Unknown error" : e->message);
@@ -1423,6 +1470,106 @@ int main(int argc, char * argv[])
 				return rg;
 			}
 
+			void * f_build_links(void * udata, const model_t * model, const model_link_t * link, const model_linksymbol_t * out, const model_linksymbol_t * in, const model_script_t * script)
+			{
+				// Sanity check
+				{
+					if unlikely(udata != NULL)
+					{
+						LOGK(LOG_WARN, "Link model userdata already set! (Will overwrite)");
+					}
+				}
+
+				// Get the information about the like
+				const model_linkable_t * out_linkable = NULL, * in_linkable = NULL;
+				const char * out_name = NULL, * in_name = NULL;
+				model_getlinksymbol(out, &out_linkable, &out_name, NULL, NULL);
+				model_getlinksymbol(in, &in_linkable, &in_name, NULL, NULL);
+
+				// Find this information
+				char out_sig = 0, in_sig = 0;
+				linklist_t * out_links = NULL, * in_links = NULL;
+
+				// Get the out link info
+				{
+					switch (model_type(model_object(out_linkable)))
+					{
+						case model_blockinst:
+						{
+							blockinst_t * bi = model_userdata(model_object(out_linkable));
+							out_links = blockinst_links(bi);
+							block_iolookup(blockinst_block(bi), out_name, meta_output, &out_sig, NULL);
+							break;
+						}
+
+						case model_syscall:
+						{
+							syscallblock_t * sb = model_userdata(model_object(out_linkable));
+							out_links = syscallblock_links(sb);
+							break;
+						}
+
+						case model_rategroup:
+						{
+
+							break;
+						}
+
+						default: break;
+					}
+
+					if (out_sig == 0 || out_links == NULL)
+					{
+						LOGK(LOG_FATAL, "Could not connect output link %s -> %s, bad types!", out_name, in_name);
+						// Will exit
+					}
+				}
+
+				// Get the in link info
+				{
+					switch (model_type(model_object(in_linkable)))
+					{
+						case model_blockinst:
+						{
+							blockinst_t * bi = model_userdata(model_object(in_linkable));
+							in_links = blockinst_links(bi);
+							block_iolookup(blockinst_block(bi), in_name, meta_input, &in_sig, NULL);
+							break;
+						}
+
+						case model_syscall:
+						{
+
+							break;
+						}
+
+						case model_rategroup:
+						{
+
+							break;
+						}
+
+						default: break;
+					}
+
+					if (in_sig == 0 || in_links == NULL)
+					{
+						LOGK(LOG_FATAL, "Could not connect input link %s -> %s, bad types!", out_name, in_name);
+						// Will exit
+					}
+				}
+
+				exception_t * e = NULL;
+				iobacking_t * iob = link_connect(link, out_sig, out_links, in_sig, in_links, &e);
+				if (iob == NULL || exception_check(&e))
+				{
+					LOGK(LOG_FATAL, "Could not connect link from %s -> %s: %s", out_name, in_name, (e == NULL)? "Unknown error" : e->message);
+					// Will exit
+				}
+
+				return iob;
+			}
+
 
 			// Call preact function on all modules
 			{
@@ -1430,7 +1577,7 @@ int main(int argc, char * argv[])
 				list_foreach(pos, &modules)
 				{
 					module_t * module = list_entry(pos, module_t, global_list);
-					module_act(module, act_preact);
+					module_activate(module, act_preact);
 				}
 			}
 
@@ -1444,17 +1591,34 @@ int main(int argc, char * argv[])
 				.rategroups = f_build_rategroups,
 			};
 
+			model_analysis_t f_build3 = {
+				.links = f_build_links,
+			};
+
 			LOGK(LOG_DEBUG, "Building the kernel structure...");
 			model_analyse(model, &f_build1);
 			model_analyse(model, &f_build2);
+			model_analyse(model, &f_build3);
 		}
 
 		// Create the kernel objects
 		{
 			void * f_create_blockinsts(void * udata, const model_t * model, const model_linkable_t * linkable, const model_blockinst_t * blockinst, const model_script_t * script)
 			{
+				// Sanity check
+				{
+					if unlikely(udata == NULL)
+					{
+						LOGK(LOG_FATAL, "Block instance model userdata not set!");
+						// Will exit
+					}
+				}
+
+				blockinst_t * bi = udata;
+				LOGK(LOG_DEBUG, "Creating block instance '%s'", block_name(blockinst_block(bi)));
+
 				exception_t * e = NULL;
-				bool success = blockinst_create(udata, &e);
+				bool success = blockinst_create(bi, &e);
 				if (!success || exception_check(&e))
 				{
 					LOGK(LOG_FATAL, "Could not create block instance: %s", (e == NULL)? "Unknown error" : e->message);
@@ -1497,7 +1661,7 @@ int main(int argc, char * argv[])
 			list_foreach(pos, &modules)
 			{
 				module_t * module = list_entry(pos, module_t, global_list);
-				module_act(module, act_postact);
+				module_activate(module, act_postact);
 			}
 		}
 	}
@@ -1638,81 +1802,73 @@ int main(int argc, char * argv[])
 
 	// Returning from the main loop means we've gotten a signal to exit
 	LOGK(LOG_DEBUG, "Destroying the kernel.");
-	mutex_lock(&kobj_mutex);
 	{
-		//GHashTableIter itr;
-		//kthread_t * kth;
-
-		/*
-		g_hash_table_iter_init(&itr, kthreads);
-		while (g_hash_table_iter_next(&itr, NULL, (void **)&kth))
+		// Destroy the kobjects
+		mutex_lock(&kobj_mutex);
 		{
-			kth->stop = true;
-			pthread_join(kth->thread, NULL);
-		}
-		*/
 
-		while (kobjects.next != &kobjects)
-		{
-			kobject_t * item = NULL;
-			bool found = false;
-
-			list_t * pos;
-			list_foreach(pos, &kobjects)
+			while (kobjects.prev != &kobjects)
 			{
-				item = list_entry(pos, kobject_t, objects_list);
-				if (item->parent == NULL)
+				kobject_t * item = NULL;
+				bool found = false;
+
+				list_t * pos;
+				list_foreach_reverse(pos, &kobjects)
 				{
-					// We've found a root object
-					found = true;
-					break;
+					item = list_entry(pos, kobject_t, objects_list);
+					if (item->parent == NULL)
+					{
+						// We've found a root object
+						found = true;
+						break;
+					}
 				}
-			}
 
-			if (!found)
+				if (!found)
+				{
+					LOGK(LOG_ERR, "Orphan kobject found: %s: %s", item->class_name, item->object_name);
+				}
+
+				LOG(LOG_DEBUG, "Destroying kobject tree %s: %s", item->class_name, item->object_name);
+				kobj_destroy(item);
+			}
+		}
+		mutex_unlock(&kobj_mutex);
+
+		// Destroy the buffer subsystem
+		buffer_destroy();
+
+		// Destroy the memfs subsystem
+		LOGK(LOG_DEBUG, "Unmounting kernel memfs");
+		{
+			exception_t * e = NULL;
+			if (!memfs_destroy(&e))
 			{
-				LOGK(LOG_ERR, "Orphan kobject found: %s: %s", item->class_name, item->object_name);
+				LOGK(LOG_ERR, "%s", e->message);
+				exception_free(e);
 			}
-
-			LOG(LOG_DEBUG, "Destroying kobject tree %s: %s", item->class_name, item->object_name);
-			kobj_destroy(item);
 		}
-	}
-	mutex_unlock(&kobj_mutex);
 
-	// Destroy the buffer subsystem
-	buffer_destroy();
-
-	// Destroy the memfs subsystem
-	LOGK(LOG_DEBUG, "Unmounting kernel memfs");
-	{
-		exception_t * e = NULL;
-		if (!memfs_destroy(&e))
+		// Clear all the properties
 		{
-			LOGK(LOG_ERR, "%s", e->message);
-			exception_free(e);
+			list_t * pos, * n;
+			hashtable_foreach_safe(pos, n, &properties)
+			{
+				property_t * prop = hashtable_itrentry(pos, property_t, entry);
+				property_clear(prop->name);
+			}
 		}
-	}
 
-	// Clear all the properties
-	{
-		list_t * pos, * n;
-		hashtable_foreach_safe(pos, n, &properties)
+		// Close the database file
+		if (database != NULL)
 		{
-			property_t * prop = hashtable_itrentry(pos, property_t, entry);
-			property_clear(prop->name);
+			LOGK(LOG_DEBUG, "Closing database file");
+			sqlite3_close(database);
 		}
-	}
 
-	// Close the database file
-	if (database != NULL)
-	{
-		LOGK(LOG_DEBUG, "Closing database file");
-		sqlite3_close(database);
+		// Remove pid file
+		unlink(PIDFILE);
 	}
-
-	// Remove pid file
-	unlink(PIDFILE);
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");
 

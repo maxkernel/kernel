@@ -104,7 +104,7 @@ bool module_init()
 	{
 		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, (e == NULL)? "Unknown error" : e->message);
 		exception_free(e);
-		return false;
+		return true;
 	}
 
 	http_adduri(ctx, "/get/", MATCH_PREFIX, handle_get, NULL);

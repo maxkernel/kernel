@@ -402,7 +402,7 @@ ssize_t vserialize_2array_wheader(void ** array, size_t arraylen, exception_t **
 	char * body = (char *)head + header_size;
 
 	size_t index = 0, pindex = 0;
-	size_t length = 0;
+	ssize_t length = 0;
 
 	va_list cargs;
 	va_copy(cargs, args);
@@ -501,7 +501,7 @@ ssize_t aserialize_2array_wheader(void ** array, size_t arraylen, exception_t **
 	char * body = (char *)head + header_size;
 
 	size_t index = 0, pindex = 0;
-	size_t length = 0;
+	ssize_t length = 0;
 
 	const char * param = NULL;
 	method_foreachparam(param, sig)
@@ -613,7 +613,7 @@ ssize_t serialize_2array_fromcb(void * array, size_t arraylen, exception_t ** er
 			}
 		}
 
-		if (wrote > arraylen)
+		if ((size_t)wrote > arraylen)
 		{
 			// Buffer overflow
 			exception_set(err, ENOBUFS, "Could not serialize sig %s, body array too small!", sig);
@@ -687,7 +687,7 @@ ssize_t serialize_2array_fromcb_wheader(void ** array, size_t arraylen, exceptio
 			}
 		}
 
-		if (wrote > (arraylen - header_size))
+		if ((size_t)wrote > (arraylen - header_size))
 		{
 			// Buffer overflow
 			exception_set(err, ENOBUFS, "Could not serialize sig %s, body array too small!", sig);
@@ -884,8 +884,8 @@ ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t 
 	labels(err_nomem, err_bufsize);
 
 	// Get the header size
-	size_t header_size = headersize(sig);
-	if (header_size > headerlen)
+	ssize_t header_size = headersize(sig);
+	if ((size_t)header_size > headerlen)
 	{
 		goto err_nomem;
 	}

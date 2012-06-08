@@ -123,6 +123,8 @@ void function_call(ffi_function_t * ffi, void * ret, void ** args)
 
 static void closure_callback(ffi_cif * cif, void * ret, void ** args, void * closure)
 {
+	unused(cif);
+
 	ffi_closure_t * c = closure;
 	c->callback(ret, (const void **)args, c->userdata);
 }

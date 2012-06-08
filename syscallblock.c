@@ -6,6 +6,20 @@
 #include <serialize.h>
 
 
+static char * syscallblock_info(void * object)
+{
+	unused(object);
+
+	char * str = "[PLACEHOLDER SYSCALLBLOCK INFO]";
+	return strdup(str);
+}
+
+static void syscallblock_free(void * object)
+{
+	syscallblock_t * sb = object;
+	closure_free(sb->closure);
+}
+
 static void syscallblock_dosyscall(void * ret, const void * args[], void * userdata)
 {
 	syscallblock_t * sb = userdata;
@@ -77,18 +91,6 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 		link_dooutputs(&sb->ports, &sb->links);
 	}
 	mutex_unlock(&sb->lock);
-}
-
-static char * syscallblock_info(void * object)
-{
-	char * str = "[PLACEHOLDER SYSCALLBLOCK INFO]";
-	return strdup(str);
-}
-
-static void syscallblock_free(void * object)
-{
-	syscallblock_t * sb = object;
-	closure_free(sb->closure);
 }
 
 syscallblock_t * syscallblock_new(const char * name, const char * sig, const char * desc, exception_t ** err)
@@ -198,4 +200,17 @@ syscallblock_t * syscallblock_new(const char * name, const char * sig, const cha
 	}
 
 	return sb;
+}
+
+bool syscallblock_iolookup(syscallblock_t * sb, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc)
+{
+	// Sanity check
+	{
+		if unlikely(sb == NULL || ioname == NULL)
+		{
+			return false;
+		}
+	}
+
+	return false;
 }

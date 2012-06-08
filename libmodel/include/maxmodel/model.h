@@ -213,7 +213,7 @@ model_t * model_new();
 void * model_setuserdata(modelhead_t * head, void * newuserdata);
 void model_clearalluserdata(model_t * model);
 void model_destroy(model_t * model, const modelhead_t * item, const model_analysis_t * funcs);
-void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err);
+bool model_addmeta(model_t * model, const meta_t * meta, exception_t ** err);
 
 model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err);
 model_module_t * model_newmodule(model_t * model, model_script_t * script, meta_t * meta, exception_t ** err);

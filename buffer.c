@@ -29,7 +29,7 @@ typedef struct
 
 static buffermem_t * buffers[BUFFER_MAX_BUFFERS];
 static size_t PAGESIZE;
-static size_t BUFFERSIZE;
+static ssize_t BUFFERSIZE;
 
 static mutex_t buffers_lock;
 static mutex_t pages_lock;
@@ -305,8 +305,8 @@ size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
 		}
 	}
 
-	size_t size = buffer_size(b);
-	size_t readsize = offset + length;
+	ssize_t size = buffer_size(b);
+	ssize_t readsize = offset + length;
 
 	if (offset > size)
 	{
@@ -324,10 +324,12 @@ size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
 	return length;
 }
 
+/*
 bool buffer_send(buffer_t buffer, int sock)
 {
 	return false;
 }
+*/
 
 size_t buffer_size(const buffer_t b)
 {

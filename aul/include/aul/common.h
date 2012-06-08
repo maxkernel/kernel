@@ -34,6 +34,7 @@ extern "C" {
 #undef  CHECK_PRINTF
 #define CHECK_PRINTF(fmt_arg, arg1)		__attribute__((format (printf, fmt_arg, arg1)))
 
+#define unused(v)						((void)v)
 
 #define labels(...)						__label__ __VA_ARGS__
 #define threadlocal						__thread

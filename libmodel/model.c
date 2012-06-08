@@ -373,16 +373,18 @@ void model_destroy(model_t * model, const modelhead_t * item, const model_analys
 	}
 }
 
-void model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
+bool model_addmeta(model_t * model, const meta_t * meta, exception_t ** err)
 {
 	meta_t ** mem = nextfree(meta_t, model->backings, MODEL_MAX_BACKINGS);
 	if (mem == NULL)
 	{
 		exception_set(err, ENOMEM, "Out of module backing memory! (MODEL_MAX_BACKINGS = %d)", MODEL_MAX_BACKINGS);
-		return;
+		return false;
 	}
 
 	*mem = meta_copy(meta);
+
+	return true;
 }
 
 model_script_t * model_newscript(model_t * model, const char * path, exception_t ** err)
@@ -1392,7 +1394,7 @@ iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkab
 {
 	// Sanity check
 	{
-		if unlikely(model == NULL || rategroup == NULL || model_type(model_object(rategroup)) != model_blockinst)
+		if unlikely(model == NULL || rategroup == NULL || model_type(model_object(rategroup)) != model_rategroup)
 		{
 			return iterator_none();
 		}
@@ -1407,7 +1409,8 @@ iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkab
 		return *insts;
 	}
 
-	return iterator_new("model_rategroupblockinst", rgbiitr_next, NULL, &rategroup->backing.rategroup, (void *)&rategroup->backing.rategroup->blockinsts[0]);
+	model_rategroup_t * rg = rategroup->backing.rategroup;
+	return iterator_new("model_rategroupblockinst", rgbiitr_next, NULL, rg, (void *)&rg->blockinsts[0]);
 }
 
 bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** blockinst)

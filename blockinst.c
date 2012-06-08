@@ -9,8 +9,10 @@
 #include <kernel-priv.h>
 
 
-static char * blockinst_info(void * blockinst)
+static char * blockinst_info(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER BLOCKINST INFO]";
 	return strdup(str);
 }
@@ -19,6 +21,7 @@ static void blockinst_destroy(void * blockinst)
 {
 	blockinst_t * blkinst = blockinst;
 
+	unused(blkinst);
 	// TODO IMPORTANT - call the ondestroy callback function of the block instance
 }
 
@@ -97,7 +100,7 @@ bool blockinst_create(blockinst_t * blockinst, exception_t ** err)
 
 			case T_STRING:
 			{
-				size_t len = strlen(blockinst->args[index]);
+				size_t len = strlen(blockinst->args[index]) + 1;
 				memcpy(array, blockinst->args[index], min(arraylen, len));
 				return len;
 			}
@@ -115,10 +118,11 @@ bool blockinst_create(blockinst_t * blockinst, exception_t ** err)
 	ssize_t wrote = serialize_2array_fromcb_wheader(header, BLOCKINST_BUFFERMAX, err, block_newsig(blockinst_block(blockinst)), parse_arg);
 	if (wrote < 0 || exception_check(err))
 	{
-		// TODO IMPORTANT - fucking finish me!
+		return false;
 	}
 
-	return false;
+	blockinst_userdata(blockinst) = block_callconstructor(blockinst_block(blockinst), header);
+	return true;
 }
 
 void blockinst_act(blockinst_t * blockinst, blockact_f callback)

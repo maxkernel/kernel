@@ -9,6 +9,11 @@
 #if defined(USE_BFD)
 #include <bfd.h>
 
+__attribute__((constructor)) static void meta_initlibrary()
+{
+	bfd_init();
+}
+
 meta_t * meta_parseelf(const char * path, exception_t ** err)
 {
 	labels(end);

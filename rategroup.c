@@ -10,8 +10,10 @@
 
 extern list_t rategroups;
 
-static char * rategroup_info(void * rategroup)
+static char * rategroup_info(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER RATEGROUP INFO]";
 	return strdup(str);
 }
@@ -20,6 +22,7 @@ static void rategroup_destroy(void * rategroup)
 {
 	rategroup_t * rg = rategroup;
 
+	unused(rg);
 	// TODO - destroy the rategroup
 }
 
@@ -31,12 +34,14 @@ static inline rategroup_t * rategroup_getrunning()
 		return NULL;
 	}
 
-	return kthread_userdata(self);
+	return (rategroup_t *)kthread_object(self);
 }
 
-static bool rategroup_run(kthread_t * thread, void * userdata)
+static bool rategroup_run(kthread_t * thread, kobject_t * object)
 {
-	rategroup_t * rg = userdata;
+	unused(thread);
+
+	rategroup_t * rg = (rategroup_t *)object;
 
 	list_t * pos = NULL;
 	list_foreach(pos, &rg->blockinsts)
@@ -150,7 +155,7 @@ bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** er
 	}
 
 	string_t name = string_new("%s thread", rategroup->name);
-	kthread_t * thread = kthread_new(name.string, priority, rategroup->trigger, rategroup_run, NULL, rategroup, err);
+	kthread_t * thread = kthread_new(name.string, priority, rategroup->trigger, kobj_cast(rategroup), rategroup_run, NULL, err);
 	if (thread == NULL || exception_check(err))
 	{
 		return false;

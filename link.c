@@ -339,31 +339,43 @@ void link_sort(linklist_t * links)
 
 static void copy_b2b(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
 	*(bool *)to = *(const bool *)from;
 }
 
 static void copy_i2i(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
 	*(int *)to = *(const int *)from;
 }
 
 static void copy_d2d(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
 	*(double *)to = *(const double *)from;
 }
 
 static void copy_c2c(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
 	*(char *)to = *(const char *)from;
 }
 
 static void copy_s2s(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
 	strncpy(*(char **)to, *(const char **)from, AUL_STRING_MAXLEN - 1);
 }
 
 static void copy_x2x(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
+	unused(linkdata);
+
 	if (!to_isnull)		buffer_free(*(buffer_t *)to);
 	if (!from_isnull)	*(buffer_t *)to = buffer_dup(*(const buffer_t *)from);
 }

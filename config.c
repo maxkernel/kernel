@@ -11,12 +11,15 @@
 
 static char * config_info(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER CONFIG INFO]";
 	return strdup(str);
 }
 
 void config_destroy(void * object)
 {
+	unused(object);
 	//config_t * config = object;
 	// No custom destructor required
 }

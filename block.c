@@ -7,8 +7,10 @@
 #include <kernel-priv.h>
 
 
-static char * block_info(void * block)
+static char * block_info(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER BLOCK INFO]";
 	return strdup(str);
 }
@@ -50,6 +52,13 @@ block_t * block_new(module_t * module, const char * name, const char * newsig, b
 		}
 	}
 
+	string_t newffi_sig = string_new("%c:%s", T_POINTER, newsig);
+	ffi_function_t * newffi = function_build(new, newffi_sig.string, err);
+	if (newffi == NULL || exception_check(err))
+	{
+		return NULL;
+	}
+
 	/*
 	const char * name = NULL;
 	meta_getblock(backing, &name, NULL, NULL, NULL, NULL, NULL);
@@ -66,7 +75,7 @@ block_t * block_new(module_t * module, const char * name, const char * newsig, b
 	blk->module = module;
 	blk->name = strdup(name);
 	blk->newsig = strdup(newsig);
-	blk->new = new;
+	blk->new = newffi;
 	blk->onupdate = onupdate;
 	blk->ondestroy = ondestroy;
 	//meta_getblockcb(onupdate, NULL, NULL, &blk->onupdate);
@@ -80,6 +89,48 @@ void block_add(block_t * block, blockinst_t * blockinst)
 {
 	list_add(&block->insts, &blockinst->block_list);
 	kobj_makechild(&block->kobject, &blockinst->kobject);
+}
+
+void * block_callconstructor(block_t * block, void ** args)
+{
+	// Sanity check
+	{
+		if unlikely(block == NULL)
+		{
+			return NULL;
+		}
+	}
+
+	void * ret = NULL;
+	function_call(block->new, &ret, args);
+
+	return ret;
+}
+
+bool block_iolookup(const block_t * block, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc)
+{
+	// Sanity check
+	{
+		if unlikely(block == NULL || ioname == NULL)
+		{
+			return false;
+		}
+	}
+
+	const meta_block_t * meta_block = NULL;
+	if (!meta_lookupblock(module_meta(block->module), block->name, &meta_block))
+	{
+		return false;
+	}
+
+	const meta_blockio_t * meta_blockio = NULL;
+	if (!meta_lookupblockio(module_meta(block->module), meta_block, ioname, iotype, &meta_blockio))
+	{
+		return false;
+	}
+
+	meta_getblockio(meta_blockio, NULL, NULL, NULL, io_sig, io_desc);
+	return true;
 }
 
 iterator_t block_ioitr(const block_t * block)
@@ -122,6 +173,8 @@ iterator_t block_ioitr(const block_t * block)
 
 	void ioitr_free(const void * object, void * itrobject)
 	{
+		unused(object);
+
 		iterator_free(*(iterator_t *)itrobject);
 		free(itrobject);
 	}

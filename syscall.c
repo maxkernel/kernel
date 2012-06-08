@@ -10,6 +10,8 @@ extern hashtable_t syscalls;
 
 static char * syscall_info(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER SYSCALL INFO]";
 	return strdup(str);
 }

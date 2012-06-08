@@ -23,11 +23,11 @@ static inline void addnanos(struct timespec * val, uint64_t add_nanos)
 	val->tv_sec += nanos / NANOS_PER_SECOND;
 }
 
-static inline int64_t diffnanos(struct timespec * a, struct timespec * b)
+static inline uint64_t diffnanos(struct timespec * a, struct timespec * b)
 {
 	int64_t diff = (a->tv_sec - b->tv_sec) * NANOS_PER_SECOND;
 	diff += a->tv_nsec - b->tv_nsec;
-	return diff;
+	return (uint64_t)diff;
 }
 
 static inline uint64_t hz2nanos(double freq_hz)
@@ -74,8 +74,10 @@ bool trigger_watch(trigger_t * trigger)
 }
 
 /*------------------- CLOCK -------------------------*/
-static char * trigger_infoclock(void * obj)
+static char * trigger_infoclock(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER CLOCK INFO]";
 	return strdup(str);
 }
@@ -104,7 +106,7 @@ static bool trigger_waitclock(trigger_t * trigger)
 	struct timespec now;
 	clock_gettime(CLOCK_REALTIME, &now);
 
-	int64_t diff = diffnanos(&now, &clk->last_trigger);
+	uint64_t diff = diffnanos(&now, &clk->last_trigger);
 	if (diff >= clk->interval_nsec)
 	{
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
@@ -152,8 +154,10 @@ trigger_clock_t * trigger_newclock(const char * name, double freq_hz)
 }
 
 /*----------------------- VARCLOCK ------------------------*/
-static char * trigger_infovarclock(void * obj)
+static char * trigger_infovarclock(void * object)
 {
+	unused(object);
+
 	char * str = "[PLACEHOLDER VARCLOCK INFO]";
 	return strdup(str);
 }
@@ -176,7 +180,7 @@ static bool trigger_waitvarclock(trigger_t * trigger)
 		clock_gettime(CLOCK_REALTIME, &now);
 		memcpy(&trigger, &clk->last_trigger, sizeof(struct timespec));
 
-		int64_t diff = diffnanos(&now, &trigger);
+		uint64_t diff = diffnanos(&now, &trigger);
 		if (diff > clk->interval_nsec)
 		{
 			memcpy(&clk->last_trigger, &now, sizeof(struct timespec));

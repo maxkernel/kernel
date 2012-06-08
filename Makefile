@@ -15,6 +15,7 @@ HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.c rategroup.c port.c link.c iobacking.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c
 #FIXME		= io.c exec.c
 #OLD_SRCS	= meta.c luaenv.c
+#TODO - add -Wextra to CFLAGS
 OBJS		= $(SRCS:.c=.o)
 PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
 INCLUDES	= -I. -Iaul/include -Ilibmodel/include $(shell pkg-config --cflags-only-I $(PACKAGES))

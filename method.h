@@ -14,7 +14,7 @@ extern "C" {
 #define method_foreachparam(param, sig) \
 	for ((param) = (sig); *(param) != '\0'; (param) += 1)
 
-static inline const char method_returntype(const char * sig)
+static inline char method_returntype(const char * sig)
 {
 	switch (*sig)
 	{

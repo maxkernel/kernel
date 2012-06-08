@@ -275,6 +275,8 @@ iterator_t cal_iterator()
 {
 	const void * cal_donext(const void * object, void ** itrobject)
 	{
+		unused(object);
+
 		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
 		return (list == &calibration.entries)? NULL : list_entry(list, calentry_t, calibration_list);
 	}
