@@ -7,7 +7,9 @@
 
 hashtable_t * hashtable_new(size_t numbuckets, hashcode_f hasher, hashequals_f equals)
 {
-	hashtable_t * table = malloc0( (sizeof(hashtable_t)-(sizeof(list_t)*AUL_HASHTABLE_BUCKETS)) + (sizeof(list_t)*numbuckets));
+	size_t memsize = (sizeof(hashtable_t) - (sizeof(list_t) * AUL_HASHTABLE_BUCKETS)) + (sizeof(list_t) * numbuckets);
+	hashtable_t * table = malloc(memsize);
+	memset(table, 0, memsize);
 
 	table->hasher = hasher;
 	table->equals = equals;

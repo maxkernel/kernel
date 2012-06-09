@@ -127,12 +127,12 @@ static void archive(const char * path)
 }
 
 
-struct log_file
+typedef struct
 {
 	char * path;
 	int fd;
 	off_t size;
-};
+} logfile_t;
 
 static void log_print(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 {
@@ -215,7 +215,7 @@ bool log_openfile(const char * path, exception_t ** err)
 {
 	void log_filewrite(level_t level, const char * domain, uint64_t milliseconds, const char * message, void * userdata)
 	{
-		struct log_file * data = userdata;
+		logfile_t * data = userdata;
 
 		if (data->fd == -1)
 		{
@@ -247,7 +247,7 @@ bool log_openfile(const char * path, exception_t ** err)
 
 	void log_fileclose(void * userdata)
 	{
-		struct log_file * data = userdata;
+		logfile_t * data = userdata;
 
 		if (data->fd != -1)
 		{
@@ -273,7 +273,8 @@ bool log_openfile(const char * path, exception_t ** err)
 	}
 	FILEOPENHEADER(fd);
 
-	struct log_file * data = malloc0(sizeof(struct log_file));
+	logfile_t * data = malloc(sizeof(logfile_t));
+	memset(data, 0, sizeof(logfile_t));
 	data->path = strdup(path);
 	data->size = file_size(path);
 	data->fd = fd;

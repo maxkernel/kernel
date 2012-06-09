@@ -25,7 +25,7 @@ static void blockinst_destroy(void * blockinst)
 	// TODO IMPORTANT - call the ondestroy callback function of the block instance
 }
 
-blockinst_t * blockinst_new(block_t * block, const char * name, const char * const * args, exception_t ** err)
+blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -34,21 +34,64 @@ blockinst_t * blockinst_new(block_t * block, const char * name, const char * con
 			return NULL;
 		}
 
-		if unlikely(block == NULL || name == NULL)
+		if unlikely(linkable == NULL || model_type(model_object(linkable)) != model_blockinst)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
 	}
 
-	blockinst_t * inst = kobj_new("Block Instance", name, blockinst_info, blockinst_destroy, sizeof(blockinst_t));
-	linklist_init(&inst->links);
-	inst->block = block;
-	inst->name = strdup(name);
-	inst->args = args;			// TODO - do some sort of strcpy here!
 
-	block_add(block, inst);
-	return inst;
+	const char * block_name = NULL;
+	const model_module_t * module = NULL;
+	const char * new_sig = NULL;
+	const char * const * new_args = NULL;
+	size_t new_argslen = 0;
+	model_getblockinst(linkable, &block_name, &module, &new_sig, &new_args, &new_argslen);
+	if (module == NULL)
+	{
+		exception_set(err, EFAULT, "Could not get module backing for block '%s'", block_name);
+		return NULL;
+	}
+
+	const char * module_path = NULL;
+	const meta_t * meta = NULL;
+	model_getmodule(module, &module_path, &meta);
+	if (meta == NULL || module_path == NULL)
+	{
+		exception_set(err, EFAULT, "Could not get meta object for module backing block '%s'", block_name);
+		return NULL;
+	}
+
+	const char * module_name = NULL;
+	meta_getinfo(meta, NULL, &module_name, NULL, NULL, NULL);
+
+	LOGK(LOG_DEBUG, "Creating block instance '%s' in module %s", block_name, module_path);
+
+	if (method_numparams(new_sig) != new_argslen)
+	{
+		exception_set(err, EINVAL, "Bad constructor arguments given to block '%s' in module %s", block_name, module_path);
+		return NULL;
+	}
+
+	module_t * m = model_userdata(model_object(module));
+	if (m == NULL)
+	{
+		exception_set(err, EFAULT, "Module object not set in module!");
+		return NULL;
+	}
+
+	block_t * b = module_lookupblock(m, block_name);
+
+	string_t name = string_new("%s.%s", module_name, block_name);
+	blockinst_t * bi = kobj_new("Block Instance", name.string, blockinst_info, blockinst_destroy, sizeof(blockinst_t));
+	linklist_init(&bi->links);
+	bi->block = b;
+	bi->name = strdup(name.string);
+	bi->args = new_args;			// TODO - do some sort of strcpy here!
+
+	block_add(b, bi);
+	return bi;
 }
 
 bool blockinst_create(blockinst_t * blockinst, exception_t ** err)

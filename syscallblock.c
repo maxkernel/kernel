@@ -1,9 +1,11 @@
 #include <stdarg.h>
 
-#include <kernel.h>
-#include <kernel-priv.h>
+#include <maxmodel/model.h>
+
 #include <buffer.h>
 #include <serialize.h>
+#include <kernel.h>
+#include <kernel-priv.h>
 
 
 static char * syscallblock_info(void * object)
@@ -93,7 +95,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 	mutex_unlock(&sb->lock);
 }
 
-syscallblock_t * syscallblock_new(const char * name, const char * sig, const char * desc, exception_t ** err)
+syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -102,34 +104,17 @@ syscallblock_t * syscallblock_new(const char * name, const char * sig, const cha
 			return NULL;
 		}
 
-		if unlikely(name == NULL || sig == NULL)
+		if unlikely(linkable == NULL || model_type(model_object(linkable)) != model_syscall)
 		{
-			exception_set(err, EINVAL, "Could not create syscall block with name '%s' or invalid signature", name);
+			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
-
-		// TODO - should we use this? The code below will catch any type errors
-		/*
-		const char * param = NULL;
-		foreach_methodparam(method_params(sig), param)
-		{
-			switch (*param)
-			{
-				case T_VOID:
-				case T_BOOLEAN:
-				case T_INTEGER:
-				case T_DOUBLE:
-				case T_CHAR:
-				case T_STRING:
-					continue;
-
-				default:
-					exception_set(err, EINVAL, "Could not create syscall block %s: invalid type '%s'", name, kernel_datatype(*param));
-					return NULL;
-			}
-		}
-		*/
 	}
+
+	const char * name = NULL, * sig = NULL, * desc = NULL;
+	model_getsyscall(linkable, &name, &sig, &desc);
+
+	LOGK(LOG_DEBUG, "Creating syscall %s(%s)", name, sig);
 
 	syscallblock_t * sb = kobj_new("SyscallBlockinst", name, syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
 	mutex_init(&sb->lock, M_NORMAL);

@@ -143,7 +143,8 @@ void service_default_init()
 	service_register(S_ECHO_HANDLE, "Echo data util", RAW, NULL, "Echo data back to client", NULL, NULL, s_echo_userdata);
 	service_register(S_LOG_HANDLE, "Log messages", TXT, NULL, "Send log messages to client", s_log_newconnect, NULL, NULL);
 
-	bool * ld = malloc0(sizeof(bool));
+	bool * ld = malloc(sizeof(bool));
+	memset(ld, 0, sizeof(bool));
 	log_addlistener(s_log_write, s_log_close, ld);
 }
 

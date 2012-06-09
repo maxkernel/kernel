@@ -9,7 +9,8 @@ void property_set(const char * name, const char * value)
 	hashentry_t * entry = hashtable_get(&properties, name);
 	if (entry == NULL)
 	{
-		property_t * prop = malloc0(sizeof(property_t));
+		property_t * prop = malloc(sizeof(property_t));
+		memset(prop, 0, sizeof(property_t));
 		prop->name = strdup(name);
 		prop->value = strdup(value);
 		hashtable_put(&properties, prop->name, &prop->entry);

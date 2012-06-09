@@ -33,7 +33,7 @@ void log_addlistener(log_f listener, logclose_f closer, void * userdata);
 void log_removelistener(log_f listener);
 void log_setdefault(log_f listener, logclose_f closer, void * userdata);
 
-static inline CHECK_PRINTF(3, 4) void log_write(level_t level, const char * domain, const char * fmt, ...)
+static inline check_printf(3, 4) void log_write(level_t level, const char * domain, const char * fmt, ...)
 {
 #if !defined(ALPHA) && !defined(BETA)
 	if (level == LEVEL_DEBUG)

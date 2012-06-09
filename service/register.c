@@ -217,9 +217,9 @@ service_h service_register(const char * id, const char * name, const char * form
 {
 	string_t kobj_name = string_new("%s " SERVICE_NAME, name);
 	service_t * s = kobj_new(SERVICE_CLASS, kobj_name.string, service_info, service_free, sizeof(service_t));
-	s->name = STRDUP(name);
-	s->format = STRDUP(format);
-	s->desc = STRDUP(desc);
+	s->name = (name == NULL)? NULL : strdup(name);
+	s->format = (format == NULL)? NULL : strdup(format);
+	s->desc = (desc == NULL)? NULL : strdup(desc);
 	s->connect = newconnect;
 	s->disconnect = disconnected;
 	s->clientdata = clientdata;

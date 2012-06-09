@@ -155,7 +155,8 @@ static bool webcam_start(webcam_t * webcam)
 		return false;
 	}
 
-	webcam->buffers = malloc0(sizeof(videobuffer_t) * req.count);
+	webcam->buffers = malloc(sizeof(videobuffer_t) * req.count);
+	memset(webcam->buffers, 0, sizeof(videobuffer_t) * req.count);
 	if (!webcam->buffers) {
 		LOG(LOG_ERR, "Webcam: Out of buffer memory");
 		return false;
@@ -275,7 +276,8 @@ void * webcam_new(char * path, char * format, int width, int height)
 		return NULL;
 	}
 
-	webcam_t * webcam = malloc0(sizeof(webcam_t));
+	webcam_t * webcam = malloc(sizeof(webcam_t));
+	memset(webcam, 0, sizeof(webcam_t));
 	webcam->fd = fd;
 	webcam->path = strdup(path);
 	webcam->format = webcam_getformat(format);

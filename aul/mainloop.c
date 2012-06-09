@@ -94,10 +94,12 @@ void mainloop_init()
 		list_add(&empty_timers, &timers[i].empty_list);
 	}
 	
-	root = malloc0(sizeof(mainloop_t));
+	root = malloc(sizeof(mainloop_t));
+	memset(root, 0, sizeof(mainloop_t));
 	mainloop_new(AUL_MAINLOOP_ROOT_NAME, root);
 }
 
+// TODO - return mainloop_t, not as a parameter!
 void mainloop_new(const char * name, mainloop_t * loop)
 {
 	memset(loop, 0, sizeof(mainloop_t));

@@ -78,16 +78,28 @@ static bool ffi_prep(const char * sig, ffi_type ** ret, ffi_type *** args, excep
 ffi_function_t * function_build(void * function, const char * sig, exception_t ** err)
 {
 	// Sanity check
-	if (exception_check(err))
 	{
-		return NULL;
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
+		if unlikely(function == NULL || sig == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
 	}
 
-	ffi_function_t * ffi = malloc0(sizeof(ffi_function_t));
-	ffi->function = function;
-	ffi->cif = malloc0(sizeof(ffi_cif));
-	ffi->atypes = malloc0(sizeof(ffi_type *) * (method_numparams(method_params(sig)) + 1)); // Sentinel at end
+	size_t asize = sizeof(ffi_type *) * (method_numparams(method_params(sig)) + 1); // Sentinel at end
 
+	ffi_function_t * ffi = malloc(sizeof(ffi_function_t));
+	memset(ffi, 0, sizeof(ffi_function_t));
+	ffi->function = function;
+	ffi->cif = malloc(sizeof(ffi_cif));
+	ffi->atypes = malloc(asize);
+	memset(ffi->cif, 0, sizeof(ffi_cif));
+	memset(ffi->atypes, 0, asize);
 
 	// Prep sig --> ffi
 	if (!ffi_prep(sig, (ffi_type **)&ffi->rtype, (ffi_type ***)&ffi->atypes, err))
@@ -132,17 +144,30 @@ static void closure_callback(ffi_cif * cif, void * ret, void ** args, void * clo
 ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err)
 {
 	// Sanity check
-	if (exception_check(err))
 	{
-		return NULL;
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
+		if unlikely(function == NULL || callback == NULL || sig == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
 	}
 
-	ffi_closure_t * ci = malloc0(sizeof(ffi_closure_t));
+	size_t asize = sizeof(ffi_type *) * (method_numparams(method_params(sig)) + 1); // Sentinel at end
+
+	ffi_closure_t * ci = malloc(sizeof(ffi_closure_t));
+	memset(ci, 0, sizeof(ffi_closure_t));
 	ci->callback = callback;
 	ci->closure = ffi_closure_alloc(sizeof(ffi_closure), function);
-	ci->cif = malloc0(sizeof(ffi_cif));
-	ci->atypes = malloc0(sizeof(ffi_type *) * (method_numparams(method_params(sig)) + 1)); // Sentinel at end
+	ci->cif = malloc(sizeof(ffi_cif));
+	ci->atypes = malloc(asize);
 	ci->userdata = userdata;
+	memset(ci->cif, 0, sizeof(ffi_cif));
+	memset(ci->atypes, 0, asize);
 
 	// Prep sig --> ffi
 	if (!ffi_prep(sig, (ffi_type **)&ci->rtype, (ffi_type ***)&ci->atypes, err))

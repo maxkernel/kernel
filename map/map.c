@@ -81,7 +81,8 @@ static map_t * map_new(map_f mapping_function, double * from, double * to, size_
 	memcpy(src, from, length * sizeof(double));
 	memcpy(dest, to, length * sizeof(double));
 
-	map_t * map = malloc0(sizeof(map_t));
+	map_t * map = malloc(sizeof(map_t));
+	memset(map, 0, sizeof(map_t));
 	map->src_array = src;
 	map->dest_array = dest;
 	map->array_size = length;

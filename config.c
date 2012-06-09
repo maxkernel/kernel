@@ -150,17 +150,16 @@ static bool config_updatebacking(const meta_variable_t * variable, const char * 
 	return true;
 }
 
-config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err)
+config_t * config_new(const meta_t * meta, const meta_variable_t * config, exception_t ** err)
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
-			// Exception already set
 			return NULL;
 		}
 
-		if (meta == NULL || config_variable == NULL)
+		if unlikely(meta == NULL || config == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
@@ -172,86 +171,83 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config_variab
 
 	const char * name = NULL;
 	char sig = 0;
-	meta_getvariable(config_variable, &name, &sig, NULL, NULL);
+	meta_getvariable(config, &name, &sig, NULL, NULL);
 
 	char cache[CONFIG_SIZE_CACHE] = {0};
-	if (!config_updatecache(config_variable, cache, err))
+	if (!config_updatecache(config, cache, err))
 	{
 		return NULL;
 	}
 
 	string_t objectname = string_new("%s -> %s", path, name);
-	config_t * config = kobj_new("Config", objectname.string, config_info, config_destroy, sizeof(config_t));
-	config->variable = config_variable;
-	strcpy(config->cache, cache);
+	config_t * c = kobj_new("Config", objectname.string, config_info, config_destroy, sizeof(config_t));
+	c->variable = config;
+	strcpy(c->cache, cache);
 
 	LOGK(LOG_DEBUG, "Registered config variable '%s' in module %s", name, path);
-	return config;
+	return c;
 }
 
-bool config_apply(config_t * config, const model_config_t * config_newvalue, exception_t ** err)
+bool config_apply(config_t * config, const model_config_t * newvalue, exception_t ** err)
 {
 	// Sanity check
 	{
-		if (exception_check(err))
+		if unlikely(exception_check(err))
 		{
-			// Exception already set
 			return false;
 		}
 
-		if (config == NULL || config_newvalue == NULL)
+		if unlikely(config == NULL || newvalue == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return false;
 		}
 
-		if (config->variable == NULL)
+		if unlikely(config->variable == NULL)
 		{
 			exception_set(err, EINVAL, "Config variable backing is null!");
 			return false;
 		}
 	}
 
-	const char * name = NULL;
-	char sig = 0;
-	meta_getvariable(config->variable, &name, &sig, NULL, NULL);
+	const char * old_name = NULL;
+	char old_sig = 0;
+	meta_getvariable(config->variable, &old_name, &old_sig, NULL, NULL);
 
-	const char * newname = NULL;
-	char newsig = 1;
+	const char * new_name = NULL;
+	char new_sig = 1;
 	constraint_t constraints = constraint_empty();
-	const char * newvalue = NULL;
-	model_getconfig(config_newvalue, &newname, &newsig, &constraints, &newvalue);
+	const char * new_value = NULL;
+	model_getconfig(newvalue, &new_name, &new_sig, &constraints, &new_value);
 
-	if (strlen(newvalue) >= CONFIG_SIZE_CACHE)
+	if (strlen(new_value) >= CONFIG_SIZE_CACHE)
 	{
-		exception_set(err, ENOMEM, "Could not apply config %s, value too long! (CONFIG_SIZE_CACHE = %d)", name, CONFIG_SIZE_CACHE);
+		exception_set(err, ENOMEM, "Could not apply config %s, value too long! (CONFIG_SIZE_CACHE = %d)", old_name, CONFIG_SIZE_CACHE);
 		return false;
 	}
 
-	if (strcmp(name, newname) != 0 || sig != newsig)
+	if (strcmp(old_name, new_name) != 0 || old_sig != new_sig)
 	{
-		exception_set(err, EINVAL, "Applying config parameters invalid. Expected (%s, %c) got (%s, %c)", name, sig, newname, newsig);
+		exception_set(err, EINVAL, "Applying config parameters invalid. Expected (%s, %c) got (%s, %c)", old_name, old_sig, new_name, new_sig);
 		return false;
 	}
 
 	string_t hint = string_blank();
-	if (!constraint_check(&constraints, newvalue, hint.string, string_available(&hint)))
+	if (!constraint_check(&constraints, new_value, hint.string, string_available(&hint)))
 	{
-		exception_set(err, EINVAL, "Config %s, failed constraint check: %s", name, hint.string);
+		exception_set(err, EINVAL, "Config %s, failed constraint check: %s", old_name, hint.string);
 		return false;
 	}
 
-	LOGK(LOG_DEBUG, "Setting config variable %s='%s'", name, newvalue);
+	LOGK(LOG_DEBUG, "Setting config variable %s to '%s'", old_name, new_value);
 
-	if (!config_updatebacking(config->variable, newvalue, err))
+	if (!config_updatebacking(config->variable, new_value, err))
 	{
-		// Error happened and exception_t set in updatebacking, just return false
 		return false;
 	}
 
 	if (!config_updatecache(config->variable, config->cache, err))
 	{
-		// Error happened and exception_t set in updatecache, just return false
 		return false;
 	}
 

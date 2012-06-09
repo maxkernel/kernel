@@ -253,7 +253,7 @@ void model_getmodule(const model_module_t * module, const char ** path, const me
 void model_getconfig(const model_config_t * config, const char ** name, char * sig, constraint_t * constraints, const char ** value);
 void model_getblockinst(const model_linkable_t * linkable, const char ** name, const model_module_t ** module, const char ** sig, const char * const ** args, size_t * argslen);
 void model_getsyscall(const model_linkable_t * linkable, const char ** name, const char ** sig, const char ** desc);
-void model_getrategroup(const model_linkable_t * linkable, const char ** name, double * hertz);		// TODO - return rategroup blockinsts too??
+void model_getrategroup(const model_linkable_t * linkable, const char ** name, double * hertz);
 void model_getlink(const model_link_t * link, const model_linksymbol_t ** out, const model_linksymbol_t ** in);
 void model_getlinksymbol(const model_linksymbol_t * symbol, const model_linkable_t ** linkable, const char ** name, bool * hasindex, size_t * index);
 

@@ -27,7 +27,8 @@ static inline void mutex_init(mutex_t * mutex, int type)
 
 static inline mutex_t * mutex_new(int type)
 {
-	mutex_t * mutex = malloc0(sizeof(mutex_t));
+	mutex_t * mutex = malloc(sizeof(mutex_t));
+	memset(mutex, 0, sizeof(mutex_t));
 	mutex_init(mutex, type);
 	return mutex;
 }
@@ -47,7 +48,8 @@ static inline void cond_init(cond_t * cond)
 
 static inline cond_t * cond_new()
 {
-	cond_t * cond = malloc0(sizeof(cond_t));
+	cond_t * cond = malloc(sizeof(cond_t));
+	memset(cond, 0, sizeof(cond_t));
 	cond_init(cond);
 	return cond;
 }

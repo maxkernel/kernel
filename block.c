@@ -30,7 +30,7 @@ static void block_destroy(void * block)
 	}
 }
 
-block_t * block_new(module_t * module, const char * name, const char * newsig, blockconstructor_f new, blockact_f onupdate, blockact_f ondestroy, exception_t ** err)
+block_t * block_new(module_t * module, const meta_block_t * block, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -39,47 +39,56 @@ block_t * block_new(module_t * module, const char * name, const char * newsig, b
 			return NULL;
 		}
 
-		if unlikely(module == NULL || name == NULL || newsig == NULL)
+		if unlikely(module == NULL || block == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
 		}
-
-		if unlikely(strlen(newsig) != 0 && new == NULL)
-		{
-			exception_set(err, EINVAL, "Bad constructor for block '%s'", name);
-			return NULL;
-		}
 	}
 
-	string_t newffi_sig = string_new("%c:%s", T_POINTER, newsig);
+	const meta_t * meta = module_meta(module);
+	if (meta == NULL)
+	{
+		exception_set(err, EFAULT, "Could not get meta backing for module backing");
+		return NULL;
+	}
+
+	const char * block_name = NULL, * new_sig = NULL;
+	meta_callback_f new = NULL;
+	meta_getblock(block, &block_name, NULL, NULL, &new_sig, NULL, &new);
+	if (new_sig == NULL || (strlen(new_sig) > 0 && new == NULL))
+	{
+		exception_set(err, EINVAL, "Bad constructor defined for block '%s'", block_name);
+		return NULL;
+	}
+
+	const meta_blockcallback_t * onupdate = NULL, * ondestroy = NULL;
+	meta_lookupblockcbs(meta, block, &onupdate, &ondestroy);
+
+	meta_callback_vp_f onupdate_cb = NULL, ondestroy_cb = NULL;
+	meta_getblockcb(onupdate, NULL, NULL, &onupdate_cb);
+	meta_getblockcb(ondestroy, NULL, NULL, &ondestroy_cb);
+
+	if (onupdate_cb == NULL)
+	{
+		exception_set(err, EINVAL, "Block '%s' update function not defined!", block_name);
+		return NULL;
+	}
+
+	string_t newffi_sig = string_new("%c:%s", T_POINTER, new_sig);
 	ffi_function_t * newffi = function_build(new, newffi_sig.string, err);
 	if (newffi == NULL || exception_check(err))
 	{
 		return NULL;
 	}
 
-	/*
-	const char * name = NULL;
-	meta_getblock(backing, &name, NULL, NULL, NULL, NULL, NULL);
-
-	const meta_blockcallback_t * onupdate = NULL, * ondestroy = NULL;
-	if (!meta_lookupblockcbs(module_getmeta(module), backing, &onupdate, &ondestroy))
-	{
-		exception_set(err, EFAULT, "Could not lookup meta block callbacks on block %s", name);
-		return NULL;
-	}
-	*/
-
-	block_t * blk = kobj_new("Block", name, block_info, block_destroy, sizeof(block_t));
+	block_t * blk = kobj_new("Block", block_name, block_info, block_destroy, sizeof(block_t));
 	blk->module = module;
-	blk->name = strdup(name);
-	blk->newsig = strdup(newsig);
+	blk->name = strdup(block_name);
+	blk->newsig = strdup(new_sig);
 	blk->new = newffi;
-	blk->onupdate = onupdate;
-	blk->ondestroy = ondestroy;
-	//meta_getblockcb(onupdate, NULL, NULL, &blk->onupdate);
-	//meta_getblockcb(ondestroy, NULL, NULL, &blk->ondestroy);
+	blk->onupdate = onupdate_cb;
+	blk->ondestroy = ondestroy_cb;
 	LIST_INIT(&blk->insts);
 
 	return blk;
@@ -99,6 +108,12 @@ void * block_callconstructor(block_t * block, void ** args)
 		{
 			return NULL;
 		}
+	}
+
+	if (block->new == NULL)
+	{
+		// No constructor defined, just return NULL
+		return NULL;
 	}
 
 	void * ret = NULL;

@@ -18,14 +18,13 @@ typedef struct
 	const char message[AUL_STRING_MAXLEN];
 } exception_t;
 
-exception_t * exception_new(int code, const char * fmt, ...) CHECK_PRINTF(2,3);
+exception_t * exception_new(int code, const char * fmt, ...) check_printf(2,3);
 exception_t * exception_vnew(int code, const char * fmt, va_list args);
-void exception_clear(exception_t * err);
 
-void exception_make(exception_t * err, int code, const char * fmt, ...) CHECK_PRINTF(3,4);
+void exception_make(exception_t * err, int code, const char * fmt, ...) check_printf(3,4);
 void exception_vmake(exception_t * err, int code, const char * fmt, va_list args);
 
-static inline void exception_set(exception_t ** err, int code, const char * fmt, ...) CHECK_PRINTF(3, 4);
+static inline void exception_set(exception_t ** err, int code, const char * fmt, ...) check_printf(3, 4);
 static inline void exception_set(exception_t ** err, int code, const char * fmt, ...)
 {
 	if (err != NULL)
@@ -37,17 +36,10 @@ static inline void exception_set(exception_t ** err, int code, const char * fmt,
 	}
 }
 
-// TODO - make #define??
-static inline bool exception_check(exception_t ** err)
-{
-	return ((err) != NULL && *(err) != NULL && (*(err))->code != 0);
-}
+#define exception_clear(err)	(memset(err, 0, sizeof(exception_t)))
 
-static inline void exception_free(exception_t * err)
-{
-	if (err != NULL) free(err);
-}
-
+static inline bool exception_check(exception_t ** err)	{ return ((err) != NULL && *(err) != NULL && (*(err))->code != 0); }
+static inline void exception_free(exception_t * err) { if (err != NULL) free(err); }
 
 #ifdef __cplusplus
 }

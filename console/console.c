@@ -138,10 +138,10 @@ bool module_init()
 {
 	// Initialize buffers
 	LIST_INIT(&free_buffers);
-	msgbuffer_t * buffers = malloc0(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
+	msgbuffer_t * buffers = malloc(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
+	memset(buffers, 0, sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 
-	size_t i = 0;
-	for (; i<CONSOLE_BUFFERS; i++)
+	for (size_t i = 0; i<CONSOLE_BUFFERS; i++)
 	{
 		list_add(&free_buffers, &buffers[i].free_list);
 	}

@@ -30,7 +30,7 @@ const char * http_getparam(httpcontext_t * ctx, const char * name);
 httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err);
 void http_adduri(httpcontext_t * ctx, const char * uri, httpmatch_t match, httpcallback_f cb, void * userdata);
 
-void http_printf(httpconnection_t * conn, const char * fmt, ...) CHECK_PRINTF(2, 3);
+void http_printf(httpconnection_t * conn, const char * fmt, ...) check_printf(2, 3);
 void http_vprintf(httpconnection_t * conn, const char * fmt, va_list args);
 void http_write(httpconnection_t * conn, const void * buf, size_t len);
 

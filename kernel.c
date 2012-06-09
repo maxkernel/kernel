@@ -1374,38 +1374,11 @@ int main(int argc, char * argv[])
 					}
 				}
 
-				const char * block_name = NULL;
-				const model_module_t * module = NULL;
-				const char * sig = NULL;
-				const char * const * args = NULL;
-				size_t argslen = 0;
-				model_getblockinst(linkable, &block_name, &module, &sig, &args, &argslen);
-
-				const char * module_path = NULL;
-				const meta_t * meta = NULL;
-				model_getmodule(module, &module_path, &meta);
-
-				const char * module_name = NULL;
-				meta_getinfo(meta, NULL, &module_name, NULL, NULL, NULL);
-
-				LOGK(LOG_DEBUG, "Creating block instance '%s' in module %s", block_name, module_path);
-
-				if (method_numparams(sig) != argslen)
-				{
-					LOGK(LOG_FATAL, "Bad constructor arguments given to block '%s' in module %s", block_name, module_path);
-					// Will exit
-				}
-
-				string_t name = string_new("%s.%s", module_name, block_name);
-
-				module_t * m = model_userdata(model_object(module));
-				block_t * b = module_lookupblock(m, block_name);
-
 				exception_t * e = NULL;
-				blockinst_t * bi = blockinst_new(b, name.string, args, &e);
+				blockinst_t * bi = blockinst_new(linkable, &e);
 				if (bi == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create block '%s': %s", block_name, (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create block: %s", (e == NULL)? "Unknown error" : e->message);
 					// Will exit
 				}
 
@@ -1422,16 +1395,11 @@ int main(int argc, char * argv[])
 					}
 				}
 
-				const char * name = NULL, * sig = NULL, * desc = NULL;
-				model_getsyscall(linkable, &name, &sig, &desc);
-
-				LOGK(LOG_DEBUG, "Creating syscall %s(%s)", name, sig);
-
 				exception_t * e = NULL;
-				syscallblock_t * sb = syscallblock_new(name, sig, desc, &e);
+				syscallblock_t * sb = syscallblock_new(linkable, &e);
 				if (sb == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create syscall %s(%s): %s", name, sig, (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create syscall: %s", (e == NULL)? "Unknown error" : e->message);
 					// Will exit
 				}
 

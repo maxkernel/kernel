@@ -98,6 +98,12 @@ bool port_makeblockports(const block_t * block, portlist_t * list, exception_t *
 	return true;
 }
 
+void port_add(portlist_t * list, port_t * port)
+{
+	list_add(list, &port->port_list);
+	port_sort(list);
+}
+
 void port_sort(portlist_t * ports)
 {
 	int port_compare(list_t * a, list_t * b)

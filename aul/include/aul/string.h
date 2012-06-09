@@ -21,16 +21,15 @@ typedef struct
 #define STRING_INIT				{{0},0}
 
 string_t string_blank();
-string_t string_new(const char * fmt, ...) CHECK_PRINTF(1, 2);
-void string_set(string_t * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
+string_t string_new(const char * fmt, ...) check_printf(1, 2);
+void string_set(string_t * str, const char * fmt, ...) check_printf(2, 3);
 void string_vset(string_t * str, const char * fmt, va_list args);
-void string_append(string_t * str, const char * fmt, ...) CHECK_PRINTF(2, 3);
+void string_append(string_t * str, const char * fmt, ...) check_printf(2, 3);
 void string_vappend(string_t * str, const char * fmt, va_list args);
 
 size_t string_available(const string_t * str);
 string_t string_clone(const string_t * str);
-// TODO - remove string_copy
-char * string_copy(const string_t * str);
+char * string_copy(const string_t * str);		// TODO - remove string_copy (use strdup)
 void string_clear(string_t * str);
 
 

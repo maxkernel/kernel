@@ -73,7 +73,8 @@ void * jpeg_new(char * format, int quality)
 		return NULL;
 	}
 
-	jpeg_t * jpeg = malloc0(sizeof(jpeg_t));
+	jpeg_t * jpeg = malloc(sizeof(jpeg_t));
+	memset(jpeg, 0, sizeof(jpeg_t));
 	jpeg->isvalid = false;
 	jpeg->quality = quality;
 	jpeg->converter = converter;

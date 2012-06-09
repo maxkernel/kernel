@@ -193,7 +193,8 @@ void * gps_new(char * serial_port, int baud)
 		return NULL;
 	}
 
-	gps_t * gps = malloc0(sizeof(gps_t));
+	gps_t * gps = malloc(sizeof(gps_t));
+	memset(gps, 0, sizeof(gps_t));
 
 	string_set(&gps->serial_port, "%s", serial_port);
 	gps->serial_speed = speed;

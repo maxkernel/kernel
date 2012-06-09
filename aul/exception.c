@@ -19,17 +19,11 @@ exception_t * exception_new(int code, const char * fmt, ...)
 
 exception_t * exception_vnew(int code, const char * fmt, va_list args)
 {
-	exception_t * err = malloc0(sizeof(exception_t));
+	exception_t * err = malloc(sizeof(exception_t));
 	exception_clear(err);
 	exception_vmake(err, code, fmt, args);
 
 	return err;
-}
-
-void exception_clear(exception_t * err)
-{
-	err->code = 0;
-	memset((void *)err->message, 0, AUL_STRING_MAXLEN);
 }
 
 void exception_make(exception_t * err, int code, const char * fmt, ...)

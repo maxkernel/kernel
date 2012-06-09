@@ -342,7 +342,7 @@ syscall_t * syscall_get(const char * name);
 void syscall_destroy(void * syscall);
 
 // TODO rename syscallblock to something like syscallblockinst (because it's really an instance)
-syscallblock_t * syscallblock_new(const char * name, const char * sig, const char * desc, exception_t ** err);
+syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t ** err);
 #define syscallblock_links(sb)	(&(sb)->links)
 #define syscallblock_ports(sb)	(&(sb)->ports)
 
@@ -367,7 +367,7 @@ void function_call(ffi_function_t * ffi, void * ret, void ** args);
 ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err);
 void closure_free(ffi_closure_t * ci);
 
-block_t * block_new(module_t * module, const char * name, const char * newsig, blockconstructor_f new, blockact_f onupdate, blockact_f ondestroy, exception_t ** err);
+block_t * block_new(module_t * module, const meta_block_t * block, exception_t ** err);
 void block_add(block_t * block, blockinst_t * blockinst);
 void * block_callconstructor(block_t * block, void ** args);
 bool block_iolookup(const block_t * block, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc);
@@ -379,7 +379,7 @@ bool block_ionext(iterator_t itr, const meta_blockio_t ** blockio);		// TODO - r
 #define block_newsig(block)		((block)->newsig)
 
 #define BLOCKINST_BUFFERMAX		256
-blockinst_t * blockinst_new(block_t * block, const char * name, const char * const * args, exception_t ** err);
+blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** err);
 bool blockinst_create(blockinst_t * blockinst, exception_t ** err);
 void blockinst_act(blockinst_t * blockinst, blockact_f callback);
 #define blockinst_block(blockinst)		((blockinst)->block)
@@ -406,15 +406,11 @@ void link_sort(linklist_t * links);
 port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
 port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name);
 bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err);
+void port_add(portlist_t * list, port_t * port);
 void port_sort(portlist_t * ports);
-static inline void port_add(portlist_t * list, port_t * port)
-{
-	list_add(list, &port->port_list);
-	port_sort(list);
-}
 #define port_iobacking(port)	((port)->backing)
 
-#define RATEGROUP_PRIO		(1)
+#define RATEGROUP_PRIO		(1)		// TODO - should we make this highest priority
 rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** err);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
 bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err);
@@ -422,8 +418,8 @@ bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** er
 #define rategroup_links(rg)		(trigger_varclock_links((rg)->trigger))
 #define rategroup_ports(rg)		(trigger_varclock_ports((rg)->trigger))
 
-config_t * config_new(const meta_t * meta, const meta_variable_t * config_variable, exception_t ** err);
-bool config_apply(config_t * config, const model_config_t * config_newvalue, exception_t ** err);
+config_t * config_new(const meta_t * meta, const meta_variable_t * config, exception_t ** err);
+bool config_apply(config_t * config, const model_config_t * newvalue, exception_t ** err);
 
 void cal_init();
 void cal_sort();

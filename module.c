@@ -258,18 +258,7 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 		{
 			while (meta_blocknext(bitr, &block))
 			{
-				const char * block_name = NULL, *new_sig;
-				meta_callback_f new = NULL;
-				meta_getblock(block, &block_name, NULL, NULL, &new_sig, NULL, &new);
-
-				const meta_blockcallback_t * onupdate = NULL, * ondestroy = NULL;
-				meta_lookupblockcbs(meta, block, &onupdate, &ondestroy);
-
-				meta_callback_vp_f onupdate_cb = NULL, ondestroy_cb = NULL;
-				meta_getblockcb(onupdate, NULL, NULL, &onupdate_cb);
-				meta_getblockcb(ondestroy, NULL, NULL, &ondestroy_cb);
-
-				block_t * blk = block_new(module, block_name, new_sig, new, onupdate_cb, ondestroy_cb, err);
+				block_t * blk = block_new(module, block, err);
 				if (blk == NULL || exception_check(err))
 				{
 					return NULL;

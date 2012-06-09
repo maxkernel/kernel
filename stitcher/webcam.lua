@@ -1,7 +1,7 @@
 -- Configure the webcam modules. Create the video pipeline
--- Created by Andrew Klofas - aklofas@gmail.com - December 2010
+-- Created by Andrew Klofas - andrew@maxkernel.com - June 2012
 
-debug("Setting up the webcam modules")
+debug("Setting up the vision pipeline")
 
 -- Set up the webcam module
 webcam_module = loadmodule("webcam")

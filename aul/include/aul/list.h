@@ -114,9 +114,7 @@ static inline void list_move_tail(list_t *list, list_t *head)
  * @member:	the name of the list_struct within the struct.
  */
 #define list_entry(ptr, type, member) \
-	((type *)((char *)(ptr)-offsetof(type, member)))
-//(unsigned long)(&((type *)0)->member)
-// TODO - change char * to void * and see if it still works (I think it should, right?)
+	((type *)((void *)(ptr)-offsetof(type, member)))
 
 /**
  * list_foreach	-	iterate over a list
@@ -208,7 +206,7 @@ static inline void list_sort(list_t * head, list_compare_f cmp)
 		return;
 	}
 
-	//simple bubble sort
+	// Simple bubble sort
 	// TODO - make better
 	for (i=len-1; i>0; --i)
 	{
