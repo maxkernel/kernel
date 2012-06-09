@@ -11,7 +11,7 @@ extern "C" {
 
 #define AUL_LOG_DOMAIN			"A-UTIL"
 #define AUL_LOG_MAXLISTENERS	10
-#define AUL_LOG_MAXFILESIZE		(400 * 1024)	/* 400 KB */
+#define AUL_LOG_MAXFILESIZE		(400 * 1024)	// 400 KB
 
 typedef enum
 {

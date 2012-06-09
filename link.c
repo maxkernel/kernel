@@ -351,6 +351,13 @@ static void copy_i2i(const void * linkdata, const void * from, bool from_isnull,
 	*(int *)to = *(const int *)from;
 }
 
+static void copy_i2d(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
+{
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
+	*(double *)to = (double)*(const int *)from;
+}
+
 static void copy_d2d(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
 	unused(linkdata); unused(from_isnull); unused(to_isnull);
@@ -420,6 +427,7 @@ link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, ch
 			switch (to_sig)
 			{
 				case T_INTEGER:		makedata_null();		return copy_i2i;
+				case T_DOUBLE:		makedata_null();		return copy_i2d;
 				default:									return NULL;
 			}
 		}

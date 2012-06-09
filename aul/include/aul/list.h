@@ -68,20 +68,6 @@ static inline list_t * list_prev(list_t * item)
 	return item->prev;
 }
 
-#if 0
-/*
- * Delete a list entry by making the prev/next entries
- * point to each other.
- *
- * This is only for internal list manipulation where we know
- * the prev/next entries already!
- */
-static inline void __list_del(list_t *prev, list_t *next)
-{
-	next->prev = prev;
-	prev->next = next;
-}
-#endif
 
 /**
  * list_remove - removes an entry from list.

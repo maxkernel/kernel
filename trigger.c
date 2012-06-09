@@ -7,13 +7,10 @@
 #include <kernel-priv.h>
 
 
-#define MAXIMUM_SLEEP_NANO		50000000	//max sleep 50 milliseconds
-#define WARN_NSEC_TOLLERENCE	5000		//warn if clock overshoot by (5 microseconds)
+#define MAXIMUM_SLEEP_NANO		50000000	// Max sleep 50 milliseconds
+#define WARN_NSEC_TOLLERENCE	5000		// Warn if clock overshoot by (5 microseconds)
 
-#define VARCLOCK_NAME			"variable trigger"
-#define VARCLOCK_KOBJ_NAME		"variable clock trigger"
-#define VARCLOCK_BLK_NAME		"varclock"
-#define VARCLOCK_BLK_IO			"rate"
+#define VARCLOCK_RATE_PORT		"rate"
 
 
 static inline void addnanos(struct timespec * val, uint64_t add_nanos)
@@ -73,7 +70,7 @@ bool trigger_watch(trigger_t * trigger)
 	return trigger->function(trigger);
 }
 
-/*------------------- CLOCK -------------------------*/
+// ------------------- CLOCK -------------------------
 static char * trigger_infoclock(void * object)
 {
 	unused(object);
@@ -153,7 +150,7 @@ trigger_clock_t * trigger_newclock(const char * name, double freq_hz)
 	return clk;
 }
 
-/*----------------------- VARCLOCK ------------------------*/
+// ----------------------- VARCLOCK ------------------------
 static char * trigger_infovarclock(void * object)
 {
 	unused(object);
@@ -167,11 +164,22 @@ static bool trigger_waitvarclock(trigger_t * trigger)
 	trigger_varclock_t * vclk = (void *)trigger;
 	trigger_clock_t * clk = &vclk->clock;
 
-	// TODO IMPORTANT - get block input rate!
-	//io_beforeblock(clk->blockinst);
-	//const double * new_freq_hz = io_doinput(clk->blockinst, VARCLOCK_BLK_IO);
+	// Handle the input/output links
+	link_doinputs(&vclk->ports, &vclk->links);
+	link_dooutputs(&vclk->ports, &vclk->links);
 
-	uint64_t new_interval = clk->interval_nsec; //////new_freq_hz == NULL? clk->interval_nsec : hz2nanos(*new_freq_hz);
+	// Get the (possibly) new block input rate
+	port_t * rateport = port_lookup(&vclk->ports, meta_input, VARCLOCK_RATE_PORT);
+	iobacking_t * ratebacking = port_iobacking(rateport);
+
+	const double * new_freq_hz = NULL;
+	if (!iobacking_isnull(ratebacking))
+	{
+		new_freq_hz = iobacking_data(ratebacking);
+	}
+
+
+	uint64_t new_interval = (new_freq_hz == NULL)? clk->interval_nsec : hz2nanos(*new_freq_hz);
 	if (new_interval != clk->interval_nsec)
 	{
 		clk->interval_nsec = new_interval;
@@ -191,56 +199,41 @@ static bool trigger_waitvarclock(trigger_t * trigger)
 	return trigger_waitclock(trigger);
 }
 
-/*
-blockinst_t * trigger_varclock_getblockinst(trigger_t * trigger)
+trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz, exception_t ** err)
 {
-	if (strcmp(trigger->kobject.object_name + (strlen(trigger->kobject.object_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
+	// Sanity check
 	{
-		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.object_name);
-		return NULL;
-	}
-
-	trigger_varclock_t * clk = (trigger_varclock_t *)trigger;
-	return clk->blockinst;
-}
-
-binput_inst_t * trigger_varclock_getrateinput(trigger_t * trigger)
-{
-	if (strcmp(trigger->kobject.object_name + (strlen(trigger->kobject.object_name) - strlen(VARCLOCK_NAME)), VARCLOCK_NAME) != 0)
-	{
-		LOGK(LOG_ERR, "KObject '%s' in not a valid varclock trigger", trigger->kobject.object_name);
-		return NULL;
-	}
-
-	trigger_varclock_t * clk = (trigger_varclock_t *)trigger;
-
-	list_t * pos;
-	binput_inst_t * in = NULL;
-	list_foreach(pos, &clk->blockinst->inputs_inst)
-	{
-		binput_inst_t * test = list_entry(pos, binput_inst_t, blockinst_list);
-		if (strcmp(VARCLOCK_BLK_IO, test->input->name) == 0)
+		if unlikely(exception_check(err))
 		{
-			in = test;
-			break;
+			return NULL;
+		}
+
+		if unlikely(name == NULL || initial_freq_hz <= 0.0)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
 		}
 	}
 
-	if (in == NULL)
+	// Create the rate port
+	iobacking_t * ratebacking = iobacking_new('d', err);
+	if (ratebacking == NULL || exception_check(err))
 	{
-		LOGK(LOG_WARN, "Variable clock '%s' doesn't have a connected input!", clk->kobject.object_name);
+		return NULL;
 	}
 
-	return in;
-}
-*/
+	port_t * rateport = port_new(meta_input, VARCLOCK_RATE_PORT, ratebacking, err);
+	if (rateport == NULL || exception_check(err))
+	{
+		return NULL;
+	}
 
-trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz)
-{
-	trigger_varclock_t * clk = trigger_new(name, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
-	clk->clock.interval_nsec = hz2nanos(initial_freq_hz);
-	linklist_init(&clk->links);
-	portlist_init(&clk->ports);
+	// Create the trigger
+	trigger_varclock_t * vclk = trigger_new(name, trigger_infovarclock, NULL, trigger_waitvarclock, sizeof(trigger_varclock_t));
+	vclk->clock.interval_nsec = hz2nanos(initial_freq_hz);
+	linklist_init(&vclk->links);
+	portlist_init(&vclk->ports);
+	port_add(&vclk->ports, rateport);
 
-	return clk;
+	return vclk;
 }

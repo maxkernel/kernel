@@ -399,12 +399,12 @@ module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Captures webcam frames (video4linux2) and outputs YUV format");
 
-define_block(device, "A webcam block", webcam_new, "ssii", "(1) The device file [eg. /dev/video0] (2) The output format [eg. yuv422] (3) The initial capture width (4) The initial capture height");
-block_input(		device, 	width, 		'i', 	"Requested frame capture width. Changing this may cause momentary image artifacts");
-block_input(		device, 	height, 	'i', 	"Requested frame capture height. Changing this may cause momentary image artifacts");
-block_output(		device, 	width, 		'i', 	"Actual frame capture width");
-block_output(		device, 	height, 	'i', 	"Actual frame capture height");
-block_output(		device, 	frame, 		'x', 	"The captured frame");
+define_block(webcam, "A webcam block", webcam_new, "ssii", "(1) The device file [eg. /dev/video0] (2) The output format [eg. yuv422] (3) The initial capture width (4) The initial capture height");
+block_input(		webcam, 	width, 		'i', 	"Requested frame capture width. Changing this may cause momentary image artifacts");
+block_input(		webcam, 	height, 	'i', 	"Requested frame capture height. Changing this may cause momentary image artifacts");
+block_output(		webcam, 	width, 		'i', 	"Actual frame capture width");
+block_output(		webcam, 	height, 	'i', 	"Actual frame capture height");
+block_output(		webcam, 	frame, 		'x', 	"The captured frame");
 // TODO - add timestamp output
-block_onupdate(		device, 	webcam_update);
-block_ondestroy(	device, 	webcam_destroy);
+block_onupdate(		webcam, 	webcam_update);
+block_ondestroy(	webcam, 	webcam_destroy);

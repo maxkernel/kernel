@@ -1049,11 +1049,46 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 
 		case model_syscall:
 		{
-			if (strcmp(outsym.name, "a") != 0)
+			// Compile the regex
+			regex_t pattern = {0};
+			if (regcomp(&pattern, "^a([0-9]+)$", REG_EXTENDED) != 0)
 			{
-				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a[0]' ... 'a[n]')", outname);
+				exception_set(err, EFAULT, "Bad model_newlink syscall regex!");
 				return NULL;
 			}
+
+			// Parse the arg
+			regmatch_t match[2];
+			memset(match, 0, sizeof(regmatch_t) * 2);
+			if (regexec(&pattern, outsym.name, 2, match, 0) != 0)
+			{
+				exception_set(err, EINVAL, "Syscall has no output named '%s' (Only options: 'a0', 'a1', ... 'an')", outname);
+				return NULL;
+			}
+
+			// Pull out the index (the number after 'a')
+			size_t index = parse_int(&outsym.name[match[1].rm_so], NULL);
+
+			// The number should be less than the number of params in the sig
+			{
+				// Grab the syscall sig
+				const char * sig = out->backing.syscall->sig;
+
+				// Get past the ':'
+				while (*sig != ':' && *sig != '\0')
+				{
+					sig += 1;
+				}
+
+				if (strlen(sig) <= (index + 1))
+				{
+					exception_set(err, EINVAL, "Invalid index of output to syscall: '%s'", outname);
+					return NULL;
+				}
+			}
+
+			// Free the regex
+			regfree(&pattern);
 
 			break;
 		}

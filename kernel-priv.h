@@ -305,7 +305,7 @@ typedef struct
 
 #define LOGFILE					"maxkernel.log"
 #define PIDFILE					"/var/run/maxkernel.pid"
-#define LOGBUF_SIZE				(400 * 1024)		/* 400 KB */
+#define LOGBUF_SIZE				(400 * 1024)		// 400 KB
 
 
 
@@ -356,7 +356,7 @@ kthread_t * kthread_self();
 void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
 bool trigger_watch(trigger_t * trigger);
 trigger_clock_t * trigger_newclock(const char * name, double freq_hz);
-trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz);
+trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz, exception_t ** err);
 #define trigger_cast(t)			((trigger_t *)(t))
 #define trigger_varclock_links(t)	(&(t)->links)
 #define trigger_varclock_ports(t)	(&(t)->ports)

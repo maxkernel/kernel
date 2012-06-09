@@ -314,15 +314,15 @@ static int l_newsyscall(lua_State * L)
 			entry_t * avalue = luaL_checkudata(L, -1, ENTRY_METATABLE);
 			if (!model_linkable(avalue->head->type))
 			{
-				return luaL_error(L, "Invalid linkable for item #a%d", index+1);
+				return luaL_error(L, "Invalid linkable for item a%d", index);
 			}
 
-			string_t aname = string_new("a%d", index+1);
+			string_t aname = string_new("a%d", index);
 
 			model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
 			if (link == NULL || exception_check(&e))
 			{
-				return luaL_error(L, "link(a%d) failed: %s", index+1, (e == NULL)? "Unknown error!" : e->message);
+				return luaL_error(L, "link(a%d) failed: %s", index, (e == NULL)? "Unknown error!" : e->message);
 			}
 		}
 
@@ -548,12 +548,10 @@ bool interpret_lua(model_t * model, const char * path, const interpret_callbacks
 		exception_set(err, ECANCELED, "Lua error: %s", lua_tostring(L, -1));
 		ret = false;
 	}
-	/*
-	// Register the functions
 
+	// Register the functions
 	//lua_register(L, "include", l_include);	// TODO - come up with an alternative to this!
 	//lua_register(L, "dofile", l_include);
-	*/
 
 	// Close down
 	lua_close(L);

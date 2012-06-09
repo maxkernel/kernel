@@ -14,7 +14,7 @@
 #define MAX_ROWSIZE			1600
 #define BUFFER_SIZE			(20 * 1024)		// 20 KB
 
-/*-------------------- JPEG STRUCT & MANAGE FUNCS -------------*/
+// -------------------- JPEG STRUCT & MANAGE FUNCS -------------
 static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
 static bool js_yuv422(JDIMENSION width, JDIMENSION height, size_t buffersize);
 
@@ -111,7 +111,7 @@ void jpeg_free(void * data)
 	free(jpeg);
 }
 
-/*--------------------------- LIBJPEG ERROR HANDLERS ---------------------*/
+// --------------------------- LIBJPEG ERROR HANDLERS ---------------------
 static void jpeg_error_exit(j_common_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
@@ -124,7 +124,7 @@ static void jpeg_output_message(j_common_ptr cinfo)
 	LOG(LOG_ERR, "libJPEG Error: %s", cinfo->err->jpeg_message_table[cinfo->err->msg_code]);
 }
 
-/*-------------------------- LIBJPEG DESTINATION MANAGER HANDLERS --------------*/
+// -------------------------- LIBJPEG DESTINATION MANAGER HANDLERS --------------
 void jpeg_destinit(j_compress_ptr cinfo)
 {
 	jpeg_t * jpeg = cinfo->client_data;
@@ -156,7 +156,7 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 	return true;
 }
 
-/*-------------------------- THE BEEF OF THE MODULE ------------------------*/
+// -------------------------- THE BEEF OF THE MODULE ------------------------
 static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
 {
 	// Algorithm developed to use same memory buffer for converting y1,u,y2,v -> y1,u,v,y2,u,v
