@@ -38,11 +38,12 @@ extern "C" {
 #define LOG_INFO		LEVEL_INFO
 #define LOG_DEBUG		LEVEL_DEBUG
 
-typedef void (*destructor_f)(void * object);
-typedef char * (*info_f)(void * object);
+typedef struct __kobject_t kobject_t;
+
+typedef void (*destructor_f)(kobject_t * object);
+typedef ssize_t (*info_f)(kobject_t * object, void * buffer, size_t length);
 typedef bool (*handler_f)(void * userdata);
 
-typedef struct __kobject_t kobject_t;
 struct __kobject_t
 {
 	const char * class_name;

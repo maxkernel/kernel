@@ -126,7 +126,7 @@ typedef struct {
 	kobject_t kobject;
 
 	list_t module_list;
-	const meta_variable_t * variable;
+	const meta_variable_t * variable;	// TODO - remove this field!!!
 	char cache[CONFIG_SIZE_CACHE];
 } config_t;
 
@@ -203,9 +203,9 @@ struct __block_t
 	list_t module_list;
 
 	module_t * module;
-	const char * name;
+	char * name;
 
-	const char * newsig;
+	char * newsig;
 	ffi_function_t * new;
 
 	blockact_f onupdate;
@@ -220,7 +220,7 @@ struct __blockinst_t
 	list_t block_list;
 
 	block_t * block;
-	const char * name;
+	char * name;
 	const char * const * args;		// TODO - make this a copy of the backing args (somehow!)
 
 	linklist_t links;
@@ -268,7 +268,7 @@ typedef struct
 	kobject_t kobject;
 	list_t global_list;
 
-	const char * name;
+	char * name;
 	trigger_varclock_t * trigger;
 
 	list_t blockinsts;
@@ -339,7 +339,6 @@ void memfs_rewindfd(int fd);
 
 syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, const char * desc, exception_t ** err);
 syscall_t * syscall_get(const char * name);
-void syscall_destroy(void * syscall);
 
 // TODO rename syscallblock to something like syscallblockinst (because it's really an instance)
 syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t ** err);
@@ -365,7 +364,7 @@ ffi_function_t * function_build(void * function, const char * sig, exception_t *
 void function_free(ffi_function_t * ffi);
 void function_call(ffi_function_t * ffi, void * ret, void ** args);
 ffi_closure_t * closure_build(void * function, closure_f callback, const char * sig, void * userdata, exception_t ** err);
-void closure_free(ffi_closure_t * ci);
+void closure_free(ffi_closure_t * closure);
 
 block_t * block_new(module_t * module, const meta_block_t * block, exception_t ** err);
 void block_add(block_t * block, blockinst_t * blockinst);
@@ -376,6 +375,7 @@ bool block_ionext(iterator_t itr, const meta_blockio_t ** blockio);		// TODO - r
 #define block_module(block)		((block)->module)
 #define block_name(block)		((block)->name)
 #define block_cbupdate(block)	((block)->onupdate)
+#define block_cbdestroy(block)	((block)->ondestroy)
 #define block_newsig(block)		((block)->newsig)
 
 #define BLOCKINST_BUFFERMAX		256
@@ -393,21 +393,21 @@ void iobacking_copy(iobacking_t * backing, const void * data);
 #define iobacking_isnull(backing)	((backing)->isnull)
 #define iobacking_data(backing)	((void *)(backing)->data)
 
-#define linklist_init(l)		({ LIST_INIT(&(l)->inputs); LIST_INIT(&(l)->outputs); })
+#define linklist_init(l)		({ list_init(&(l)->inputs); list_init(&(l)->outputs); })
 iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * outlinks, char insig, linklist_t * inlinks, exception_t ** err);
+void link_destroy(linklist_t * links);
 link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, char to_sig, void ** linkdata);
 void link_doinputs(portlist_t * ports, linklist_t * links);
 void link_dooutputs(portlist_t * ports, linklist_t * links);
 void link_sort(linklist_t * links);
 #define link_symbol(link)		((link)->symbol)
 
-#define portlist_init(l)		({ LIST_INIT(l); })
+#define portlist_init(l)		({ list_init(l); })
 #define port_test(port, iotype, ioname)		((port)->type == (iotype) && strcmp((port)->name, (ioname)) == 0)
-port_t * port_new(meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
+bool port_add(portlist_t * ports, meta_iotype_t type, const char * name, iobacking_t * backing, exception_t ** err);
+void port_destroy(portlist_t * ports);
 port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name);
 bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err);
-void port_add(portlist_t * list, port_t * port);
-void port_sort(portlist_t * ports);
 #define port_iobacking(port)	((port)->backing)
 
 #define RATEGROUP_PRIO		(1)		// TODO - should we make this highest priority

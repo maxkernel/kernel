@@ -18,7 +18,6 @@ typedef struct
 	size_t length;
 } string_t;
 
-#define STRING_INIT				{{0},0}
 
 string_t string_blank();
 string_t string_new(const char * fmt, ...) check_printf(1, 2);

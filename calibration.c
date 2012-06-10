@@ -145,9 +145,9 @@ static bool cal_updatebacking(calentry_t * entry, const char * value)
 void cal_init()
 {
 	memset(&calibration, 0, sizeof(calibration_t));
-	LIST_INIT(&calibration.entries);
-	LIST_INIT(&calibration.previews);
-	LIST_INIT(&calibration.modechanges);
+	list_init(&calibration.entries);
+	list_init(&calibration.previews);
+	list_init(&calibration.modechanges);
 }
 
 void cal_sort()

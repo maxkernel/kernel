@@ -196,6 +196,53 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 	return backing;
 }
 
+void link_destroy(linklist_t * links)
+{
+	// Sanity check
+	{
+		if unlikely(links == NULL)
+		{
+			return;
+		}
+	}
+
+	// Free input links
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &links->inputs)
+		{
+			link_t * link = list_entry(pos, link_t, link_list);
+			list_remove(pos);
+
+			// Don't free link->backing. It is a shared backing between output and input.
+
+			if (link->linkdata != NULL)
+			{
+				free(link->linkdata);
+			}
+			free(link);
+		}
+	}
+
+	// Free output links
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &links->outputs)
+		{
+			link_t * link = list_entry(pos, link_t, link_list);
+			list_remove(pos);
+
+			// Don't free link->backing. It is a shared backing between output and input.
+
+			if (link->linkdata != NULL)
+			{
+				free(link->linkdata);
+			}
+			free(link);
+		}
+	}
+}
+
 void link_doinputs(portlist_t * ports, linklist_t * links)
 {
 	// Sanity check

@@ -15,11 +15,11 @@ hashtable_t * hashtable_new(size_t numbuckets, hashcode_f hasher, hashequals_f e
 	table->equals = equals;
 	table->numbuckets = numbuckets;
 
-	LIST_INIT(&table->iterator);
+	list_init(&table->iterator);
 
 	for (int i=0; i<numbuckets; i++)
 	{
-		LIST_INIT(&table->buckets[i]);
+		list_init(&table->buckets[i]);
 	}
 
 	return table;

@@ -30,12 +30,12 @@ typedef struct
 	list_t buckets[AUL_HASHTABLE_BUCKETS];
 } hashtable_t;
 
-#define HASHTABLE_INIT(ptr, hashfunc, equalsfunc) \
+#define hashtable_init(ptr, hashfunc, equalsfunc) \
 	({ \
 		(ptr)->hasher = (hashfunc); (ptr)->equals = (equalsfunc);						\
 		(ptr)->numbuckets = AUL_HASHTABLE_BUCKETS;										\
-		LIST_INIT(&(ptr)->iterator);													\
-		for (int i=0; i<AUL_HASHTABLE_BUCKETS; ++i) { LIST_INIT(&(ptr)->buckets[i]); }	\
+		list_init(&(ptr)->iterator);													\
+		for (int i=0; i<AUL_HASHTABLE_BUCKETS; ++i) { list_init(&(ptr)->buckets[i]); }	\
 	})
 
 

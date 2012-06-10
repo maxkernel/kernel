@@ -137,7 +137,7 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 bool module_init()
 {
 	// Initialize buffers
-	LIST_INIT(&free_buffers);
+	list_init(&free_buffers);
 	msgbuffer_t * buffers = malloc(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 	memset(buffers, 0, sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 

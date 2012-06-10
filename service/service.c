@@ -254,8 +254,8 @@ bool module_init()
 	//initialize default services
 	service_default_init();
 
-	serviceloop = malloc(sizeof(mainloop_t));
-	mainloop_new("Service network loop", serviceloop);
+	serviceloop = mainloop_new("Service network loop");
+
 	mainloop_addtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL);
 	if (!kthread_newthread("Service server", KTH_PRIO_MEDIUM, service_runloop, service_stoploop, NULL, NULL))
 	{

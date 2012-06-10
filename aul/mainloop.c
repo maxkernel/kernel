@@ -81,8 +81,8 @@ void mainloop_init()
 	}
 
 	mutex_init(&mainloop_lock, M_RECURSIVE);
-	LIST_INIT(&empty_watchers);
-	LIST_INIT(&empty_timers);
+	list_init(&empty_watchers);
+	list_init(&empty_timers);
 
 	size_t i;
 	for (i=0; i<AUL_MAINLOOP_MAX_WATCHERS; i++)
@@ -94,14 +94,12 @@ void mainloop_init()
 		list_add(&empty_timers, &timers[i].empty_list);
 	}
 	
-	root = malloc(sizeof(mainloop_t));
-	memset(root, 0, sizeof(mainloop_t));
-	mainloop_new(AUL_MAINLOOP_ROOT_NAME, root);
+	root = mainloop_new(AUL_MAINLOOP_ROOT_NAME);
 }
 
-// TODO - return mainloop_t, not as a parameter!
-void mainloop_new(const char * name, mainloop_t * loop)
+mainloop_t * mainloop_new(const char * name)
 {
+	mainloop_t * loop = malloc(sizeof(mainloop_t));
 	memset(loop, 0, sizeof(mainloop_t));
 
 	loop->name = name;
@@ -109,7 +107,9 @@ void mainloop_new(const char * name, mainloop_t * loop)
 	loop->running = false;
 	mutex_init(&loop->runlock, M_RECURSIVE);
 
-	HASHTABLE_INIT(&loop->watching, hash_int, hash_inteq);
+	hashtable_init(&loop->watching, hash_int, hash_inteq);
+
+	return loop;
 }
 
 void mainloop_run(mainloop_t * loop)

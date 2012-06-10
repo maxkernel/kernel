@@ -10,20 +10,31 @@
 
 extern list_t rategroups;
 
-static char * rategroup_info(void * object)
+static ssize_t rategroup_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER RATEGROUP INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void rategroup_destroy(void * rategroup)
+static void rategroup_destroy(kobject_t * object)
 {
-	rategroup_t * rg = rategroup;
+	rategroup_t * rg = (rategroup_t *)object;
 
-	unused(rg);
-	// TODO - destroy the rategroup
+	// Destroy the rategroup block instances
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &rg->blockinsts)
+		{
+			rategroup_blockinst_t * rg_blockinst = list_entry(pos, rategroup_blockinst_t, rategroup_list);
+			list_remove(pos);
+
+			port_destroy(&rg_blockinst->ports);
+			free(rg_blockinst);
+		}
+	}
+
+	free(rg->name);
 }
 
 static inline rategroup_t * rategroup_getrunning()
@@ -103,7 +114,7 @@ rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** er
 	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_info, rategroup_destroy, sizeof(rategroup_t));
 	rg->trigger = trigger;
 	rg->name = strdup(name);
-	LIST_INIT(&rg->blockinsts);
+	list_init(&rg->blockinsts);
 
 	list_add(&rategroups, &rg->global_list);
 	return rg;

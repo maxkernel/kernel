@@ -138,8 +138,8 @@ void buffer_init()
 {
 	PAGESIZE = getpagesize();
 	BUFFERSIZE = PAGESIZE * BUFFER_MAX_PAGES;
-	LIST_INIT(&empty_buffers);
-	LIST_INIT(&empty_pages);
+	list_init(&empty_buffers);
+	list_init(&empty_pages);
 	mutex_init(&buffers_lock, M_RECURSIVE);
 	mutex_init(&pages_lock, M_RECURSIVE);
 	

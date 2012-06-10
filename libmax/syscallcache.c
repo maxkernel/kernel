@@ -29,8 +29,8 @@ void max_syscallcache_enable(maxhandle_t * hand)
 		return;
 	}
 
-	LIST_INIT(&cache->syscalls_free);
-	HASHTABLE_INIT(&cache->syscalls, hash_str, hash_streq);
+	list_init(&cache->syscalls_free);
+	hashtable_init(&cache->syscalls, hash_str, hash_streq);
 
 	unsigned int i=0;
 	for (; i<SYSCALL_CACHE_SIZE; i++)

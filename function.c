@@ -122,6 +122,14 @@ ffi_function_t * function_build(void * function, const char * sig, exception_t *
 
 void function_free(ffi_function_t * ffi)
 {
+	// Sanity check
+	{
+		if unlikely(ffi == NULL)
+		{
+			return;
+		}
+	}
+
 	free(ffi->atypes);
 	free(ffi->cif);
 	free(ffi);
@@ -129,6 +137,14 @@ void function_free(ffi_function_t * ffi)
 
 void function_call(ffi_function_t * ffi, void * ret, void ** args)
 {
+	// Sanity check
+	{
+		if unlikely(ffi == NULL)
+		{
+			return;
+		}
+	}
+
 	ffi_call((ffi_cif *)ffi->cif, ffi->function, ret, args);
 }
 
@@ -197,10 +213,18 @@ ffi_closure_t * closure_build(void * function, closure_f callback, const char * 
 	return ci;
 }
 
-void closure_free(ffi_closure_t * ci)
+void closure_free(ffi_closure_t * closure)
 {
-	free(ci->atypes);
-	free(ci->cif);
-	ffi_closure_free(ci->closure);
-	free(ci);
+	// Sanity check
+	{
+		if unlikely(closure == NULL)
+		{
+			return;
+		}
+	}
+
+	free(closure->atypes);
+	free(closure->cif);
+	ffi_closure_free(closure->closure);
+	free(closure);
 }

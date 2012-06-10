@@ -113,7 +113,7 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 				size_t keyvalue_index = 0;
 
 				// Parse the GET parameters off the URI
-				HASHTABLE_INIT(&buffer->ctx->parameters, hash_str, hash_streq);
+				hashtable_init(&buffer->ctx->parameters, hash_str, hash_streq);
 				if (strchr(request_uri, '?') != NULL)
 				{
 					char * params = strchr(request_uri, '?');
@@ -180,7 +180,7 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 				{
 					// We have matched (at least) one filter. Parse the rest of the headers
 					//hashtable_t * headers = &buffer->ctx->headers;
-					HASHTABLE_INIT(&buffer->ctx->headers, hash_str, hash_streq);
+					hashtable_init(&buffer->ctx->headers, hash_str, hash_streq);
 
 					size_t offset = 0;
 					while (regexec(&header_match, buffer->buffer + offset, 3, match, 0) == 0 && keyvalue_index < NUM_KEYVALUES)
@@ -288,7 +288,7 @@ httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** er
 	memset(ctx, 0, sizeof(httpcontext_t));
 
 	ctx->mainloop = mainloop;
-	LIST_INIT(&ctx->filters);
+	list_init(&ctx->filters);
 
 	ctx->socket = tcp_server(port, err);
 	if (ctx->socket == -1 || exception_check(err))

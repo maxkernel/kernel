@@ -9,20 +9,19 @@
 #include <kernel-priv.h>
 
 
-static char * blockinst_info(void * object)
+static ssize_t blockinst_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER BLOCKINST INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void blockinst_destroy(void * blockinst)
+static void blockinst_destroy(kobject_t * object)
 {
-	blockinst_t * blkinst = blockinst;
-
-	unused(blkinst);
-	// TODO IMPORTANT - call the ondestroy callback function of the block instance
+	blockinst_t * blkinst = (blockinst_t *)object;
+	blockinst_act(blkinst, block_cbdestroy(blockinst_block(blkinst)));
+	link_destroy(&blkinst->links);
+	free(blkinst->name);
 }
 
 blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** err)
@@ -178,5 +177,5 @@ void blockinst_act(blockinst_t * blockinst, blockact_f callback)
 		}
 	}
 
-	callback(blockinst->userdata);
+	callback(blockinst_userdata(blockinst));
 }

@@ -13,8 +13,7 @@ struct __list_t
 typedef int (*list_compare_f)(list_t * a, list_t * b);
 
 
-// TODO - make this lower case
-#define LIST_INIT(ptr) \
+#define list_init(ptr) \
 	({ (ptr)->next = (ptr); (ptr)->prev = (ptr); })
 
 

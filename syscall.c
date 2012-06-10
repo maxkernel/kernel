@@ -6,14 +6,14 @@
 #include <kernel.h>
 #include <kernel-priv.h>
 
+
 extern hashtable_t syscalls;
 
-static char * syscall_info(void * object)
+static ssize_t syscall_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER SYSCALL INFO]";
-	return strdup(str);
+	return 0;
 }
 
 syscall_t * syscall_get(const char * name)
@@ -22,9 +22,9 @@ syscall_t * syscall_get(const char * name)
 	return (entry == NULL)? NULL : hashtable_entry(entry, syscall_t, global_entry);
 }
 
-void syscall_destroy(void * syscall)
+void syscall_destroy(kobject_t * object)
 {
-	syscall_t * sys = syscall;
+	syscall_t * sys = (syscall_t *)object;
 	hashtable_remove(&sys->global_entry);
 
 	function_free(sys->ffi);

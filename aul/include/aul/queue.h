@@ -14,7 +14,7 @@ typedef struct
 	void * buffer;
 } queue_t;
 
-#define QUEUE_INIT(q, b, s)	\
+#define queue_init(q, b, s)	\
 	({ \
 		memset((q), 0, sizeof(queue_t));			\
 		(q)->buffer = (b);  (q)->bufsize = (s);		\
@@ -94,7 +94,7 @@ static inline size_t queue_size(queue_t * queue)
 static inline queue_t queue_new(void * buffer, size_t bufsize)
 {
 	queue_t q;
-	QUEUE_INIT(&q, buffer, bufsize);
+	queue_init(&q, buffer, bufsize);
 	return q;
 }
 

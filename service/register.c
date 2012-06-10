@@ -14,14 +14,14 @@ extern GHashTable * service_table;
 extern GHashTable * stream_table;
 
 
-static char * service_info(void * object)
+static ssize_t service_info(kobject_t * object, void * buffer, size_t length)
 {
-	return strdup("SERVICE INFO");
+	return 0;
 }
 
-static void service_free(void * object)
+static void service_free(kobject_t * object)
 {
-	service_t * s = object;
+	service_t * s = (service_t *)object;
 
 	mutex_lock(&service_lock);
 	{

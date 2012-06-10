@@ -9,24 +9,47 @@
 
 extern list_t modules;
 
-static char * module_info(void * object)
+static ssize_t module_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER MODULE INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void module_destroy(void * object)
+static void module_destroy(kobject_t * object)
 {
-	module_t * module = object;
+	module_t * module = (module_t *)object;
 
-	// Sanity check
+	// Destroy the configs
 	{
-		if (module == NULL)
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &module->configs)
 		{
-			LOGK(LOG_ERR, "Module is NULL (module_destroy)");
-			return;
+			config_t * config = list_entry(pos, config_t, module_list);
+			list_remove(pos);
+			kobj_destroy(kobj_cast(config));
+		}
+	}
+
+	// Destroy all syscalls
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &module->syscalls)
+		{
+			syscall_t * syscall = list_entry(pos, syscall_t, module_list);
+			list_remove(pos);
+			kobj_destroy(kobj_cast(syscall));
+		}
+	}
+
+	// Destroy all blocks
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &module->blocks)
+		{
+			block_t * block = list_entry(pos, block_t, module_list);
+			list_remove(pos);
+			kobj_destroy(kobj_cast(block));
 		}
 	}
 
@@ -204,10 +227,10 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 
 	module_t * module = kobj_new("Module", name, module_info, module_destroy, sizeof(module_t));
 	module->backing = meta;
-	LIST_INIT(&module->syscalls);
-	LIST_INIT(&module->configs);
-	LIST_INIT(&module->blocks);
-	LIST_INIT(&module->blockinsts);
+	list_init(&module->syscalls);
+	list_init(&module->configs);
+	list_init(&module->blocks);
+	list_init(&module->blockinsts);
 
 	// Create configs
 	{
@@ -222,6 +245,7 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 					return NULL;
 				}
 
+				kobj_makechild(kobj_cast(module), kobj_cast(config));
 				list_add(&module->configs, &config->module_list);
 			}
 		}
@@ -245,6 +269,7 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 					return NULL;
 				}
 
+				kobj_makechild(kobj_cast(module), kobj_cast(syscall));
 				list_add(&module->syscalls, &syscall->module_list);
 			}
 		}
@@ -264,6 +289,7 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 					return NULL;
 				}
 
+				kobj_makechild(kobj_cast(module), kobj_cast(blk));
 				list_add(&module->blocks, &blk->module_list);
 			}
 		}

@@ -7,27 +7,28 @@
 #include <kernel-priv.h>
 
 
-static char * block_info(void * object)
+static ssize_t block_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER BLOCK INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void block_destroy(void * block)
+static void block_destroy(kobject_t * object)
 {
-	block_t * blk = block;
+	block_t * blk = (block_t *)object;
 
-	list_t * pos, * n;
+	list_t * pos = NULL, * n = NULL;
 	list_foreach_safe(pos, n, &blk->insts)
 	{
 		blockinst_t * inst = list_entry(pos, blockinst_t, block_list);
 		list_remove(&inst->block_list);
-
-		blockinst_act(inst, blk->ondestroy);
-		kobj_destroy(&inst->kobject);
+		kobj_destroy(kobj_cast(inst));
 	}
+
+	function_free(blk->new);
+	free(blk->name);
+	free(blk->newsig);
 }
 
 block_t * block_new(module_t * module, const meta_block_t * block, exception_t ** err)
@@ -89,7 +90,7 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 	blk->new = newffi;
 	blk->onupdate = onupdate_cb;
 	blk->ondestroy = ondestroy_cb;
-	LIST_INIT(&blk->insts);
+	list_init(&blk->insts);
 
 	return blk;
 }
@@ -97,7 +98,7 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 void block_add(block_t * block, blockinst_t * blockinst)
 {
 	list_add(&block->insts, &blockinst->block_list);
-	kobj_makechild(&block->kobject, &blockinst->kobject);
+	kobj_makechild(kobj_cast(block), kobj_cast(blockinst));
 }
 
 void * block_callconstructor(block_t * block, void ** args)

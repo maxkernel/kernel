@@ -44,7 +44,7 @@ typedef bool (*watch_f)(mainloop_t * loop, int fd, fdcond_t condition, void * us
 typedef bool (*timer_f)(mainloop_t * loop, uint64_t nanoseconds, void * userdata);
 
 void mainloop_init();
-void mainloop_new(const char * name, mainloop_t * loop);
+mainloop_t * mainloop_new(const char * name);
 void mainloop_run(mainloop_t * loop);
 void mainloop_stop(mainloop_t * loop);
 

@@ -9,15 +9,14 @@
 #include <kernel-priv.h>
 
 
-static char * config_info(void * object)
+static ssize_t config_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER CONFIG INFO]";
-	return strdup(str);
+	return 0;
 }
 
-void config_destroy(void * object)
+void config_destroy(kobject_t * object)
 {
 	unused(object);
 	//config_t * config = object;

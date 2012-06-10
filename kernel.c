@@ -311,17 +311,16 @@ void kobj_destroy(kobject_t * object)
 }
 
 // --------------------- KThread functions -----------------------
-static char * kthread_info(void * kthread)
+static ssize_t kthread_info(kobject_t * object, void * buffer, size_t length)
 {
-	unused(kthread);
+	unused(object);
 
-	char * str = "[PLACEHOLDER KTHREAD INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void kthread_destroy(void * kthread)
+static void kthread_destroy(kobject_t * object)
 {
-	kthread_t * kth = kthread;
+	kthread_t * kth = (kthread_t *)object;
 	kth->stop = true;
 
 	if (kth->stopfunction != NULL && !kth->stopfunction(kth, kth->object))
@@ -438,8 +437,8 @@ kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, ko
 	kth->stopfunction = stopfunction;
 	kth->object = object;
 
-	kobj_makechild(&kth->kobject, kobj_cast(trigger));
-	kobj_makechild(&kth->kobject, object);
+	kobj_makechild(kobj_cast(kth), kobj_cast(trigger));
+	kobj_makechild(kobj_cast(kth), object);
 	return kth;
 }
 
@@ -749,12 +748,12 @@ int main(int argc, char * argv[])
 
 	// Initialize global variables
 	model = model_new();
-	LIST_INIT(&modules);
-	LIST_INIT(&rategroups);
-	LIST_INIT(&kobjects);
-	LIST_INIT(&kthreads);
-	HASHTABLE_INIT(&properties, hash_str, hash_streq);
-	HASHTABLE_INIT(&syscalls, hash_str, hash_streq);
+	list_init(&modules);
+	list_init(&rategroups);
+	list_init(&kobjects);
+	list_init(&kthreads);
+	hashtable_init(&properties, hash_str, hash_streq);
+	hashtable_init(&syscalls, hash_str, hash_streq);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
 	mutex_init(&kthreads_mutex, M_RECURSIVE);
 	mutex_init(&io_lock, M_RECURSIVE);
@@ -1760,7 +1759,7 @@ int main(int argc, char * argv[])
 		// Destroy the kobjects
 		mutex_lock(&kobj_mutex);
 		{
-
+			// TODO IMPORTANT - make sure you destroy all kthreads FIRST, then destroy everything else
 			while (kobjects.prev != &kobjects)
 			{
 				kobject_t * item = NULL;
@@ -1788,6 +1787,11 @@ int main(int argc, char * argv[])
 			}
 		}
 		mutex_unlock(&kobj_mutex);
+
+		// Destroy the model
+		model_clearalluserdata(model);
+		// TODO - fix the segfault that this causes!!!!!
+		//model_destroy(model, NULL, NULL);
 
 		// Destroy the buffer subsystem
 		buffer_destroy();

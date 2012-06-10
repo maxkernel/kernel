@@ -199,7 +199,7 @@ void maxpod_update(void * obj)
 
 
 bool maxpod_init() {
-	QUEUE_INIT(&queue, data, sizeof(data));
+	queue_init(&queue, data, sizeof(data));
 
 	pod_fd = serial_open(serial_port, B115200);
 	if (pod_fd == -1)

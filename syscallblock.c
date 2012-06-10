@@ -8,18 +8,19 @@
 #include <kernel-priv.h>
 
 
-static char * syscallblock_info(void * object)
+static ssize_t syscallblock_info(kobject_t * object, void * buffer, size_t length)
 {
 	unused(object);
 
-	char * str = "[PLACEHOLDER SYSCALLBLOCK INFO]";
-	return strdup(str);
+	return 0;
 }
 
-static void syscallblock_free(void * object)
+static void syscallblock_free(kobject_t * object)
 {
-	syscallblock_t * sb = object;
+	syscallblock_t * sb = (syscallblock_t *)object;
 	closure_free(sb->closure);
+	link_destroy(&sb->links);
+	port_destroy(&sb->ports);
 }
 
 static void syscallblock_dosyscall(void * ret, const void * args[], void * userdata)
@@ -149,13 +150,11 @@ syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t
 			return NULL;
 		}
 
-		port_t * port = port_new(meta_input, "r", backing, err);
-		if (port == NULL || exception_check(err))
+		bool success = port_add(&sb->ports, meta_input, "r", backing, err);
+		if (!success || exception_check(err))
 		{
 			return NULL;
 		}
-
-		port_add(&sb->ports, port);
 	}
 
 	// Build the biobacking arguments
@@ -172,13 +171,11 @@ syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t
 			}
 
 			string_t port_name = string_new("a%zu", index);
-			port_t * port = port_new(meta_output, port_name.string, backing, err);
-			if (port == NULL || exception_check(err))
+			bool success = port_add(&sb->ports, meta_output, port_name.string, backing, err);
+			if (!success || exception_check(err))
 			{
 				return NULL;
 			}
-
-			port_add(&sb->ports, port);
 
 			index += 1;
 		}
