@@ -16,6 +16,7 @@
 #include <sqlite3.h>
 
 #include <aul/common.h>
+#include <aul/atomic.h>
 #include <aul/list.h>
 #include <aul/hashtable.h>
 #include <aul/mainloop.h>
@@ -48,6 +49,7 @@ calibration_t calibration;
 uint64_t starttime = 0;
 threadlocal kthread_t * kthread_local = NULL;
 
+static unsigned int kobject_nextid = 0xa00;
 static list_t kobjects = {0,0};
 static mutex_t kobj_mutex;
 
@@ -244,6 +246,7 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 
 	object->class_name = class_name;
 	object->object_name = strdup(name);
+	object->object_id = atomic_inc(kobject_nextid);
 	object->info = info;
 	object->destructor = destructor;
 
@@ -311,11 +314,10 @@ void kobj_destroy(kobject_t * object)
 }
 
 // --------------------- KThread functions -----------------------
-static ssize_t kthread_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t kthread_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	kthread_t * kth = (kthread_t *)object;
+	return snprintf(buffer, length, "{ running: %s, stop_flag: %s, priority: %d, trigger_id: %#x }", ser_bool(&kth->running), ser_bool(&kth->stop), kth->priority, kobj_id(kobj_cast(kth->trigger)));
 }
 
 static void kthread_destroy(kobject_t * object)

@@ -77,8 +77,8 @@ static void pantilt_update(void * object)
 	{
 		// Not in calibration mode, read inputs and apply maps
 
-		const double * value_pan = INPUT(pan);
-		const double * value_tilt = INPUT(tilt);
+		const double * value_pan = input(pan);
+		const double * value_tilt = input(tilt);
 
 		if (value_pan != NULL)
 		{
@@ -93,8 +93,8 @@ static void pantilt_update(void * object)
 			pt->pwm.tilt = (int)map_tovalue(pt->map.tilt, clamp(*value_tilt, -M_PI/4.0, M_PI/2.0));
 	}
 
-	OUTPUT(pan_pwm, &pt->pwm.pan);
-	OUTPUT(tilt_pwm, &pt->pwm.tilt);
+	output(pan_pwm, &pt->pwm.pan);
+	output(tilt_pwm, &pt->pwm.tilt);
 }
 
 static void * pantilt_new()

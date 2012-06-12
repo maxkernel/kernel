@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <errno.h>
 
 #include <aul/exception.h>
@@ -10,11 +11,19 @@
 
 extern list_t rategroups;
 
-static ssize_t rategroup_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t rategroup_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
+	rategroup_t * rg = (rategroup_t *)object;
 
-	return 0;
+	string_t ids = string_blank();
+	list_t * pos = NULL;
+	list_foreach(pos, &rg->blockinsts)
+	{
+		rategroup_blockinst_t * rg_blockinst = list_entry(pos, rategroup_blockinst_t, rategroup_list);
+		string_append(&ids, "%s%#x", (ids.length == 0)? "" : ", ", kobj_id(kobj_cast(rg_blockinst->blockinst)));
+	}
+
+	return snprintf(buffer, length, "{ name: %s, priority: %d, trigger_id: %#x, blockinstance_ids: [ %s ] }", rg->name, rg->priority, kobj_id(kobj_cast(trigger_cast(rg->trigger))), ids.string);
 }
 
 static void rategroup_destroy(kobject_t * object)

@@ -45,18 +45,10 @@ static bool crange_new(const char * constraint, void * object)
 		char * colon = strchr(step, ':');
 		if (colon != NULL)	*colon = '\0';
 
-		exception_t * e = NULL;
 		crange_t * range = object;
-		range->min = parse_double(min, &e);
-		range->step = parse_double(step, &e);
-		range->max = parse_double(max, &e);
-
-		if (exception_check(&e))
-		{
-			// Could not parse something or other :-/
-			exception_free(e);
-			goto end;
-		}
+		range->min = parse_double(min, NULL);
+		range->step = parse_double(step, NULL);
+		range->max = parse_double(max, NULL);
 
 		success = true;
 	}

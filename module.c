@@ -9,11 +9,10 @@
 
 extern list_t modules;
 
-static ssize_t module_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t module_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	module_t * module = (module_t *)object;
+	return meta_yamlinfo(module->backing, buffer, length);
 }
 
 static void module_destroy(kobject_t * object)

@@ -102,9 +102,9 @@ static void quadrasteer_update(void * object)
 	{
 		// Not in calibration mode, read inputs and apply maps
 
-		const double * value_throttle = INPUT(throttle);
-		const double * value_front = INPUT(front);
-		const double * value_rear = INPUT(rear);
+		const double * value_throttle = input(throttle);
+		const double * value_front = input(front);
+		const double * value_rear = input(rear);
 
 		if (value_throttle != NULL)
 		{
@@ -123,10 +123,10 @@ static void quadrasteer_update(void * object)
 		q->pwm.motor_front = q->pwm.motor_rear = q->cal.motor_center;
 	}
 
-	OUTPUT(motor_front_pwm, &q->pwm.motor_front);
-	OUTPUT(motor_rear_pwm, &q->pwm.motor_rear);
-	OUTPUT(front_pwm, &q->pwm.front);
-	OUTPUT(rear_pwm, &q->pwm.rear);
+	output(motor_front_pwm, &q->pwm.motor_front);
+	output(motor_rear_pwm, &q->pwm.motor_rear);
+	output(front_pwm, &q->pwm.front);
+	output(rear_pwm, &q->pwm.rear);
 }
 
 static void * quadrasteer_new()

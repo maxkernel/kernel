@@ -126,6 +126,10 @@ typedef struct {
 	kobject_t kobject;
 
 	list_t module_list;
+	char * name;
+	char sig;
+	char * desc;
+
 	const meta_variable_t * variable;	// TODO - remove this field!!!
 	char cache[CONFIG_SIZE_CACHE];
 } config_t;
@@ -204,8 +208,10 @@ struct __block_t
 
 	module_t * module;
 	char * name;
+	char * desc;
 
 	char * newsig;
+	char * newdesc;
 	ffi_function_t * new;
 
 	blockact_f onupdate;
@@ -222,6 +228,7 @@ struct __blockinst_t
 	block_t * block;
 	char * name;
 	const char * const * args;		// TODO - make this a copy of the backing args (somehow!)
+	size_t argslen;
 
 	linklist_t links;
 	void * userdata;
@@ -419,6 +426,7 @@ bool rategroup_schedule(rategroup_t * rategroup, exception_t ** err);
 #define rategroup_links(rg)		(trigger_varclock_links((rg)->trigger))
 #define rategroup_ports(rg)		(trigger_varclock_ports((rg)->trigger))
 
+// TODO IMPORTANT - fix config_t to remove references to meta_variable_t!!
 config_t * config_new(const meta_t * meta, const meta_variable_t * config, exception_t ** err);
 bool config_apply(config_t * config, const model_config_t * newvalue, exception_t ** err);
 

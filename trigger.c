@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 
@@ -71,11 +72,10 @@ bool trigger_watch(trigger_t * trigger)
 }
 
 // ------------------- CLOCK -------------------------
-static ssize_t trigger_infoclock(kobject_t * object, void * buffer, size_t length)
+static ssize_t trigger_infoclock(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	trigger_clock_t * clk = (trigger_clock_t *)object;
+	return snprintf(buffer, length, "{ interval: %" PRIu64 " }", clk->interval_nsec);
 }
 
 static bool trigger_waitclock(trigger_t * trigger)
@@ -150,13 +150,6 @@ trigger_clock_t * trigger_newclock(const char * name, double freq_hz)
 }
 
 // ----------------------- VARCLOCK ------------------------
-static ssize_t trigger_infovarclock(kobject_t * object, void * buffer, size_t length)
-{
-	unused(object);
-
-	return 0;
-}
-
 static void trigger_destroyvarclock(kobject_t * object)
 {
 	trigger_varclock_t * vclk = (trigger_varclock_t *)object;
@@ -221,7 +214,7 @@ trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_
 	}
 
 	// Create the trigger
-	trigger_varclock_t * vclk = trigger_new(name, trigger_infovarclock, trigger_destroyvarclock, trigger_waitvarclock, sizeof(trigger_varclock_t));
+	trigger_varclock_t * vclk = trigger_new(name, trigger_infoclock, trigger_destroyvarclock, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	vclk->clock.interval_nsec = hz2nanos(initial_freq_hz);
 	linklist_init(&vclk->links);
 	portlist_init(&vclk->ports);

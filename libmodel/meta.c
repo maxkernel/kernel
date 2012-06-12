@@ -377,6 +377,22 @@ end_init:
 
 #endif
 
+ssize_t meta_yamlinfo(const meta_t * meta, char * buffer, size_t length)
+{
+	// Sanity check
+	{
+		if unlikely(meta == NULL || buffer == NULL)
+		{
+			return -1;
+		}
+	}
+
+	const char * path = NULL, * name = NULL, * author = NULL, * desc = NULL;
+	const version_t * version = NULL;
+	meta_getinfo(meta, &path, &name, &version, &author, &desc);
+	return snprintf(buffer, length, "{ path: '%s', name: '%s', author: %s, version: %s, description: '%s' }", path, name, ser_string(author), ser_version(version), ser_string(desc));
+}
+
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err)
 {
 	// TODO - finish me
@@ -385,7 +401,7 @@ meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err)
 	return NULL;
 }
 
-size_t meta_encodebase64(meta_t * meta, const char * to, size_t length)
+size_t meta_encodebase64(const meta_t * meta, const char * to, size_t length)
 {
 	// TODO - finish me
 	//return base64_encode((void *)meta, sizeof(meta_t), to, length);

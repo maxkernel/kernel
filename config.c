@@ -9,18 +9,16 @@
 #include <kernel-priv.h>
 
 
-static ssize_t config_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t config_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	config_t * config = (config_t *)object;
+	return snprintf(buffer, length, "{ name: %s, signature: %c, value: '%s', description: '%s' }", config->name, config->sig, ser_string(config->cache), ser_string(config->desc));
 }
 
 void config_destroy(kobject_t * object)
 {
-	unused(object);
-	//config_t * config = object;
-	// No custom destructor required
+	config_t * config = (config_t *)object;
+	free(config->name);
 }
 
 static bool config_updatecache(const meta_variable_t * variable, char * cachebacking, exception_t ** err)
@@ -165,12 +163,11 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config, excep
 		}
 	}
 
-	const char * path = NULL;
-	meta_getinfo(meta, &path, NULL, NULL, NULL, NULL);
-
-	const char * name = NULL;
+	const char * name = NULL, * desc = NULL;
 	char sig = 0;
-	meta_getvariable(config, &name, &sig, NULL, NULL);
+	meta_getvariable(config, &name, &sig, &desc, NULL);
+
+	LOGK(LOG_DEBUG, "Registering config variable '%s'", name);
 
 	char cache[CONFIG_SIZE_CACHE] = {0};
 	if (!config_updatecache(config, cache, err))
@@ -178,12 +175,13 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config, excep
 		return NULL;
 	}
 
-	string_t objectname = string_new("%s -> %s", path, name);
-	config_t * c = kobj_new("Config", objectname.string, config_info, config_destroy, sizeof(config_t));
+	config_t * c = kobj_new("Config", name, config_info, config_destroy, sizeof(config_t));
+	c->name = strdup(name);
+	c->sig = sig;
+	c->desc = strdup(desc);
 	c->variable = config;
 	strcpy(c->cache, cache);
 
-	LOGK(LOG_DEBUG, "Registered config variable '%s' in module %s", name, path);
 	return c;
 }
 

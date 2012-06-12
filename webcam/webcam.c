@@ -333,8 +333,8 @@ void webcam_update(void * object)
 		return;
 	}
 
-	const int * width = INPUT(width);
-	const int * height = INPUT(height);
+	const int * width = input(width);
+	const int * height = input(height);
 
 	if (width != NULL && height != NULL && (*width != webcam->width || *height != webcam->height))
 	{
@@ -377,9 +377,9 @@ void webcam_update(void * object)
 		if (frame != -1)
 		{
 
-			OUTPUT(width, &webcam->width);
-			OUTPUT(height, &webcam->height);
-			OUTPUT(frame, &frame);
+			output(width, &webcam->width);
+			output(height, &webcam->height);
+			output(frame, &frame);
 
 			//LOG(LOG_INFO, "FRAME");
 		}

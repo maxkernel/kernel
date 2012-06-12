@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include <aul/common.h>
+#include <aul/atomic.h>
 #include <aul/list.h>
 #include <aul/mutex.h>
 #include <kernel-priv.h>
@@ -195,7 +196,7 @@ buffer_t buffer_dup(const buffer_t b)
 		}
 	}
 
-	__sync_add_and_fetch(&buffers[b]->references, 1);		// Atomic increment
+	atomic_inc(buffers[b]->references);		// Atomic increment
 	return (buffer_t)b;
 }
 
@@ -360,7 +361,7 @@ void buffer_free(buffer_t b)
 		}
 	}
 
-	int refs = __sync_sub_and_fetch(&buffers[b]->references, 1);		// Atomic decrement
+	int refs = atomic_dec(buffers[b]->references);		// Atomic decrement
 	if (refs > 0)
 	{
 		// Still references

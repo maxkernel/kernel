@@ -181,12 +181,12 @@ void maxpod_update(void * obj)
 	}
 
 	// Get the input
-	const int * pwm0 = INPUT(pwm0);
-	const int * pwm1 = INPUT(pwm1);
-	const int * pwm2 = INPUT(pwm2);
-	const int * pwm3 = INPUT(pwm3);
-	const int * pwm4 = INPUT(pwm4);
-	const int * pwm5 = INPUT(pwm5);
+	const int * pwm0 = input(pwm0);
+	const int * pwm1 = input(pwm1);
+	const int * pwm2 = input(pwm2);
+	const int * pwm3 = input(pwm3);
+	const int * pwm4 = input(pwm4);
+	const int * pwm5 = input(pwm5);
 
 	// Now write it to the servos
 	if (pwm0 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 0, *pwm0);

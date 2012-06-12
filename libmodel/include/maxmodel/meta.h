@@ -325,8 +325,9 @@ meta_t * meta_parseelf(const char * path, exception_t ** err);
 bool meta_loadmodule(meta_t * meta, exception_t ** err);
 #endif
 
+ssize_t meta_yamlinfo(const meta_t * meta, char * buffer, size_t length);
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err);
-size_t meta_encodebase64(meta_t * meta, const char * to, size_t length);
+size_t meta_encodebase64(const meta_t * meta, const char * to, size_t length);
 
 meta_t * meta_copy(const meta_t * meta);
 void meta_destroy(meta_t * meta);

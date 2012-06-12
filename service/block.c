@@ -18,7 +18,7 @@ void s_bufstream_update(void * userdata)
 {
 	service_h handle = userdata;
 
-	const buffer_t * buffer = INPUT(buffer);
+	const buffer_t * buffer = input(buffer);
 	if (buffer == NULL)
 	{
 		// No data to process

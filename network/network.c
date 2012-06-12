@@ -42,7 +42,7 @@ void wifi_update(void * object)
 		fclose(fp);
 
 		strength /= SIGNAL_MAX;
-		OUTPUT(strength, &strength);
+		output(strength, &strength);
 	}
 }
 

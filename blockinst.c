@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include <aul/iterator.h>
@@ -9,11 +10,17 @@
 #include <kernel-priv.h>
 
 
-static ssize_t blockinst_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t blockinst_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
+	blockinst_t * blkinst = (blockinst_t *)object;
 
-	return 0;
+	string_t args = string_new("'%s'", (blkinst->argslen > 0)? blkinst->args[0] : "");
+	for (size_t i = 1; i < blkinst->argslen; i++)
+	{
+		string_append(&args, ", '%s'", blkinst->args[i]);
+	}
+
+	return snprintf(buffer, length, "{ name: %s, block_id: %#x, args: [ %s ] }", blkinst->name, kobj_id(kobj_cast(blkinst->block)), args.string);
 }
 
 static void blockinst_destroy(kobject_t * object)
@@ -88,6 +95,7 @@ blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** er
 	bi->block = b;
 	bi->name = strdup(name.string);
 	bi->args = new_args;			// TODO - do some sort of strcpy here!
+	bi->argslen = new_argslen;
 
 	block_add(b, bi);
 	return bi;

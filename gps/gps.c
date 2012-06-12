@@ -197,15 +197,15 @@ static void gps_update(void * object)
 
 	mutex_lock(&gps->update_mutex);
 	{
-		OUTPUT(lastupdate, &gps->lastupdate);
-		OUTPUT(lock, &gps->lock);
-		OUTPUT(latitude, &gps->lat);
-		OUTPUT(longitude, &gps->lon);
-		OUTPUT(heading, &gps->heading);
-		OUTPUT(speed, &gps->speed);
-		OUTPUT(elevation, &gps->elevation);
-		OUTPUT(satellites, &gps->satellites);
-		OUTPUT(hdop, &gps->hdop);
+		output(lastupdate, &gps->lastupdate);
+		output(lock, &gps->lock);
+		output(latitude, &gps->lat);
+		output(longitude, &gps->lon);
+		output(heading, &gps->heading);
+		output(speed, &gps->speed);
+		output(elevation, &gps->elevation);
+		output(satellites, &gps->satellites);
+		output(hdop, &gps->hdop);
 	}
 	mutex_unlock(&gps->update_mutex);
 }

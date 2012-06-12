@@ -37,6 +37,13 @@ void string_clear(string_t * str);
 #define strsuffix(string, suffix)	(strlen(string) >= strlen(suffix) && strcmp(string + (strlen(string) - strlen(suffix)), suffix) == 0)
 
 
+// Serializa utils
+#define ser_bool(b)			(((b) == NULL)? "(undefined)" : ((b)? "True" : "False"))
+#define ser_string(s)		(((s) == NULL || strlen(s) == 0)? "(undefined)" : (s))
+#define ser_version(v)		(((v) == NULL)? "(undefined)" : version_tostring(*(v)).string)
+
+
+
 #ifdef __cplusplus
 }
 #endif

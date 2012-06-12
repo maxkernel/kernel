@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdarg.h>
 
 #include <maxmodel/model.h>
@@ -8,11 +9,10 @@
 #include <kernel-priv.h>
 
 
-static ssize_t syscallblock_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t syscallblock_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	syscallblock_t * sb = (syscallblock_t *)object;
+	return snprintf(buffer, length, "{ syscall_id: %#x }", kobj_id(kobj_cast(sb->syscall)));
 }
 
 static void syscallblock_free(kobject_t * object)

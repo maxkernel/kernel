@@ -163,9 +163,9 @@ static void compressor_update(void * object)
 		}
 	}
 
-	const int * width = INPUT(width);
-	const int * height = INPUT(height);
-	const buffer_t * frame = INPUT(frame);
+	const int * width = input(width);
+	const int * height = input(height);
+	const buffer_t * frame = input(frame);
 
 	if (object == NULL || width == NULL || height == NULL || frame == NULL)
 	{
@@ -255,7 +255,7 @@ static void compressor_update(void * object)
 
 		jpeg_finish_compress(cinfo);
 
-		OUTPUT(frame, &jpeg->out);
+		output(frame, &jpeg->out);
 		buffer_free(jpeg->out);
 		jpeg->out = -1;
 	}

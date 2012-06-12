@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -9,11 +10,10 @@
 
 extern hashtable_t syscalls;
 
-static ssize_t syscall_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t syscall_info(kobject_t * object, char * buffer, size_t length)
 {
-	unused(object);
-
-	return 0;
+	syscall_t * syscall = (syscall_t *)object;
+	return snprintf(buffer, length, "{ name: %s, signature: %s, description: '%s' }", syscall->name, syscall->sig, ser_string(syscall->desc));
 }
 
 syscall_t * syscall_get(const char * name)

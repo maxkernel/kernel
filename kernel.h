@@ -41,13 +41,14 @@ extern "C" {
 typedef struct __kobject_t kobject_t;
 
 typedef void (*destructor_f)(kobject_t * object);
-typedef ssize_t (*info_f)(kobject_t * object, void * buffer, size_t length);
+typedef ssize_t (*info_f)(kobject_t * object, char * buffer, size_t length);
 typedef bool (*handler_f)(void * userdata);
 
 struct __kobject_t
 {
 	const char * class_name;
 	char * object_name;
+	unsigned int object_id;
 	kobject_t * parent;
 
 	info_f info;
@@ -60,6 +61,7 @@ bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const cha
 void kobj_makechild(kobject_t * parent, kobject_t * child);
 void kobj_destroy(kobject_t * object);
 #define kobj_cast(kobj)		(&(kobj)->kobject)
+#define kobj_id(kobj)		((kobj)->object_id)
 
 #define PATH_BUFSIZE			2048
 #define PATH_MAXPATHS			50
@@ -107,8 +109,8 @@ bool property_isset(const char * name);
 
 const void * rategroup_input(const char * name);
 void rategroup_output(const char * name, const void * output);
-#define INPUT(name)					rategroup_input(#name)
-#define OUTPUT(name, value)			rategroup_output(#name, value)
+#define input(name)					rategroup_input(#name)
+#define output(name, value)			rategroup_output(#name, value)
 
 const char * max_model();
 const char * kernel_id();

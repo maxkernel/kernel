@@ -168,22 +168,22 @@ static void pololu_update(void * object)
 	pololu_t * p = object;
 
 	// Get the input
-	const int * pwm0 = INPUT(pwm0);
-	const int * pwm1 = INPUT(pwm1);
-	const int * pwm2 = INPUT(pwm2);
-	const int * pwm3 = INPUT(pwm3);
-	const int * pwm4 = INPUT(pwm4);
-	const int * pwm5 = INPUT(pwm5);
-	const int * pwm6 = INPUT(pwm6);
-	const int * pwm7 = INPUT(pwm7);
-	const int * pwm8 = INPUT(pwm8);
-	const int * pwm9 = INPUT(pwm9);
-	const int * pwm10 = INPUT(pwm10);
-	const int * pwm11 = INPUT(pwm11);
-	const int * pwm12 = INPUT(pwm12);
-	const int * pwm13 = INPUT(pwm13);
-	const int * pwm14 = INPUT(pwm14);
-	const int * pwm15 = INPUT(pwm15);
+	const int * pwm0 = input(pwm0);
+	const int * pwm1 = input(pwm1);
+	const int * pwm2 = input(pwm2);
+	const int * pwm3 = input(pwm3);
+	const int * pwm4 = input(pwm4);
+	const int * pwm5 = input(pwm5);
+	const int * pwm6 = input(pwm6);
+	const int * pwm7 = input(pwm7);
+	const int * pwm8 = input(pwm8);
+	const int * pwm9 = input(pwm9);
+	const int * pwm10 = input(pwm10);
+	const int * pwm11 = input(pwm11);
+	const int * pwm12 = input(pwm12);
+	const int * pwm13 = input(pwm13);
+	const int * pwm14 = input(pwm14);
+	const int * pwm15 = input(pwm15);
 	
 
 	// Now write it to the servos

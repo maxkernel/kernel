@@ -14,7 +14,7 @@ extern GHashTable * service_table;
 extern GHashTable * stream_table;
 
 
-static ssize_t service_info(kobject_t * object, void * buffer, size_t length)
+static ssize_t service_info(kobject_t * object, char * buffer, size_t length)
 {
 	return 0;
 }
