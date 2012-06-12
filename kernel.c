@@ -343,29 +343,6 @@ static void * kthread_dothread(void * object)
 	kthread_t * kth = object;
 	kthread_local = kth;
 
-	// Set scheduling parameters
-	{
-		struct sched_param param;
-		memset(&param, 0, sizeof(struct sched_param));
-
-		if (sched_getparam(0, &param) == 0)
-		{
-			int prio = param.sched_priority + kth->priority;
-			int max = sched_get_priority_max(KTHREAD_SCHED);
-			int min = sched_get_priority_min(KTHREAD_SCHED);
-
-			param.sched_priority = clamp(prio, min, max);
-			if (sched_setscheduler(0, KTHREAD_SCHED, &param) == -1)
-			{
-				LOGK(LOG_WARN, "Could not set scheduler parameters on thread %s: %s", kth->kobject.object_name, strerror(errno));
-			}
-		}
-		else
-		{
-			LOGK(LOG_WARN, "Could not get scheduler parameters on thread %s: %s", kth->kobject.object_name, strerror(errno));
-		}
-	}
-
 	kth->running = true;
 	kth->stop = false;
 	while (!kth->stop)
@@ -383,7 +360,7 @@ static void * kthread_dothread(void * object)
 			}
 
 			// Yield before the next round
-			sched_yield();
+			pthread_yield();
 		}
 	}
 
@@ -393,10 +370,24 @@ static void * kthread_dothread(void * object)
 
 static bool kthread_start(kthread_t * kth)
 {
-	int result = pthread_create(&kth->thread, NULL, kthread_dothread, kth);
-	if (result == -1)
+	pthread_attr_t attr;
+	memset(&attr, 0, sizeof(pthread_attr_t));
+	pthread_attr_init(&attr);
+
+	// Set up the attr
 	{
-		LOGK(LOG_ERR, "Could not create new kernel thread: %s", strerror(result));
+		struct sched_param param;
+		memset(&param, 0, sizeof(struct sched_param));
+		param.sched_priority = SCHED_PRIO_BASE + kth->priority;
+
+		pthread_attr_setschedpolicy(&attr, SCHED_POLICY);
+		pthread_attr_setschedparam(&attr, &param);
+		pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	}
+
+	if (pthread_create(&kth->thread, &attr, kthread_dothread, kth) != 0)
+	{
+		LOGK(LOG_FATAL, "Could not create new thread: %s", strerror(errno));
 		return false;
 	}
 
@@ -708,40 +699,88 @@ int main(int argc, char * argv[])
 		if(*(int32_t *)"\200\0\0\0\0\0\0\0" < 0)
 		{
 			LOGK(LOG_FATAL, "Failed little-endian runtime check!");
+			// Will exit
 		}
 
 		if (sizeof(bool) != 1)
 		{
 			LOGK(LOG_FATAL, "Failed bool size runtime check!");
+			// Will exit
 		}
 
-		// TODO IMPORTANT - check for threadlocal support
+		// Test for thread-local support
+		{
+			static threadlocal volatile bool testtl = true;
+			void * testtl_dothread(void * obj)
+			{
+				unused(obj);
+				testtl = false;
+				return NULL;
+			}
+
+			pthread_t testtl_thread;
+			memset(&testtl_thread, 0, sizeof(pthread_t));
+
+			pthread_create(&testtl_thread, NULL, testtl_dothread, NULL);
+			pthread_join(testtl_thread, NULL);
+
+			if (!testtl)
+			{
+				LOGK(LOG_FATAL, "Failed thread-local runtime check!");
+				// Will exit
+			}
+		}
 	}
 
 	// Set up the working directory to the install dir
-	chdir(INSTALL);
-	path_set(".", NULL);
+	{
+		chdir(INSTALL);
+		path_set(".", NULL);
+	}
 	
 	// Set up signals
 	signal_init();
 
-	argp_parse(&argp, argc, argv, ARGP_SILENT, 0, 0);
-	if (args.forkdaemon)
+	// Parse the arguments
 	{
-		// Fork this process as a daemon
-		daemonize();
+		argp_parse(&argp, argc, argv, ARGP_SILENT, 0, 0);
+		if (args.forkdaemon)
+		{
+			// Fork this process as a daemon
+			daemonize();
+		}
 	}
 
-	// Init logging
-	log_openfile(LOGDIR "/" LOGFILE, NULL);
-	log_addlistener(log_appendbuf, NULL, NULL);
+	// Initialize logging
+	{
+		log_openfile(LOGDIR "/" LOGFILE, NULL);
+		log_addlistener(log_appendbuf, NULL, NULL);
+	}
 
 	// Configure memory for realtime
-	if (mlockall(MCL_CURRENT | MCL_FUTURE))
 	{
-		LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
+		if (mlockall(MCL_CURRENT | MCL_FUTURE))
+		{
+			LOGK(LOG_WARN, "Could not lock memory to RAM: %s", strerror(errno));
+		}
+		mallopt(M_TRIM_THRESHOLD, -1);
 	}
-	mallopt(M_TRIM_THRESHOLD, -1);
+
+	// Configure the scheduler settings
+	{
+		struct sched_param param;
+		memset(&param, 0, sizeof(struct sched_param));
+		if (sched_getparam(0, &param) != 0)
+		{
+			LOGK(LOG_FATAL, "Could not get scheduler settings: %s", strerror(errno));
+		}
+
+		param.sched_priority = SCHED_PRIO_BASE;
+		if (sched_setscheduler(0, SCHED_POLICY, &param) != 0)
+		{
+			LOGK(LOG_FATAL, "Could not set scheduler settings: %s", strerror(errno));
+		}
+	}
 
 	// Set up buffers
 	buffer_init();
@@ -1415,11 +1454,13 @@ int main(int argc, char * argv[])
 					}
 				}
 
+				/*
 				const char * name = NULL;
 				double hertz = 0.0;
-				model_getrategroup(linkable, &name, &hertz);
+				model_getrategroup(linkable, &name, &priority, &hertz);
 
 				LOGK(LOG_DEBUG, "Creating rategroup %s with update at %f Hz", name, hertz);
+				*/
 
 				rategroup_t * rg = NULL;
 
@@ -1429,7 +1470,7 @@ int main(int argc, char * argv[])
 					rg = rategroup_new(linkable, &e);
 					if (rg == NULL || exception_check(&e))
 					{
-						LOGK(LOG_FATAL, "Could not create rategroup %s at %f Hz: %s", name, hertz, (e == NULL)? "Unknown error" : e->message);
+						LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
 						// Will exit
 					}
 				}
@@ -1447,7 +1488,7 @@ int main(int argc, char * argv[])
 							bool success = rategroup_addblockinst(rg, bi, &e);
 							if (!success || exception_check(&e))
 							{
-								LOGK(LOG_FATAL, "Could not add block instance to rategroup '%s'", name);
+								LOGK(LOG_FATAL, "Could not add block instance to rategroup: %s", (e == NULL)? "Unknown error" : e->message);
 								// Will exit
 							}
 						}
@@ -1675,7 +1716,7 @@ int main(int argc, char * argv[])
 				LOGK(LOG_DEBUG, "Scheduling rategroup %s", rategroup_name(rg));
 
 				exception_t * e = NULL;
-				bool success = rategroup_schedule(rg, RATEGROUP_PRIO, &e);
+				bool success = rategroup_schedule(rg, &e);
 				if (!success || exception_check(&e))
 				{
 					LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
@@ -1782,7 +1823,7 @@ int main(int argc, char * argv[])
 					LOGK(LOG_ERR, "Orphan kobject found: %s: %s", item->class_name, item->object_name);
 				}
 
-				LOG(LOG_DEBUG, "Destroying kobject tree %s: %s", item->class_name, item->object_name);
+				LOGK(LOG_DEBUG, "Destroying kobject tree %s: %s", item->class_name, item->object_name);
 				kobj_destroy(item);
 			}
 		}

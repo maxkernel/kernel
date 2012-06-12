@@ -208,19 +208,21 @@ static int l_route(lua_State * L)
 
 static int l_newrategroup(lua_State * L)
 {
-	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string");
-	luaL_argcheck(L, lua_type(L, 2) == LUA_TTABLE, 2, "must be table");
-	luaL_argcheck(L, lua_type(L, 3) == LUA_TNUMBER, 3, "must be number");
+	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string (rategroup name)");
+	luaL_argcheck(L, lua_type(L, 2) == LUA_TNUMBER, 3, "must be a number (priority)");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TTABLE, 3, "must be table (block instances to run in order)");
+	luaL_argcheck(L, lua_type(L, 4) == LUA_TNUMBER, 4, "must be number (frequency in Hz)");
 
 	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
 	const char * name = luaL_checkstring(L, 1);
-	double rate_hz = luaL_checknumber(L, 3);
+	int priority = luaL_checkinteger(L, 2);
+	double rate_hz = luaL_checknumber(L, 4);
 
 	size_t index = 0;
 	const model_linkable_t * blockinsts[MODEL_MAX_RATEGROUPELEMS] = { NULL };
 
 	lua_pushnil(L);
-	while (lua_next(L, 2))
+	while (lua_next(L, 3))
 	{
 		if (index >= MODEL_MAX_RATEGROUPELEMS)
 		{
@@ -240,7 +242,7 @@ static int l_newrategroup(lua_State * L)
 	}
 
 	exception_t * e = NULL;
-	model_linkable_t * rg = model_newrategroup(env->model, env->script, name, rate_hz, blockinsts, index, &e);
+	model_linkable_t * rg = model_newrategroup(env->model, env->script, name, priority, rate_hz, blockinsts, index, &e);
 	if (rg == NULL || exception_check(&e))
 	{
 		return luaL_error(L, "rategroup failed: %s", (e == NULL)? "Unknown error!" : e->message);
@@ -260,8 +262,8 @@ static int l_newsyscall(lua_State * L)
 {
 	luaL_argcheck(L, lua_type(L, 1) == LUA_TSTRING, 1, "must be string (syscall name)");
 	luaL_argcheck(L, lua_type(L, 2) == LUA_TSTRING, 2, "must be string (syscall signature)");
-	luaL_argcheck(L, lua_type(L, 3) == LUA_TTABLE, 3, "must be table (parameters)");
-	luaL_argcheck(L, lua_type(L, 4) == LUA_TUSERDATA || lua_type(L, 4) == LUA_TNIL, 4, "must be userdata or nil (return)");
+	luaL_argcheck(L, lua_type(L, 3) == LUA_TUSERDATA || lua_type(L, 3) == LUA_TNIL, 3, "must be userdata or nil (return)");
+	luaL_argcheck(L, lua_type(L, 4) == LUA_TTABLE || lua_type(L, 4) == LUA_TNIL, 4, "must be table or nil (parameters)");
 	luaL_argcheck(L, lua_type(L, 5) == LUA_TSTRING, 5, "must be string (documentation string)");
 
 	luaenv_t * env = luaL_checkudata(L, lua_upvalueindex(1), ENV_METATABLE);
@@ -270,9 +272,9 @@ static int l_newsyscall(lua_State * L)
 	entry_t * retvalue = NULL;
 	const char * desc = luaL_checkstring(L, 5);
 
-	if (!lua_isnil(L, 4))
+	if (!lua_isnil(L, 3))
 	{
-		retvalue = luaL_checkudata(L, 4, ENTRY_METATABLE);
+		retvalue = luaL_checkudata(L, 3, ENTRY_METATABLE);
 		if (!model_linkable(retvalue->head->type))
 		{
 			return luaL_error(L, "Invalid linkable for item #r");
@@ -306,28 +308,33 @@ static int l_newsyscall(lua_State * L)
 	size_t index = 0;
 
 	// Link all the argument values
-	lua_pushnil(L);
-	while (lua_next(L, 3))
+	if (!lua_isnil(L, 4))
 	{
-		if (!lua_isnil(L, -1))
+		lua_pushnil(L);
+		while (lua_next(L, 4))
 		{
-			entry_t * avalue = luaL_checkudata(L, -1, ENTRY_METATABLE);
-			if (!model_linkable(avalue->head->type))
+			// Nil values are acceptable in the table (used as a place-holder)
+			// Assumes that it will be manually routed later
+			if (!lua_isnil(L, -1))
 			{
-				return luaL_error(L, "Invalid linkable for item a%d", index);
+				entry_t * avalue = luaL_checkudata(L, -1, ENTRY_METATABLE);
+				if (!model_linkable(avalue->head->type))
+				{
+					return luaL_error(L, "Invalid linkable for item a%d", index);
+				}
+
+				string_t aname = string_new("a%d", index);
+
+				model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
+				if (link == NULL || exception_check(&e))
+				{
+					return luaL_error(L, "link(a%d) failed: %s", index, (e == NULL)? "Unknown error!" : e->message);
+				}
 			}
 
-			string_t aname = string_new("a%d", index);
-
-			model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
-			if (link == NULL || exception_check(&e))
-			{
-				return luaL_error(L, "link(a%d) failed: %s", index, (e == NULL)? "Unknown error!" : e->message);
-			}
+			lua_pop(L, 1);
+			index += 1;
 		}
-
-		lua_pop(L, 1);
-		index += 1;
 	}
 
 	return 1;

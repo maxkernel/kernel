@@ -14,7 +14,7 @@
 
 typedef struct
 {
-	string_t serial_port;
+	char * serial_port;
 	speed_t serial_speed;
 
 	int fd;
@@ -94,7 +94,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 	if (bytesread <= 0)
 	{
 		//end stream!
-		LOG(LOG_WARN, "End of stream reached in GPS serial port %s", gps->serial_port.string);
+		LOG(LOG_WARN, "End of stream reached in GPS serial port %s", gps->serial_port);
 		return false;
 	}
 	
@@ -166,12 +166,12 @@ static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * user
 	{
 		// Have not read any data from serial port in 2 seconds, close and reopen
 		// fixes bug where computer can't read serial data from GPS
-		LOG(LOG_WARN, "Haven't received any GPS data from serial port %s. Retrying connection", gps->serial_port.string);
+		LOG(LOG_WARN, "Haven't received any GPS data from serial port %s. Retrying connection", gps->serial_port);
 	
 		mainloop_removewatch(NULL, gps->fd, FD_READ);
 		close(gps->fd);
 
-		gps->fd = serial_open(gps->serial_port.string, gps->serial_speed);
+		gps->fd = serial_open(gps->serial_port, gps->serial_speed);
 		mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, NULL);
 		
 		return true;
@@ -183,63 +183,17 @@ static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * user
 	}
 }
 
-void * gps_new(char * serial_port, int baud)
+static void gps_update(void * object)
 {
-	// Check input
-	speed_t speed = serial_getspeed(baud);
-	if (speed == 0)
+	// Sanity check
 	{
-		LOG(LOG_WARN, "Invalid speed setting on GPS device %s: %d", serial_port, baud);
-		return NULL;
+		if unlikely(object == NULL)
+		{
+			return;
+		}
 	}
 
-	gps_t * gps = malloc(sizeof(gps_t));
-	memset(gps, 0, sizeof(gps_t));
-
-	string_set(&gps->serial_port, "%s", serial_port);
-	gps->serial_speed = speed;
-
-	gps->fd = -1;
-	gps->readsuccess = false;
-
-	mutex_init(&gps->update_mutex, M_RECURSIVE);
-	gps->lastupdate = 0;
-	gps->lock = false;
-	string_clear(&gps->date);
-	string_clear(&gps->time);
-	gps->lat = gps->lon = 0.0;
-	gps->heading = gps->speed = 0;
-	gps->elevation = 0.0;
-	gps->satellites = 0;
-	gps->hdop = 0.0;
-
-	// Set up serial port
-	gps->fd = serial_open(gps->serial_port.string, gps->serial_speed);
-	if (gps->fd != -1)
-	{
-		mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, gps);
-		mainloop_addtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps);
-	}
-	else
-	{
-		LOG(LOG_WARN, "Could not open GPS serial device %s", gps->serial_port.string);
-		free(gps);
-		return NULL;
-	}
-
-	return gps;
-}
-
-void gps_update(void * object)
-{
 	gps_t * gps = object;
-
-	// Validate the GPS object
-	if (gps == NULL || gps->fd == -1)
-	{
-		// GPS device not initialized properly
-		return;
-	}
 
 	mutex_lock(&gps->update_mutex);
 	{
@@ -256,21 +210,64 @@ void gps_update(void * object)
 	mutex_unlock(&gps->update_mutex);
 }
 
-void gps_destroy(void * object)
+void * gps_new(char * serial_port, int baud)
 {
-	gps_t * gps = object;
-
-	// Validate the GPS object
-	if (gps == NULL || gps->fd == -1)
+	// Check input
+	speed_t speed = serial_getspeed(baud);
+	if (speed == 0)
 	{
-		// GPS device not initialized properly
-		return;
+		LOG(LOG_WARN, "Invalid speed setting on GPS device %s: %d", serial_port, baud);
+		return NULL;
 	}
 
-	close(gps->fd);
+	gps_t * gps = malloc(sizeof(gps_t));
+	memset(gps, 0, sizeof(gps_t));
+
+	gps->serial_port = strdup(serial_port);
+	gps->serial_speed = serial_getspeed(baud);
+	gps->readsuccess = false;
+	mutex_init(&gps->update_mutex, M_RECURSIVE);
+	gps->lastupdate = 0;
+	gps->lock = false;
+	string_clear(&gps->date);
+	string_clear(&gps->time);
+	gps->lat = gps->lon = 0.0;
+	gps->heading = gps->speed = 0;
+	gps->elevation = 0.0;
+	gps->satellites = 0;
+	gps->hdop = 0.0;
+
+	// Set up serial port
+	gps->fd = serial_open(serial_port, gps->serial_speed);
+	if (gps->fd < 0)
+	{
+		LOG(LOG_WARN, "Could not open GPS serial device %s", serial_port);
+		return NULL;
+	}
+
+	mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, gps);
+	mainloop_addtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps);
+
+	return gps;
 }
 
-bool module_init() {
+static void gps_destroy(void * object)
+{
+	// Sanity check
+	{
+		if unlikely(object == NULL)
+		{
+			return;
+		}
+	}
+
+	gps_t * gps = object;
+	close(gps->fd);
+	free(gps->serial_port);
+	free(gps);
+}
+
+static bool gps_init() {
 	// Set up $GPGGA regex (NMEA protocol)
 	// TODO - make this extended REGEX
 	if (regcomp(&gpgga_match, "^\\$GPGGA,\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\([[:digit:]]\\{2\\}\\)\\.[[:digit:]]\\{3\\},\\([[:digit:].]\\+\\),"
@@ -292,20 +289,18 @@ module_name("GPS");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Reads from any serial GPS module outputting NMEA format");
-module_oninitialize(module_init);
+module_oninitialize(gps_init);
 
-define_block(device, "GPS device", gps_new, "si", "(1) Serial port [eg. /dev/ttyUSB0], (2) Baud rate of the GPS device [eg. 4800]");
-
-block_onupdate(device, gps_update);
-block_ondestroy(deivce, gps_destroy);
-
-block_output(device, lastupdate, 'i', "The millisecond timestamp for the last GPS reading (default is 0)s");
-block_output(device, lock, 'b', "True if the device has a GPS lock (default is false)");
-//block_output(device, time, 's'); // TODO - add UTC time as string
-block_output(device, latitude, 'd', "The latitude reading (default is 0)");
-block_output(device, longitude, 'd', "The longitude reading (default is 0)");
-block_output(device, heading, 'd', "The estimated heading angle in degrees true (default is 0)");
-block_output(device, speed, 'd', "The estimated speed in knots (default is 0)");
-block_output(device, elevation, 'd', "Altitide in meters above sea level (default is 0)");
-block_output(device, satellites, 'i', "Number of satellites being tracked (default is 0)");
-block_output(device, hdop, 'd', "Horizontal dilution of position");
+define_block(	nmea,	"NMEA GPS device", gps_new, "si", "(1) Serial port [eg. /dev/ttyUSB0], (2) Baud rate of the GPS device [eg. 4800]");
+block_onupdate(	nmea,	gps_update);
+block_ondestroy(nmea,	gps_destroy);
+block_output(	nmea,	lastupdate,	'i',	"The millisecond timestamp for the last GPS reading (default is 0)s");
+block_output(	nmea,	lock,		'b',	"True if the device has a GPS lock (default is false)");
+//block_output(	nmea,	time,		's'); // TODO - add UTC time as string
+block_output(	nmea,	latitude,	'd',	"The latitude reading (default is 0)");
+block_output(	nmea,	longitude,	'd',	"The longitude reading (default is 0)");
+block_output(	nmea,	heading,	'd', 	"The estimated heading angle in degrees true (default is 0)");
+block_output(	nmea,	speed,		'd',	"The estimated speed in knots (default is 0)");
+block_output(	nmea,	elevation,	'd',	"Altitide in meters above sea level (default is 0)");
+block_output(	nmea,	satellites,	'i',	"Number of satellites being tracked (default is 0)");
+block_output(	nmea,	hdop,		'd',	"Horizontal dilution of position");

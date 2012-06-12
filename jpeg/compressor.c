@@ -61,29 +61,6 @@ static bool jpeg_getfmtinfo(char * fmt, convert_f * converter, sizecheck_f * siz
 	return false;
 }
 
-void * jpeg_new(char * format, int quality)
-{
-	convert_f converter;
-	sizecheck_f sizechecker;
-
-
-	if (!jpeg_getfmtinfo(format, &converter, &sizechecker))
-	{
-		LOG(LOG_ERR, "libJPEG error: Invalid input format: %s", format);
-		return NULL;
-	}
-
-	jpeg_t * jpeg = malloc(sizeof(jpeg_t));
-	memset(jpeg, 0, sizeof(jpeg_t));
-	jpeg->isvalid = false;
-	jpeg->quality = quality;
-	jpeg->converter = converter;
-	jpeg->sizechecker = sizechecker;
-	jpeg->out = -1;
-
-	return jpeg;
-}
-
 static void jpeg_freecompress(jpeg_t * jpeg)
 {
 	if (jpeg->isvalid)
@@ -98,18 +75,6 @@ static void jpeg_freecompress(jpeg_t * jpeg)
 		buffer_free(jpeg->out);
 		jpeg->out = -1;
 	}
-}
-
-void jpeg_free(void * data)
-{
-	if (data == NULL)
-	{
-		return;
-	}
-
-	jpeg_t * jpeg = data;
-	jpeg_freecompress(jpeg);
-	free(jpeg);
 }
 
 // --------------------------- LIBJPEG ERROR HANDLERS ---------------------
@@ -188,8 +153,16 @@ static bool js_yuv422(JDIMENSION width, JDIMENSION height, size_t buffersize)
 	return buffersize == expected;
 }
 
-void jpeg_update(void * object)
+static void compressor_update(void * object)
 {
+	// Sanity check
+	{
+		if unlikely(object == NULL)
+		{
+			return;
+		}
+	}
+
 	const int * width = INPUT(width);
 	const int * height = INPUT(height);
 	const buffer_t * frame = INPUT(frame);
@@ -288,16 +261,49 @@ void jpeg_update(void * object)
 	}
 }
 
+void * compressor_new(char * format, int quality)
+{
+	convert_f converter;
+	sizecheck_f sizechecker;
 
-module_name("JPEG Compressor");
-module_version(1,0,0);
-module_author("Andrew Klofas - andrew@maxkernel.com");
-module_description("Compresses an input buffer to a JPEG image");
 
-define_block(compressor, "JPEG compressor block", jpeg_new, "si", "(1) The input format [currently only YUV422 is supported] (2) The lossy compress quality [1-100]");
-block_input(compressor, width, 'i', "The width in pixels of the raw input image");
-block_input(compressor, height, 'i', "The hight in pixels of the raw input image");
-block_input(compressor, frame, 'x', "The raw frame to compress");
-block_output(compressor, frame, 'x', "The compressed JPEG image frame");
-block_onupdate(compressor, jpeg_update);
-block_ondestroy(compressor, jpeg_free);
+	if (!jpeg_getfmtinfo(format, &converter, &sizechecker))
+	{
+		LOG(LOG_ERR, "libJPEG error: Invalid input format: %s", format);
+		return NULL;
+	}
+
+	jpeg_t * jpeg = malloc(sizeof(jpeg_t));
+	memset(jpeg, 0, sizeof(jpeg_t));
+	jpeg->isvalid = false;
+	jpeg->quality = quality;
+	jpeg->converter = converter;
+	jpeg->sizechecker = sizechecker;
+	jpeg->out = -1;
+
+	return jpeg;
+}
+
+static void compressor_destroy(void * object)
+{
+	// Sanity check
+	{
+		if unlikely(object == NULL)
+		{
+			return;
+		}
+	}
+
+	jpeg_t * jpeg = object;
+	jpeg_freecompress(jpeg);
+	free(jpeg);
+}
+
+
+define_block(	compressor,	"JPEG compressor block", compressor_new, "si", "(1) The input format [currently only YUV422 is supported] (2) The lossy compress quality [1-100]");
+block_onupdate(	compressor,	compressor_update);
+block_ondestroy(compressor,	compressor_destroy);
+block_input(	compressor,	width,	'i',	"The width in pixels of the raw input image");
+block_input(	compressor,	height,	'i',	"The hight in pixels of the raw input image");
+block_input(	compressor,	frame,	'x',	"The raw frame to compress");
+block_output(	compressor,	frame,	'x',	"The compressed JPEG image frame");

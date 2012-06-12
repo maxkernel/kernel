@@ -18,6 +18,7 @@ static ssize_t syscallblock_info(kobject_t * object, void * buffer, size_t lengt
 static void syscallblock_free(kobject_t * object)
 {
 	syscallblock_t * sb = (syscallblock_t *)object;
+	kobj_destroy(kobj_cast(sb->syscall));
 	closure_free(sb->closure);
 	link_destroy(&sb->links);
 	port_destroy(&sb->ports);
@@ -181,6 +182,7 @@ syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t
 		}
 	}
 
+	kobj_makechild(kobj_cast(sb), kobj_cast(sb->syscall));
 	return sb;
 }
 

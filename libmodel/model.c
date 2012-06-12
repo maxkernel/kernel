@@ -792,7 +792,7 @@ model_linkable_t * model_newblockinst(model_t * model, model_module_t * module, 
 	return linkable;
 }
 
-model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, const char * groupname, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err)
+model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, const char * groupname, int priority, double hertz, const model_linkable_t ** elems, size_t elems_length, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -853,6 +853,7 @@ model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, 
 	linkable->backing.rategroup = rategroup;
 
 	strcpy(rategroup->name, groupname);
+	rategroup->priority = priority;
 	rategroup->hertz = hertz;
 	for (size_t i = 0; i < elems_length; i++)
 	{
@@ -1582,7 +1583,7 @@ void model_getsyscall(const model_linkable_t * linkable, const char ** name, con
 	if (desc != NULL)			*desc = syscall->description;
 }
 
-void model_getrategroup(const model_linkable_t * linkable, const char ** name, double * hertz)
+void model_getrategroup(const model_linkable_t * linkable, const char ** name, int * priority, double * hertz)
 {
 	// Sanity check
 	{
@@ -1594,6 +1595,7 @@ void model_getrategroup(const model_linkable_t * linkable, const char ** name, d
 
 	const model_rategroup_t * rategroup = linkable->backing.rategroup;
 	if (name != NULL)			*name = rategroup->name;
+	if (priority != NULL)		*priority = rategroup->priority;
 	if (hertz != NULL)			*hertz = rategroup->hertz;
 }
 

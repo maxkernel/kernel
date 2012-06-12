@@ -1,7 +1,7 @@
--- Configure the webcam modules. Create the video pipeline
+-- Configure the video pipeline
 -- Created by Andrew Klofas - andrew@maxkernel.com - June 2012
 
-debug("Setting up the vision pipeline")
+debug("Setting up the video pipeline")
 
 -- Set up the webcam module
 webcam_module = loadmodule("webcam")
@@ -9,7 +9,7 @@ camera = webcam_module.webcam("/dev/video0", "YUV422", 320, 240)
 
 
 -- Set up the JPEG compressor module
-jpeg_module = loadmodule("jpegcompress")
+jpeg_module = loadmodule("jpeg")
 jpegcompress = jpeg_module.compressor("YUV422", 80)
 
 
@@ -26,10 +26,10 @@ route(jpegcompress.frame, camerasink.buffer)
 
 
 -- Create the execution thread
-pipeline = newrategroup("Camera pipeline", { camera, jpegcompress, camerasink }, 30)
+pipeline = newrategroup("Camera pipeline", 1, { camera, jpegcompress, camerasink }, 30)
 
 
 -- Allow us to muck with the width/height and framerate through a syscall
-newsyscall("videoparams", "v:iii", {camera.width, camera.height, pipeline.rate}, nil, "Configures the video pipeline. (1) Frame resolution width. (2) Frame resolution height. (3) Frames per second.")
+newsyscall("videoparams", "v:iii", nil, {camera.width, camera.height, pipeline.rate}, "Configures the video pipeline. (1) Frame resolution width. (2) Frame resolution height. (3) Frames per second.")
 
 

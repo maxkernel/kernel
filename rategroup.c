@@ -101,8 +101,11 @@ rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** er
 	}
 
 	const char * name = NULL;
+	int priority = 0;
 	double hertz = 0;
-	model_getrategroup(linkable, &name, &hertz);
+	model_getrategroup(linkable, &name, &priority, &hertz);
+
+	LOGK(LOG_DEBUG, "Creating rategroup %s with priority %d and update rate of %f Hz", name, priority, hertz);
 
 	string_t trigger_name = string_new("%s trigger", name);
 	trigger_varclock_t * trigger = trigger_newvarclock(trigger_name.string, hertz, err);
@@ -112,8 +115,9 @@ rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** er
 	}
 
 	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_info, rategroup_destroy, sizeof(rategroup_t));
-	rg->trigger = trigger;
 	rg->name = strdup(name);
+	rg->priority = priority;
+	rg->trigger = trigger;
 	list_init(&rg->blockinsts);
 
 	list_add(&rategroups, &rg->global_list);
@@ -153,7 +157,7 @@ bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, ex
 	return true;
 }
 
-bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err)
+bool rategroup_schedule(rategroup_t * rategroup, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -170,7 +174,7 @@ bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** er
 	}
 
 	string_t name = string_new("%s thread", rategroup->name);
-	kthread_t * thread = kthread_new(name.string, priority, trigger_cast(rategroup->trigger), kobj_cast(rategroup), rategroup_run, NULL, err);
+	kthread_t * thread = kthread_new(name.string, rategroup->priority, trigger_cast(rategroup->trigger), kobj_cast(rategroup), rategroup_run, NULL, err);
 	if (thread == NULL || exception_check(err))
 	{
 		return false;

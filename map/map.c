@@ -11,6 +11,8 @@
 
 static GRegex * map_regex = NULL;
 
+// TODO IMPORTANT - add sanity checks, remove GLIB!!
+
 static double map_linear(map_t * map, const double tomap, size_t ia, size_t ib)
 {
 	double diff_src = map->src_array[ib] - map->src_array[ia];
@@ -95,6 +97,14 @@ static map_t * map_new(map_f mapping_function, double * from, double * to, size_
 
 void map_destroy(map_t * map)
 {
+	// Sanity check
+	{
+		if unlikely(map == NULL)
+		{
+			return;
+		}
+	}
+
 	free(map->src_array);
 	free(map->dest_array);
 	free(map);

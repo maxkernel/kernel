@@ -269,6 +269,7 @@ typedef struct
 	list_t global_list;
 
 	char * name;
+	int priority;
 	trigger_varclock_t * trigger;
 
 	list_t blockinsts;
@@ -307,6 +308,8 @@ typedef struct
 #define PIDFILE					"/var/run/maxkernel.pid"
 #define LOGBUF_SIZE				(400 * 1024)		// 400 KB
 
+#define SCHED_POLICY				SCHED_RR
+#define SCHED_PRIO_BASE		5
 
 
 typedef enum
@@ -345,7 +348,6 @@ syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t
 #define syscallblock_links(sb)	(&(sb)->links)
 #define syscallblock_ports(sb)	(&(sb)->ports)
 
-#define KTHREAD_SCHED		SCHED_RR
 kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, kobject_t * object, runnable_f runfunction, runnable_f stopfunction, exception_t ** err);
 void kthread_schedule(kthread_t * thread);
 kthread_t * kthread_self();
@@ -410,10 +412,9 @@ port_t * port_lookup(portlist_t * ports, meta_iotype_t type, const char * name);
 bool port_makeblockports(const block_t * block, portlist_t * list, exception_t ** err);
 #define port_iobacking(port)	((port)->backing)
 
-#define RATEGROUP_PRIO		(1)		// TODO - should we make this highest priority
 rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** err);
 bool rategroup_addblockinst(rategroup_t * rategroup, blockinst_t * blockinst, exception_t ** err);
-bool rategroup_schedule(rategroup_t * rategroup, int priority, exception_t ** err);
+bool rategroup_schedule(rategroup_t * rategroup, exception_t ** err);
 #define rategroup_name(rg)		((rg)->name)
 #define rategroup_links(rg)		(trigger_varclock_links((rg)->trigger))
 #define rategroup_ports(rg)		(trigger_varclock_ports((rg)->trigger))

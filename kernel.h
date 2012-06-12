@@ -137,10 +137,10 @@ typedef void (*calpreview_f)(void * object, const char * domain, const char * na
 typedef void (*calgpreview_f)(void * object, const char * domain, const char * name, const char sig, const void * backing, char * hint, size_t hint_length);
 typedef void (*calmodechange_f)(void * object, calmode_t mode, calstatus_t status);
 
-#define cal_register(domain, variable, sig, desc, onpreview, onpreview_object) \
+#define cal_register(domain, name, variable, sig, desc, onpreview, onpreview_object) \
 	({ \
 		exception_t * __e = NULL;			\
-		cal_doregister(domain, #variable, sig, constraint_parse(desc, &__e), constraint_parsepast(desc), &variable, onpreview, onpreview_object); \
+		cal_doregister((domain), (name), (sig), constraint_parse((desc), &__e), constraint_parsepast(desc), (variable), (onpreview), (onpreview_object)); \
 		if (exception_check(&__e))			\
 		{									\
 			LOG(LOG_WARN, "Invalid constraint declaration: %s. Ignoring constraint", __e->message); \

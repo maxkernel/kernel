@@ -7,17 +7,15 @@ RELEASE		= BETA
 
 MODEL       = Max 5J
 
-MODULES		= console discovery netui httpserver map service drivemodel lookmodel webcam ssc-32 parallax-ssc gps network maxpod jpegcompress
+MODULES		= console discovery netui httpserver map service motionmodel webcam ssc gps network maxpod jpeg
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h
 
 SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.c rategroup.c port.c link.c iobacking.c syscallblock.c property.c config.c calibration.c buffer.c serialize.c trigger.c
-#FIXME		= io.c exec.c
-#OLD_SRCS	= meta.c luaenv.c
 #TODO - add -Wextra to CFLAGS
 OBJS		= $(SRCS:.c=.o)
-PACKAGES	= libconfuse libffi glib-2.0 sqlite3 lua5.1
+PACKAGES	= libconfuse libffi sqlite3
 INCLUDES	= -I. -Iaul/include -Ilibmodel/include $(shell pkg-config --cflags-only-I $(PACKAGES))
 DEFINES		= -D_GNU_SOURCE -DKERNEL -DUSE_BFD -DUSE_DL -DUSE_LUA -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\""
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
