@@ -224,17 +224,17 @@ string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseco
 }
 
 // --------------------- KObject functions -----------------------
-void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size)
+void * kobj_new(const char * class_name, const char * name, desc_f desc, destructor_f destructor, size_t size)
 {
 	// Sanity check
 	{
-		if (size < sizeof(kobject_t))
+		if unlikely(size < sizeof(kobject_t))
 		{
 			LOGK(LOG_FATAL, "Size of new kobject_t is too small");
 			//will exit
 		}
 
-		if (class_name == NULL || name == NULL)
+		if unlikely(class_name == NULL || name == NULL)
 		{
 			LOGK(LOG_FATAL, "Invalid arguments to kobj_new");
 			// Will exit
@@ -247,7 +247,7 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 	object->class_name = class_name;
 	object->object_name = strdup(name);
 	object->object_id = atomic_inc(kobject_nextid);
-	object->info = info;
+	object->desc = desc;
 	object->destructor = destructor;
 
 	mutex_lock(&kobj_mutex);
@@ -259,22 +259,22 @@ void * kobj_new(const char * class_name, const char * name, info_f info, destruc
 	return object;
 }
 
-bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const char ** object_name, const kobject_t ** parent)
+ssize_t kobj_desc(const kobject_t * kobject, char * buffer, size_t length)
 {
 	// Sanity check
 	{
-		if (kobject == NULL)
+		if unlikely(kobject == NULL || buffer == NULL)
 		{
-			return false;
+			return -1;
 		}
 	}
 
-	// TODO - return more kobject info (like callback functions)
-	if (class_name != NULL)		*class_name = kobject->class_name;
-	if (object_name != NULL)	*object_name = kobject->object_name;
-	if (parent != NULL)			*parent = kobject->parent;
+	if (kobject->desc == NULL)
+	{
+		return 0;
+	}
 
-	return true;
+	return kobject->desc(kobject, buffer, length);
 }
 
 void kobj_makechild(kobject_t * parent, kobject_t * child)
@@ -313,11 +313,49 @@ void kobj_destroy(kobject_t * object)
 	mutex_unlock(&kobj_mutex);
 }
 
-// --------------------- KThread functions -----------------------
-static ssize_t kthread_info(kobject_t * object, char * buffer, size_t length)
+iterator_t kobj_itr()
 {
-	kthread_t * kth = (kthread_t *)object;
-	return snprintf(buffer, length, "{ running: %s, stop_flag: %s, priority: %d, trigger_id: %#x }", ser_bool(&kth->running), ser_bool(&kth->stop), kth->priority, kobj_id(kobj_cast(kth->trigger)));
+	const void * kobjs_next(const void * object, void ** itrobject)
+	{
+		unused(object);
+
+		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		if (list == &kobjects)
+		{
+			return NULL;
+		}
+		else
+		{
+			return list_entry(list, kobject_t, objects_list);
+		}
+	}
+
+	return iterator_new("kobjects", kobjs_next, NULL, NULL, &kobjects);
+}
+
+bool kobj_next(iterator_t itr, const kobject_t ** kobject)
+{
+	const kobject_t * k = iterator_next(itr, "kobjects");
+	if (k == NULL)
+	{
+		return false;
+	}
+
+	if (kobject != NULL)		*kobject = k;
+	return true;
+}
+
+// --------------------- KThread functions -----------------------
+static ssize_t kthread_desc(const kobject_t * object, char * buffer, size_t length)
+{
+	const kthread_t * kth = (const kthread_t *)object;
+
+	string_t trigger_id = string_new("none");
+	if (kth->trigger != NULL)
+	{
+		string_set(&trigger_id, "%#x", kobj_id(kobj_cast(kth->trigger)));
+	}
+	return snprintf(buffer, length, "{ 'running': %s, 'stop_flag': %s, 'priority': %d, 'trigger_id': '%s' }", ser_bool(&kth->running), ser_bool(&kth->stop), kth->priority, trigger_id.string);
 }
 
 static void kthread_destroy(kobject_t * object)
@@ -421,7 +459,7 @@ kthread_t * kthread_new(const char * name, int priority, trigger_t * trigger, ko
 		}
 	}
 
-	kthread_t * kth = kobj_new("Thread", name, kthread_info, kthread_destroy, sizeof(kthread_t));
+	kthread_t * kth = kobj_new("Thread", name, kthread_desc, kthread_destroy, sizeof(kthread_t));
 	kth->priority = priority;
 	kth->running = false;
 	kth->stop = false;
@@ -454,9 +492,7 @@ static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * user
 			kthread_t * kth = list_entry(pos, kthread_t, schedule_list);
 			list_remove(&kth->schedule_list);
 
-			const char * object_name = NULL;
-			kobj_getinfo(&kth->kobject, NULL, &object_name, NULL);
-			LOGK(LOG_DEBUG, "Starting thread %s", object_name);
+			LOGK(LOG_DEBUG, "Starting thread %s", kobj_objectname(kobj_cast(kth)));
 
 			kthread_start(kth);
 		}
@@ -601,14 +637,9 @@ static int modules_itr()
 		{
 			module_t * module = list_entry(list, module_t, global_list);
 
-			if (module->backing != NULL)
-			{
-				const char * path = NULL;
-				meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
-				return path;
-			}
-
-			return NULL;
+			const char * path = NULL;
+			meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
+			return path;
 		}
 	}
 
@@ -881,24 +912,24 @@ int main(int argc, char * argv[])
 			}																	\
 		})
 
-	reg_syscall(	modules_itr,		"i:v",		"Returns an iterator that loops over all loaded modules. Use in conjunction with 'modules_next' and 'itr_free'");
-	reg_syscall(	modules_next,		"s:i",		"Returns the next name of module in iterator. Use in conjunction with 'modules_itr' and 'itr_free'");
+	reg_syscall(	modules_itr,		"i:v",		"Returns an iterator that loops over all loaded modules. Use in conjunction with modules_next and itr_free");
+	reg_syscall(	modules_next,		"s:i",		"Returns the next name of module in iterator. Use in conjunction with modules_itr and itr_free");
 	reg_syscall(	module_exists,		"b:s",		"Returns true if module exists and is loaded by name (param 1)");
-	reg_syscall(	syscalls_itr,		"i:v",		"Returns an iterator that loop over all registered syscalls. Use in conjunction with 'syscalls_next' and 'itr_free'");
-	reg_syscall(	syscalls_next,		"s:i",		"Returns the next name of the syscall in the iterator. Use in conjunction with 'syscalls_itr' and 'itr_free'");
+	reg_syscall(	syscalls_itr,		"i:v",		"Returns an iterator that loop over all registered syscalls. Use in conjunction with syscalls_next and itr_free");
+	reg_syscall(	syscalls_next,		"s:i",		"Returns the next name of the syscall in the iterator. Use in conjunction with syscalls_itr and itr_free");
 	reg_syscall(	syscall_info,		"s:s",		"Returns description of the given syscall (param 1)");
 	reg_syscall(	syscall_exists,		"b:ss",		"Returns true if syscall exists by name (param 1) and signature (param 2). If signature is an empty string or null, only name is evaluated");
 	reg_syscall(	syscall_signature,	"s:s",		"Returns the signature for the given syscall (param 1) if it exists, or an empty string if not");
 	reg_syscall(	max_model,			"s:v",		"Returns the model name of the robot");
 	reg_syscall(	kernel_id,			"s:v",		"Returns the unique id of the kernel (non-volatile)");
 	reg_syscall(	kernel_installed,	"i:v",		"Returns a unix timestamp when maxkernel was installed");
-	reg_syscall(	properties_itr,		"i:v",		"Returns an iterator that loops over all the property names defined. Use in conjunction with 'properties_next' and 'itr_free'");
-	reg_syscall(	properties_next,	"s:i",		"Returns the next property name in the iterator. Use in conjunction with 'properties_itr' and 'itr_free'");
+	reg_syscall(	properties_itr,		"i:v",		"Returns an iterator that loops over all the property names defined. Use in conjunction with properties_next and itr_free");
+	reg_syscall(	properties_next,	"s:i",		"Returns the next property name in the iterator. Use in conjunction with properties_itr and itr_free");
 	reg_syscall(	property_get,		"s:s",		"Returns the string representation of the defined property");
 	reg_syscall(	property_set,		"v:ss",		"Sets the property name (param 1) to the specified value (param 2)");
 	reg_syscall(	property_clear,		"v:s",		"Clears the property name (param 1) and the associated value from the database");
 	reg_syscall(	property_isset,		"b:s",		"Returns true if the property name (param 1) has been set");
-	reg_syscall(    itr_free,			"v:i",		"Frees the given iterator. It can no longer be used after it's free'd");
+	reg_syscall(    itr_free,			"v:i",		"Frees the given iterator. It can no longer be used after it has been freed");
 
 	// Parse configuration file
 	{

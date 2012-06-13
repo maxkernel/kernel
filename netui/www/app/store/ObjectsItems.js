@@ -1,12 +1,12 @@
-Ext.define('Max.store.CalibrationItems', {
+Ext.define('Max.store.ObjectsItems', {
     extend: 'Ext.data.Store',
-    model: 'Max.model.CalibrationItem',
+    model: 'Max.model.ObjectsItem',
     
     groupField: 'name',
     
     proxy: {
         type: 'ajax',
-        url: '/get/calibration.json',
+        url: '/get/objects.json',
         
         reader: {
             type: 'json',
@@ -20,5 +20,7 @@ Ext.define('Max.store.CalibrationItems', {
         sortParam: undefined,
         limitParam: undefined,
     },
+    
+    autoLoad: true,
 });
 

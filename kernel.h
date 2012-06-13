@@ -41,7 +41,7 @@ extern "C" {
 typedef struct __kobject_t kobject_t;
 
 typedef void (*destructor_f)(kobject_t * object);
-typedef ssize_t (*info_f)(kobject_t * object, char * buffer, size_t length);
+typedef ssize_t (*desc_f)(const kobject_t * object, char * buffer, size_t length);
 typedef bool (*handler_f)(void * userdata);
 
 struct __kobject_t
@@ -49,19 +49,24 @@ struct __kobject_t
 	const char * class_name;
 	char * object_name;
 	unsigned int object_id;
-	kobject_t * parent;
+	const kobject_t * parent;
 
-	info_f info;
+	desc_f desc;
 	destructor_f destructor;
 	list_t objects_list;
 };
 
-void * kobj_new(const char * class_name, const char * name, info_f info, destructor_f destructor, size_t size);
-bool kobj_getinfo(const kobject_t * kobject, const char ** class_name, const char ** object_name, const kobject_t ** parent);
+void * kobj_new(const char * class_name, const char * name, desc_f desc, destructor_f destructor, size_t size);
 void kobj_makechild(kobject_t * parent, kobject_t * child);
 void kobj_destroy(kobject_t * object);
-#define kobj_cast(kobj)		(&(kobj)->kobject)
-#define kobj_id(kobj)		((kobj)->object_id)
+iterator_t kobj_itr();
+bool kobj_next(iterator_t itr, const kobject_t ** kobject);
+#define kobj_cast(kobj)			(&(kobj)->kobject)
+#define kobj_classname(kobj)	((kobj)->class_name)
+#define kobj_objectname(kobj)	((const char *)(kobj)->object_name)
+#define kobj_id(kobj)			((kobj)->object_id)
+#define kobj_parent(kobj)		((kobj)->parent)
+ssize_t kobj_desc(const kobject_t * kobject, char * buffer, size_t length);
 
 #define PATH_BUFSIZE			2048
 #define PATH_MAXPATHS			50

@@ -8,10 +8,10 @@
 #include <kernel-priv.h>
 
 
-static ssize_t block_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t block_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	block_t * blk = (block_t *)object;
-	return snprintf(buffer, length, "{ name: %s, description: '%s', signature: %s, signature_description: '%s', module_id: %#x }", blk->name, ser_string(blk->desc), ser_string(blk->newsig), ser_string(blk->newdesc), kobj_id(kobj_cast(blk->module)));
+	const block_t * blk = (const block_t *)object;
+	return snprintf(buffer, length, "{ 'name': '%s', 'description': '%s', 'signature': '%s', 'signature_description': '%s', 'module_id': '%#x' }", blk->name, ser_string(blk->desc), ser_string(blk->newsig), ser_string(blk->newdesc), kobj_id(kobj_cast(blk->module)));
 }
 
 static void block_destroy(kobject_t * object)
@@ -56,12 +56,12 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 		return NULL;
 	}
 
-	const char * block_name = NULL, * block_desc = NULL, * new_sig = NULL, * new_desc;
+	const char * name = NULL, * desc = NULL, * new_sig = NULL, * new_desc;
 	meta_callback_f new = NULL;
-	meta_getblock(block, &block_name, &block_desc, NULL, &new_sig, &new_desc, &new);
+	meta_getblock(block, &name, &desc, NULL, &new_sig, &new_desc, &new);
 	if (new_sig == NULL || (strlen(new_sig) > 0 && new == NULL))
 	{
-		exception_set(err, EINVAL, "Bad constructor defined for block '%s'", block_name);
+		exception_set(err, EINVAL, "Bad constructor defined for block '%s'", name);
 		return NULL;
 	}
 
@@ -74,7 +74,7 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 
 	if (onupdate_cb == NULL)
 	{
-		exception_set(err, EINVAL, "Block '%s' update function not defined!", block_name);
+		exception_set(err, EINVAL, "Block '%s' update function not defined!", name);
 		return NULL;
 	}
 
@@ -85,10 +85,10 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 		return NULL;
 	}
 
-	block_t * blk = kobj_new("Block", block_name, block_info, block_destroy, sizeof(block_t));
+	block_t * blk = kobj_new("Block", name, block_desc, block_destroy, sizeof(block_t));
 	blk->module = module;
-	blk->name = strdup(block_name);
-	blk->desc = strdup(block_desc);
+	blk->name = strdup(name);
+	blk->desc = strdup(desc);
 	blk->newsig = strdup(new_sig);
 	blk->newdesc = strdup(new_desc);
 	blk->new = newffi;

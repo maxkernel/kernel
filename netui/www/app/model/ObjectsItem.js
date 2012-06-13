@@ -1,12 +1,11 @@
-Ext.define('Max.model.CalibrationItem', {
+Ext.define('Max.model.ObjectsItem', {
     extend: 'Ext.data.Model',
     
     fields: [
         {name: 'name', type: 'string'},
         {name: 'subname',  type: 'string'},
-        {name: 'sig', type: 'string'},
-        {name: 'value',  type: 'string'},
-        {name: 'step', type: 'number'},
+        {name: 'id', type: 'string'},
+        {name: 'parent', type: 'string'},
         {name: 'desc',  type: 'string'}
     ]
 });

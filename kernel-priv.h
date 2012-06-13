@@ -192,6 +192,7 @@ typedef struct
 	trigger_t trigger;
 	struct timespec last_trigger;
 	uint64_t interval_nsec;
+	double freq_hz;
 } trigger_clock_t;
 
 typedef struct
@@ -361,7 +362,7 @@ kthread_t * kthread_self();
 #define kthread_trigger(kth)	((kth)->trigger)
 #define kthread_object(kth)		((kth)->object)
 
-void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
+void * trigger_new(const char * name, desc_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size);
 bool trigger_watch(trigger_t * trigger);
 trigger_clock_t * trigger_newclock(const char * name, double freq_hz);
 trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_hz, exception_t ** err);

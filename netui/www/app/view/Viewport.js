@@ -4,17 +4,18 @@ Ext.define('Max.view.Viewport', {
     requires: [
         'Max.view.Viewer',
         'Max.view.Menu',
-        'Max.view.Banner',
         'Ext.layout.container.Border'
     ],
 
 	layout: 'border',
 	
 	items: [{
-	    region: 'north',
-	    xtype: 'banner'
-	},
-	{
+		xtype: 'box',
+		id: 'banner',
+		region: 'north',
+		html: '<h1>MaxKernel Dashboard</h1>',
+		height: 30
+	},{
 		region: 'center',
 		xtype: 'viewer'
 	},

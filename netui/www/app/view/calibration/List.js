@@ -6,18 +6,17 @@ Ext.define('Max.view.calibration.List', {
     store: 'CalibrationItems',
 
 	initComponent: function() {
-	    var grouping = Ext.create('Ext.grid.feature.Grouping', {
-            groupHeaderTpl: '{name}'
-        });
-        
 		Ext.apply(this, {
-			features: [grouping],
+			features: [{
+				ftype: 'grouping',
+				groupHeaderTpl: 'Domain: {name}'
+			}],
 			
 			cellCls: 'valign-middle',
 			
 			columns: [{
 				text: 'Name',
-				dataIndex: 'name',
+				dataIndex: 'subname',
 				width: 200
 			}, {
 				text: 'Description',
@@ -36,7 +35,7 @@ Ext.define('Max.view.calibration.List', {
 				items: [{
 				    text: 'Start',
 				    name: 'start',
-				    icon: 'images/cal-start.png',
+				    icon: 'images/calibration-start.png',
 				    action: 'start'
 				},{
 					text: 'Revert',

@@ -27,6 +27,7 @@ Ext.define('Max.view.Viewer', {
         
         this.tabs[tabConfig.title] = this.add(tabConfig);
         this.tabs[tabConfig.title].on('beforeclose', this.closeTab, this, { title: tabConfig.title });
+        this.setActiveTab(this.tabs[tabConfig.title]);
     },
     
     getTab: function(title) {

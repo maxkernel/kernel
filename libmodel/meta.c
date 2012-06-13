@@ -390,7 +390,7 @@ ssize_t meta_yamlinfo(const meta_t * meta, char * buffer, size_t length)
 	const char * path = NULL, * name = NULL, * author = NULL, * desc = NULL;
 	const version_t * version = NULL;
 	meta_getinfo(meta, &path, &name, &version, &author, &desc);
-	return snprintf(buffer, length, "{ path: '%s', name: '%s', author: %s, version: %s, description: '%s' }", path, name, ser_string(author), ser_version(version), ser_string(desc));
+	return snprintf(buffer, length, "{ 'path': '%s', 'name': '%s', 'author': '%s', 'version': '%s', 'description': '%s' }", path, name, ser_string(author), ser_version(version), ser_string(desc));
 }
 
 meta_t * meta_parsebase64(const char * from, size_t length, exception_t ** err)

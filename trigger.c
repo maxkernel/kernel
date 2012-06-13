@@ -43,7 +43,7 @@ static inline struct timespec nanos2timespec(uint64_t nanos)
 	return tm;
 }
 
-void * trigger_new(const char * name, info_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size)
+void * trigger_new(const char * name, desc_f info, destructor_f destructor, trigger_f trigfunc, size_t malloc_size)
 {
 	if (malloc_size < sizeof(trigger_f))
 	{
@@ -72,10 +72,10 @@ bool trigger_watch(trigger_t * trigger)
 }
 
 // ------------------- CLOCK -------------------------
-static ssize_t trigger_infoclock(kobject_t * object, char * buffer, size_t length)
+static ssize_t trigger_descclock(const kobject_t * object, char * buffer, size_t length)
 {
-	trigger_clock_t * clk = (trigger_clock_t *)object;
-	return snprintf(buffer, length, "{ interval: %" PRIu64 " }", clk->interval_nsec);
+	const trigger_clock_t * clk = (const trigger_clock_t *)object;
+	return snprintf(buffer, length, "{ 'frequency': %f }", clk->freq_hz);
 }
 
 static bool trigger_waitclock(trigger_t * trigger)
@@ -107,10 +107,7 @@ static bool trigger_waitclock(trigger_t * trigger)
 	{
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
-			const char * object_name = NULL;
-			kobj_getinfo(&clk->trigger.kobject, NULL, &object_name, NULL);
-
-			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", object_name, (diff - clk->interval_nsec));
+			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", kobj_objectname(kobj_cast(trigger_cast(clk))), (diff - clk->interval_nsec));
 			clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
 		}
 		else
@@ -143,8 +140,9 @@ static bool trigger_waitclock(trigger_t * trigger)
 trigger_clock_t * trigger_newclock(const char * name, double freq_hz)
 {
 	string_t str = string_new("%s (@ %0.3fHz) clock trigger", name, freq_hz);
-	trigger_clock_t * clk = trigger_new(str.string, trigger_infoclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
+	trigger_clock_t * clk = trigger_new(str.string, trigger_descclock, NULL, trigger_waitclock, sizeof(trigger_clock_t));
 	clk->interval_nsec = hz2nanos(freq_hz);
+	clk->freq_hz = freq_hz;
 
 	return clk;
 }
@@ -181,6 +179,7 @@ static bool trigger_waitvarclock(trigger_t * trigger)
 	if (new_interval != clk->interval_nsec)
 	{
 		clk->interval_nsec = new_interval;
+		clk->freq_hz = *new_freq_hz;
 
 		struct timespec now, trigger;
 		clock_gettime(CLOCK_REALTIME, &now);
@@ -214,8 +213,9 @@ trigger_varclock_t * trigger_newvarclock(const char * name, double initial_freq_
 	}
 
 	// Create the trigger
-	trigger_varclock_t * vclk = trigger_new(name, trigger_infoclock, trigger_destroyvarclock, trigger_waitvarclock, sizeof(trigger_varclock_t));
+	trigger_varclock_t * vclk = trigger_new(name, trigger_descclock, trigger_destroyvarclock, trigger_waitvarclock, sizeof(trigger_varclock_t));
 	vclk->clock.interval_nsec = hz2nanos(initial_freq_hz);
+	vclk->clock.freq_hz = initial_freq_hz;
 	linklist_init(&vclk->links);
 	portlist_init(&vclk->ports);
 

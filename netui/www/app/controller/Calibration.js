@@ -87,8 +87,8 @@ Ext.define('Max.controller.Calibration', {
             url: '/set/calibration/preview',
             method: 'GET',
             params: {
-            	domain: evt.record.data.domain,
-                name: evt.record.data.name,
+            	domain: evt.record.data.name,
+                name: evt.record.data.subname,
                 value: evt.value
             },
             success: function(response) {

@@ -10,17 +10,16 @@
 #include <kernel-priv.h>
 
 
-static ssize_t blockinst_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t blockinst_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	blockinst_t * blkinst = (blockinst_t *)object;
+	const blockinst_t * blkinst = (const blockinst_t *)object;
 
-	string_t args = string_new("'%s'", (blkinst->argslen > 0)? blkinst->args[0] : "");
-	for (size_t i = 1; i < blkinst->argslen; i++)
+	string_t args = string_blank();
+	for (size_t i = 0; i < blkinst->argslen; i++)
 	{
-		string_append(&args, ", '%s'", blkinst->args[i]);
+		string_append(&args, "%s'%s'", (i > 0)? ", " : "", blkinst->args[i]);
 	}
-
-	return snprintf(buffer, length, "{ name: %s, block_id: %#x, args: [ %s ] }", blkinst->name, kobj_id(kobj_cast(blkinst->block)), args.string);
+	return snprintf(buffer, length, "{ 'name': '%s', 'block_id': '%#x', 'args': [ %s ] }", blkinst->name, kobj_id(kobj_cast(blkinst->block)), args.string);
 }
 
 static void blockinst_destroy(kobject_t * object)
@@ -90,7 +89,7 @@ blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** er
 	block_t * b = module_lookupblock(m, block_name);
 
 	string_t name = string_new("%s.%s", module_name, block_name);
-	blockinst_t * bi = kobj_new("Block Instance", name.string, blockinst_info, blockinst_destroy, sizeof(blockinst_t));
+	blockinst_t * bi = kobj_new("Block Instance", name.string, blockinst_desc, blockinst_destroy, sizeof(blockinst_t));
 	linklist_init(&bi->links);
 	bi->block = b;
 	bi->name = strdup(name.string);

@@ -32,15 +32,5 @@ Ext.define('Max.controller.Menu', {
 	    	this.getController(item.get('path'));
 	    	this.getViewer().showTab({title: item.get('name'), xtype: item.get('view')});
 	    }
-    /*
-        var item = selected[0];
-
-        if (item) {
-            var c = this.getController(item.get('path'));
-            Ext.onReady(function() {
-                c.init(this);
-            }, this);          
-        }
-    */
-    }
+    },
 });

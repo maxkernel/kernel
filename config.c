@@ -9,10 +9,10 @@
 #include <kernel-priv.h>
 
 
-static ssize_t config_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t config_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	config_t * config = (config_t *)object;
-	return snprintf(buffer, length, "{ name: %s, signature: %c, value: '%s', description: '%s' }", config->name, config->sig, ser_string(config->cache), ser_string(config->desc));
+	const config_t * config = (const config_t *)object;
+	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%c', 'value': '%s', 'description': '%s' }", config->name, config->sig, ser_string(config->cache), ser_string(config->desc));
 }
 
 void config_destroy(kobject_t * object)
@@ -175,7 +175,7 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config, excep
 		return NULL;
 	}
 
-	config_t * c = kobj_new("Config", name, config_info, config_destroy, sizeof(config_t));
+	config_t * c = kobj_new("Config", name, config_desc, config_destroy, sizeof(config_t));
 	c->name = strdup(name);
 	c->sig = sig;
 	c->desc = strdup(desc);

@@ -11,19 +11,19 @@
 
 extern list_t rategroups;
 
-static ssize_t rategroup_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t rategroup_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	rategroup_t * rg = (rategroup_t *)object;
+	const rategroup_t * rg = (const rategroup_t *)object;
 
 	string_t ids = string_blank();
 	list_t * pos = NULL;
 	list_foreach(pos, &rg->blockinsts)
 	{
 		rategroup_blockinst_t * rg_blockinst = list_entry(pos, rategroup_blockinst_t, rategroup_list);
-		string_append(&ids, "%s%#x", (ids.length == 0)? "" : ", ", kobj_id(kobj_cast(rg_blockinst->blockinst)));
+		string_append(&ids, "%s'%#x'", (ids.length == 0)? "" : ", ", kobj_id(kobj_cast(rg_blockinst->blockinst)));
 	}
 
-	return snprintf(buffer, length, "{ name: %s, priority: %d, trigger_id: %#x, blockinstance_ids: [ %s ] }", rg->name, rg->priority, kobj_id(kobj_cast(trigger_cast(rg->trigger))), ids.string);
+	return snprintf(buffer, length, "{ 'name': '%s', 'priority': %d, 'trigger_id': '%#x', 'blockinstance_ids': [ %s ] }", rg->name, rg->priority, kobj_id(kobj_cast(trigger_cast(rg->trigger))), ids.string);
 }
 
 static void rategroup_destroy(kobject_t * object)
@@ -123,7 +123,7 @@ rategroup_t * rategroup_new(const model_linkable_t * linkable, exception_t ** er
 		return NULL;
 	}
 
-	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_info, rategroup_destroy, sizeof(rategroup_t));
+	rategroup_t * rg = kobj_new("Rategroup", name, rategroup_desc, rategroup_destroy, sizeof(rategroup_t));
 	rg->name = strdup(name);
 	rg->priority = priority;
 	rg->trigger = trigger;

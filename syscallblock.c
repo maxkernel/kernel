@@ -9,10 +9,10 @@
 #include <kernel-priv.h>
 
 
-static ssize_t syscallblock_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t syscallblock_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	syscallblock_t * sb = (syscallblock_t *)object;
-	return snprintf(buffer, length, "{ syscall_id: %#x }", kobj_id(kobj_cast(sb->syscall)));
+	const syscallblock_t * sb = (const syscallblock_t *)object;
+	return snprintf(buffer, length, "{ 'syscall_id': '%#x' }", kobj_id(kobj_cast(sb->syscall)));
 }
 
 static void syscallblock_free(kobject_t * object)
@@ -118,7 +118,7 @@ syscallblock_t * syscallblock_new(const model_linkable_t * linkable, exception_t
 
 	LOGK(LOG_DEBUG, "Creating syscall %s(%s)", name, sig);
 
-	syscallblock_t * sb = kobj_new("SyscallBlockinst", name, syscallblock_info, syscallblock_free, sizeof(syscallblock_t));
+	syscallblock_t * sb = kobj_new("SyscallBlockinst", name, syscallblock_desc, syscallblock_free, sizeof(syscallblock_t));
 	mutex_init(&sb->lock, M_NORMAL);
 	linklist_init(&sb->links);
 	portlist_init(&sb->ports);

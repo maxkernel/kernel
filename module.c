@@ -9,9 +9,9 @@
 
 extern list_t modules;
 
-static ssize_t module_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t module_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	module_t * module = (module_t *)object;
+	const module_t * module = (const module_t *)object;
 	return meta_yamlinfo(module->backing, buffer, length);
 }
 
@@ -67,6 +67,8 @@ static void module_destroy(kobject_t * object)
 			destroyer();
 		}
 	}
+
+	//meta_destroy((meta_t *)module->backing);
 
 	//do not dlclose module because that address space might still be in use
 	// TODO - we can check that and unload if not in use!
@@ -224,8 +226,8 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 		return NULL;
 	}
 
-	module_t * module = kobj_new("Module", name, module_info, module_destroy, sizeof(module_t));
-	module->backing = meta;
+	module_t * module = kobj_new("Module", name, module_desc, module_destroy, sizeof(module_t));
+	module->backing = meta; //meta_copy(meta);
 	list_init(&module->syscalls);
 	list_init(&module->configs);
 	list_init(&module->blocks);

@@ -4,15 +4,6 @@
 #include <aul/common.h>
 #include <aul/string.h>
 
-string_t string_blank()
-{
-	string_t str;
-	str.string[0] = 0;
-	str.length = 0;
-
-	return str;
-}
-
 string_t string_new(const char * fmt, ...)
 {
 	string_t str = string_blank();
@@ -49,7 +40,8 @@ void string_append(string_t * str, const char * fmt, ...)
 
 void string_vappend(string_t * str, const char * fmt, va_list args)
 {
-	str->length += vsnprintf(str->string + str->length, AUL_STRING_MAXLEN - str->length, fmt, args);
+	str->length += vsnprintf(&str->string[str->length], AUL_STRING_MAXLEN - str->length, fmt, args);
+	str->length = min(str->length, AUL_STRING_MAXLEN - 1);
 }
 
 size_t string_available(const string_t * str)
@@ -63,11 +55,6 @@ string_t string_clone(const string_t * str)
 	memcpy(&cpy, str, sizeof(string_t));
 
 	return cpy;
-}
-
-char * string_copy(const string_t * str)
-{
-	return strdup(str->string);
 }
 
 void string_clear(string_t * str)

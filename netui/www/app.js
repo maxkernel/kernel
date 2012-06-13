@@ -9,8 +9,8 @@ Ext.onReady(function() {
     	autoCreateViewport: true,
     	
 		launch: function() {
-			//var self = this;
-			this.controllers.addListener('add', function(index, controller, key) {
+			var self = this;
+			self.controllers.addListener('add', function(index, controller, key) {
 				controller.init();
 			});
 		},

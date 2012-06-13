@@ -23,7 +23,7 @@ void * wifi_new(const char * name)
 		return NULL;
 	}
 
-	return string_copy(&path);
+	return strdup(path.string);
 }
 
 void wifi_update(void * object)

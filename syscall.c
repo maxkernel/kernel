@@ -10,10 +10,10 @@
 
 extern hashtable_t syscalls;
 
-static ssize_t syscall_info(kobject_t * object, char * buffer, size_t length)
+static ssize_t syscall_desc(const kobject_t * object, char * buffer, size_t length)
 {
-	syscall_t * syscall = (syscall_t *)object;
-	return snprintf(buffer, length, "{ name: %s, signature: %s, description: '%s' }", syscall->name, syscall->sig, ser_string(syscall->desc));
+	const syscall_t * syscall = (const syscall_t *)object;
+	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%s', 'description': '%s' }", syscall->name, syscall->sig, ser_string(syscall->desc));
 }
 
 syscall_t * syscall_get(const char * name)
@@ -53,7 +53,7 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 		}
 	}
 
-	syscall_t * syscall = kobj_new("Syscall", name, syscall_info, syscall_destroy, sizeof(syscall_t));
+	syscall_t * syscall = kobj_new("Syscall", name, syscall_desc, syscall_destroy, sizeof(syscall_t));
 
 	syscall->name = strdup(name);
 	syscall->sig = strdup(sig);
