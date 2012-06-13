@@ -5,7 +5,7 @@ Ext.define('Max.controller.Calibration', {
     stores: ['CalibrationItems'],
     
     requires: [
-        'Max.view.calibration.List'
+        'Max.view.Calibration'
     ],
     
     refs: [
@@ -14,10 +14,10 @@ Ext.define('Max.controller.Calibration', {
 
     init: function() {
         this.control({
-	        'calibrationlist *[action=start]': { click: this.start },
-            'calibrationlist *[action=commit]': { click: this.commit },
-            'calibrationlist *[action=revert]': { click: this.revert },
-            'calibrationlist': { preview: this.preview, init: this.initview }
+	        'calibration *[action=start]': { click: this.start },
+            'calibration *[action=commit]': { click: this.commit },
+            'calibration *[action=revert]': { click: this.revert },
+            'calibration': { preview: this.preview, init: this.initview }
         });
     },
     
@@ -42,9 +42,14 @@ Ext.define('Max.controller.Calibration', {
 		        }
 		        else if (lines[1].toLowerCase() == "calibrating")
 		        {
-		        	self.getViewer().getTab('Calibration').fireEvent("start");
+		        	self.setmode(true);
 				    self.getViewer().getTab('Calibration').loadStore();
-					self.setmode(true);
+					
+    			}
+    			else
+    			{
+    				self.getViewer().getTab('Calibration').clearStore();
+    				self.setmode(false);
     			}
 		    },
 		    failure: function(response) {
@@ -56,7 +61,6 @@ Ext.define('Max.controller.Calibration', {
     start: function(evt) {
 		var self = this;
 		this.getViewer().setLoading(true);
-		this.getViewer().getTab('Calibration').fireEvent("start");
 		
 		Ext.Ajax.request({
 		    url: '/set/calibration/start',
@@ -82,6 +86,8 @@ Ext.define('Max.controller.Calibration', {
     },
     preview: function(evt) {
         var self = this;
+        
+        console.log(evt.value);
         
         Ext.Ajax.request({
             url: '/set/calibration/preview',
@@ -122,7 +128,6 @@ Ext.define('Max.controller.Calibration', {
         var self = this;
         var comment = this.getViewer().getTab('Calibration').down('[name=comment]').value
         this.getViewer().setLoading(true);
-        this.getViewer().getTab('Calibration').fireEvent("commit");
         
         Ext.Ajax.request({
             url: '/set/calibration/commit',
@@ -153,7 +158,6 @@ Ext.define('Max.controller.Calibration', {
     revert: function(evt) {
         var self = this;
         this.getViewer().setLoading(true);
-        this.getViewer().getTab('Calibration').fireEvent("revert");
         
         Ext.Ajax.request({
             url: '/set/calibration/revert',

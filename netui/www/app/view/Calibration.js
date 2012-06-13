@@ -1,6 +1,6 @@
-Ext.define('Max.view.calibration.List', {
+Ext.define('Max.view.Calibration', {
 	extend: 'Ext.grid.Panel',
-	alias: 'widget.calibrationlist',
+	alias: 'widget.calibration',
 	
     requires: ['Ext.toolbar.Toolbar'],
     store: 'CalibrationItems',
@@ -67,13 +67,21 @@ Ext.define('Max.view.calibration.List', {
 	},
 	
 	loadStore: function() {
+		this.features[0].enable();
 		this.getStore().load();
 	},
 	clearStore: function() {
 		this.getStore().removeAll();
+		this.features[0].disable();
+		this.getStore().add({desc: '<i>Press Start to begin calibration</i>'});
 	},
 	
 	formatValue: function(value, metaData, record) {
+		if (value == '')
+		{
+			return '';
+		}
+		
         var self = this;
 	    var id = Ext.id();
 	    

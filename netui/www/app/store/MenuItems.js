@@ -3,8 +3,9 @@ Ext.define('Max.store.MenuItems', {
     model: 'Max.model.MenuItem',
 
     data: [
-        {name: 'Calibration', icon: 'calibration.png', path: 'Max.controller.Calibration', view: 'calibrationlist'},
-        {name: 'Objects', icon: 'objects.png', path: 'Max.controller.ObjectsView', view: 'objectslist'}
+    	{name: 'Dashboard', icon: 'dashboard.png', path: 'Max.controller.Dashboard', view: 'dashboard'},
+        {name: 'Calibration', icon: 'calibration.png', path: 'Max.controller.Calibration', view: 'calibration'},
+        {name: 'Objects', icon: 'objects.png', path: 'Max.controller.Objects', view: 'objects'}
     ]
 });
 

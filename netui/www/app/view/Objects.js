@@ -1,6 +1,6 @@
-Ext.define('Max.view.objects.List', {
+Ext.define('Max.view.Objects', {
 	extend: 'Ext.panel.Panel',
-	alias: 'widget.objectslist',
+	alias: 'widget.objects',
 	
 	initComponent: function() {
 		var self = this;
@@ -40,7 +40,16 @@ Ext.define('Max.view.objects.List', {
 				xtype: 'propertygrid',
 				
 				source: {
-					'': 'Select object in table to inspect'
+					'': ''
+				},
+				
+				listeners: {
+					'propertychange': {
+						fn: function(source, recordId, value, oldValue, eOpts){
+							source[recordId] = oldValue;
+							self.down('[name=objects_inspector]').setSource(source);
+						}
+					}
 				}
 			}]
 		});
