@@ -65,7 +65,7 @@ static int l_dopath(lua_State * L, bool (*pathfunc)(const char *, exception_t **
 	exception_t * e = NULL;
 	if (!pathfunc(lua_tostring(L, 1), &e) || exception_check(&e))
 	{
-		return luaL_error(L, "config path failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		return luaL_error(L, "config path failed: %s", exception_message(e));
 	}
 
 	return 0;
@@ -96,13 +96,13 @@ static int l_loadmodule(lua_State * L)
 	{
 		if (meta == NULL || exception_check(&e))
 		{
-			return luaL_error(L, "loadmodule failed (meta): %s", (e == NULL)? "Unknown error!" : e->message);
+			return luaL_error(L, "loadmodule failed (meta): %s", exception_message(e));
 		}
 
 		model_module_t * module = model_newmodule(env->model, env->script, meta, &e);
 		if (module == NULL || exception_check(&e))
 		{
-			return luaL_error(L, "loadmodule failed (module): %s", (e == NULL)? "Unknown error!" : e->message);
+			return luaL_error(L, "loadmodule failed (module): %s", exception_message(e));
 		}
 
 		entry = lua_newuserdata(L, sizeof(entry_t));
@@ -164,7 +164,7 @@ static int l_newblockinst(lua_State * L)
 	model_linkable_t * blockinst = model_newblockinst(env->model, module, env->script, blockname, args, args_length, &e);
 	if (blockinst == NULL || exception_check(&e))
 	{
-		return luaL_error(L, "blockinst failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		return luaL_error(L, "blockinst failed: %s", exception_message(e));
 	}
 
 	entry_t * newentry = lua_newuserdata(L, sizeof(entry_t));
@@ -200,7 +200,7 @@ static int l_route(lua_State * L)
 	model_link_t * link = model_newlink(env->model, env->script, (model_linkable_t *)out->head, out->name, (model_linkable_t *)in->head, in->name, &e);
 	if (link == NULL || exception_check(&e))
 	{
-		return luaL_error(L, "link failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		return luaL_error(L, "link failed: %s", exception_message(e));
 	}
 
 	return 0;
@@ -245,7 +245,7 @@ static int l_newrategroup(lua_State * L)
 	model_linkable_t * rg = model_newrategroup(env->model, env->script, name, priority, rate_hz, blockinsts, index, &e);
 	if (rg == NULL || exception_check(&e))
 	{
-		return luaL_error(L, "rategroup failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		return luaL_error(L, "rategroup failed: %s", exception_message(e));
 	}
 
 	entry_t * entry = lua_newuserdata(L, sizeof(entry_t));
@@ -285,7 +285,7 @@ static int l_newsyscall(lua_State * L)
 	model_linkable_t * syscall = model_newsyscall(env->model, env->script, name, sig, desc, &e);
 	if (syscall == NULL || exception_check(&e))
 	{
-		return luaL_error(L, "syscall failed: %s", (e == NULL)? "Unknown error!" : e->message);
+		return luaL_error(L, "syscall failed: %s", exception_message(e));
 	}
 
 	entry_t * entry = lua_newuserdata(L, sizeof(entry_t));
@@ -301,7 +301,7 @@ static int l_newsyscall(lua_State * L)
 		model_link_t * link = model_newlink(env->model, env->script, (model_linkable_t *)retvalue->head, retvalue->name, syscall, "r", &e);
 		if (link == NULL || exception_check(&e))
 		{
-			return luaL_error(L, "link(r) failed: %s", (e == NULL)? "Unknown error!" : e->message);
+			return luaL_error(L, "link(r) failed: %s", exception_message(e));
 		}
 	}
 
@@ -328,7 +328,7 @@ static int l_newsyscall(lua_State * L)
 				model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
 				if (link == NULL || exception_check(&e))
 				{
-					return luaL_error(L, "link(a%d) failed: %s", index, (e == NULL)? "Unknown error!" : e->message);
+					return luaL_error(L, "link(a%d) failed: %s", index, exception_message(e));
 				}
 			}
 
@@ -450,7 +450,7 @@ static int mt_entry_newindex(lua_State * L)
 				model_config_t * configparam = model_newconfig(env->model, (model_module_t *)entry->head, key, value, &e);
 				if (configparam == NULL || exception_check(&e))
 				{
-					return luaL_error(L, "configparam failed: %s", (e == NULL)? "Unknown error!" : e->message);
+					return luaL_error(L, "configparam failed: %s", exception_message(e));
 				}
 			}
 			else

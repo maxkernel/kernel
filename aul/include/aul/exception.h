@@ -36,10 +36,13 @@ static inline void exception_set(exception_t ** err, int code, const char * fmt,
 	}
 }
 
-#define exception_clear(err)	(memset(err, 0, sizeof(exception_t)))
+#define exception_clear(e)		(memset(e, 0, sizeof(exception_t)))
+#define exception_code(e)		(((e) == NULL)? 0 : (e)->code)
+#define exception_message(e)	(((e) == NULL)? "Unknown error" : (e)->message)
 
 static inline bool exception_check(exception_t ** err)	{ return ((err) != NULL && *(err) != NULL && (*(err))->code != 0); }
-static inline void exception_free(exception_t * err) { if (err != NULL) free(err); }
+#define exception_free(e)		({ if ((e) != NULL) { free(e); (e) = NULL; }})
+//static inline void exception_free(exception_t * err) { if (err != NULL) free(err); }
 
 #ifdef __cplusplus
 }

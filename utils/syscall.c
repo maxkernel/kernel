@@ -52,18 +52,18 @@ int main(int argc, char ** argv)
 	max_initialize(&hand);
 
 	success = max_connect(&hand, (args.host == NULL)? HOST_LOCAL : args.host, &e);
-	if (!success)
+	if (!success || exception_check(&e))
 	{
-		fprintf(stderr, "<error> Error during init connection: %s\n", e->message);
+		fprintf(stderr, "<error> Error during init connection: %s\n", exception_message(e));
 		return EXIT_FAILURE;
 	}
 	
 	const char * syscall_name = argv[argi++];
 
 	success = max_syscall(&hand, &e, &ret, "syscall_signature", "s:s", syscall_name);
-	if (!success)
+	if (!success || exception_check(&e))
 	{
-		fprintf(stderr, "<error> Error during syscall lookup: %s\n", e->message);
+		fprintf(stderr, "<error> Error during syscall lookup: %s\n", exception_message(e));
 		return 0;
 	}
 
@@ -169,9 +169,9 @@ int main(int argc, char ** argv)
 	}
 
 	success = max_asyscall(&hand, &e, &ret, syscall_name, syscall_sig, syscall_args);
-	if (!success)
+	if (!success || exception_check(&e))
 	{
-		fprintf(stderr, "<error> Could not complete syscall: %s\n", e->message);
+		fprintf(stderr, "<error> Could not complete syscall: %s\n", exception_message(e));
 		return EXIT_FAILURE;
 	}
 

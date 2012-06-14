@@ -59,7 +59,7 @@ message_t * message_getmessage(msgbuffer_t * buf);
 msgstate_t message_getstate(msgbuffer_t * buf);
 
 void message_reset(msgbuffer_t * buf);
-void message_clear(msgbuffer_t * buf);
+#define message_clear(buf)		(memset((buf), 0, sizeof(msgbuffer_t)))
 
 #ifdef __cplusplus
 }

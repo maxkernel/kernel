@@ -104,7 +104,11 @@ static void signal_int(int signo)
 {
 	unused(signo);
 
-	mainloop_stop(NULL);
+	exception_t * e = NULL;
+	if (!mainloop_stop(NULL, &e))
+	{
+		LOGK(LOG_ERR, "Mainloop failed to stop: %s", exception_message(e));
+	}
 }
 
 static void signal_coredump(const char * name, const char * code)
@@ -844,9 +848,9 @@ int main(int argc, char * argv[])
 	// Init memfs file system
 	{
 		exception_t * e = NULL;
-		if (!memfs_init(&e))
+		if (!memfs_init(&e) || exception_check(&e))
 		{
-			LOGK(LOG_FATAL, "%s", e->message);
+			LOGK(LOG_FATAL, "Memfs initialization failure: %s", exception_message(e));
 			// Will exit
 		}
 	}
@@ -894,12 +898,21 @@ int main(int argc, char * argv[])
 	}
 
 	// Init AUL components
-	mainloop_init();
-	iterator_init();
+	{
+		exception_t * e = NULL;
+		if (!mainloop_init(&e))
+		{
+			LOGK(LOG_FATAL, "Could not initialize mainloop: %s", exception_message(e));
+			// Will exit
+		}
+
+		iterator_init();
+	}
 
 	// Initialize kernel subsystems
-	cal_init();
-	//module_kernelinit();	//a generic module that points to kernel space
+	{
+		cal_init();
+	}
 	
 	// Register syscalls
 	#define reg_syscall(f, s, d) \
@@ -907,7 +920,7 @@ int main(int argc, char * argv[])
 			exception_t * e = NULL;												\
 			syscall_t * ts = syscall_new((#f), (s), (syscall_f)(f), (d), &e);	\
 			if (ts == NULL || exception_check(&e)) {							\
-				LOGK(LOG_ERR, "Could not create kernel syscall %s: %s", (#f), (e == NULL)? "Unknown error" : e->message); \
+				LOGK(LOG_ERR, "Could not create kernel syscall %s: %s", (#f), exception_message(e)); \
 				exception_free(e);												\
 			}																	\
 		})
@@ -942,7 +955,7 @@ int main(int argc, char * argv[])
 
 			if (script == NULL || exception_check(&e))
 			{
-				LOGK(LOG_FATAL, "Could not create script '%s' in model: %s", scriptpath, (e == NULL)? "Unknown error" : e->message);
+				LOGK(LOG_FATAL, "Could not create script '%s' in model: %s", scriptpath, exception_message(e));
 				// Will exit
 			}
 		}
@@ -1028,7 +1041,7 @@ int main(int argc, char * argv[])
 			exception_t * e = NULL;
 			if (!int_setpath(argv[0], &e))
 			{
-				cfg_error(cfg, "Could not set path: Code %d %s", e->code, e->message);
+				cfg_error(cfg, "Could not set path:  %s", exception_message(e));
 				exception_free(e);
 				return -1;
 			}
@@ -1051,7 +1064,7 @@ int main(int argc, char * argv[])
 			{
 				if (!int_appendpath(argv[i], &e))
 				{
-					cfg_error(cfg, "Could not append path: Code %d %s", e->code, e->message);
+					cfg_error(cfg, "Could not append path: %s", exception_message(e));
 					exception_free(e);
 					return -1;
 				}
@@ -1076,7 +1089,7 @@ int main(int argc, char * argv[])
 				meta_t * meta = int_metalookup(argv[i], &e);
 				if (meta == NULL || exception_check(&e))
 				{
-					cfg_error(cfg, "Could not load module %s: %s", argv[i], (e == NULL)? "Unknown error" : e->message);
+					cfg_error(cfg, "Could not load module %s: %s", argv[i], exception_message(e));
 					exception_free(e);
 					return -1;
 				}
@@ -1084,7 +1097,7 @@ int main(int argc, char * argv[])
 				model_module_t * module = model_newmodule(model, script, meta, &e);
 				if (module == NULL || exception_check(&e))
 				{
-					cfg_error(cfg, "Could not add module %s: %s", argv[i], (e == NULL)? "Unknown error" : e->message);
+					cfg_error(cfg, "Could not add module %s: %s", argv[i], exception_message(e));
 					exception_free(e);
 					return -1;
 				}
@@ -1133,7 +1146,7 @@ int main(int argc, char * argv[])
 			model_config_t * param = model_newconfig(model, module, name, value, &e);
 			if (param == NULL || exception_check(&e))
 			{
-				cfg_error(cfg, "Could not set config %s=%s: %s", name, value, (e == NULL)? "Unknown error" : e->message);
+				cfg_error(cfg, "Could not set config %s=%s: %s", name, value, exception_message(e));
 				exception_free(e);
 				return -1;
 			}
@@ -1186,7 +1199,7 @@ int main(int argc, char * argv[])
 				if (!execfunc(model, path.string, &cbs, &e))
 				{
 					// TODO - make less verbose?
-					cfg_error(cfg, "Error while executing script: %s", (e == NULL)? "Unknown error" : e->message);
+					cfg_error(cfg, "Error while executing script: %s", exception_message(e));
 					exception_free(e);
 					return -1;
 				}
@@ -1336,7 +1349,7 @@ int main(int argc, char * argv[])
 						meta = meta_parseelf(path.string, &e);
 						if (meta == NULL || exception_check(&e))
 						{
-							LOGK(LOG_ERR, "Load meta failed: %s", (e == NULL)? "Unknown error!" : e->message);
+							LOGK(LOG_ERR, "Load meta failed: %s", exception_message(e));
 							exception_free(e);
 							return NULL;
 						}
@@ -1361,7 +1374,7 @@ int main(int argc, char * argv[])
 				module_t * m = module_load((model_t *)model, (meta_t *)meta, meta_lookup, &e);
 				if (m == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Module loading failed: %s", (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Module loading failed: %s", exception_message(e));
 					// Will exit
 				}
 
@@ -1428,7 +1441,7 @@ int main(int argc, char * argv[])
 				exception_t * e = NULL;
 				if (!config_apply(modconfig, config, &e))
 				{
-					LOGK(LOG_FATAL, "Could not apply config %s: %s", name, (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not apply config %s: %s", name, exception_message(e));
 					// Will exit
 				}
 
@@ -1449,7 +1462,7 @@ int main(int argc, char * argv[])
 				blockinst_t * bi = blockinst_new(linkable, &e);
 				if (bi == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create block: %s", (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create block: %s", exception_message(e));
 					// Will exit
 				}
 
@@ -1470,7 +1483,7 @@ int main(int argc, char * argv[])
 				syscallblock_t * sb = syscallblock_new(linkable, &e);
 				if (sb == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create syscall: %s", (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create syscall: %s", exception_message(e));
 					// Will exit
 				}
 
@@ -1503,7 +1516,7 @@ int main(int argc, char * argv[])
 					rg = rategroup_new(linkable, &e);
 					if (rg == NULL || exception_check(&e))
 					{
-						LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
+						LOGK(LOG_FATAL, "Could not create rategroup: %s", exception_message(e));
 						// Will exit
 					}
 				}
@@ -1521,7 +1534,7 @@ int main(int argc, char * argv[])
 							bool success = rategroup_addblockinst(rg, bi, &e);
 							if (!success || exception_check(&e))
 							{
-								LOGK(LOG_FATAL, "Could not add block instance to rategroup: %s", (e == NULL)? "Unknown error" : e->message);
+								LOGK(LOG_FATAL, "Could not add block instance to rategroup: %s", exception_message(e));
 								// Will exit
 							}
 						}
@@ -1678,7 +1691,7 @@ int main(int argc, char * argv[])
 				iobacking_t * iob = link_connect(link, out_sig, out_links, in_sig, in_links, &e);
 				if (iob == NULL || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not connect link from %s -> %s: %s", out_name, in_name, (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not connect link from %s -> %s: %s", out_name, in_name, exception_message(e));
 					// Will exit
 				}
 
@@ -1736,7 +1749,7 @@ int main(int argc, char * argv[])
 				bool success = blockinst_create(bi, &e);
 				if (!success || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create block instance: %s", (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create block instance: %s", exception_message(e));
 					// Will exit
 				}
 
@@ -1752,7 +1765,7 @@ int main(int argc, char * argv[])
 				bool success = rategroup_schedule(rg, &e);
 				if (!success || exception_check(&e))
 				{
-					LOGK(LOG_FATAL, "Could not create rategroup: %s", (e == NULL)? "Unknown error" : e->message);
+					LOGK(LOG_FATAL, "Could not create rategroup: %s", exception_message(e));
 					// Will exit
 				}
 
@@ -1821,11 +1834,24 @@ int main(int argc, char * argv[])
 		}
 
 		// Check for new kernel thread tasks every second
-		mainloop_addtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL);
+		{
+			exception_t * e = NULL;
+			if (!mainloop_newtimerfd(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e))
+			{
+				LOGK(LOG_FATAL, "Could not create kthread task handler: %s", exception_message(e));
+				// Will exit
+			}
+		}
 	}
 
 	// Run maxkernel mainloop
-	mainloop_run(NULL);
+	{
+		exception_t * e = NULL;
+		if (!mainloop_run(NULL, &e))
+		{
+			LOGK(LOG_ERR, "Mainloop exited with failure: %s", exception_message(e));
+		}
+	}
 
 	// Returning from the main loop means we've gotten a signal to exit
 	LOGK(LOG_DEBUG, "Destroying the kernel.");
@@ -1874,9 +1900,9 @@ int main(int argc, char * argv[])
 		LOGK(LOG_DEBUG, "Unmounting kernel memfs");
 		{
 			exception_t * e = NULL;
-			if (!memfs_destroy(&e))
+			if (!memfs_destroy(&e) || exception_check(&e))
 			{
-				LOGK(LOG_ERR, "%s", e->message);
+				LOGK(LOG_ERR, "Could not unmount Memfs: %s", exception_message(e));
 				exception_free(e);
 			}
 		}

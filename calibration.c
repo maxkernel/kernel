@@ -134,7 +134,7 @@ static bool cal_updatebacking(calentry_t * entry, const char * value)
 
 	if (exception_check(&e))
 	{
-		LOGK(LOG_ERR, "Could not set calibration entry %s: %s", entry->name, e->message);
+		LOGK(LOG_ERR, "Could not set calibration entry %s: %s", entry->name, exception_message(e));
 		exception_free(e);
 		return false;
 	}

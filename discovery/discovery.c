@@ -56,12 +56,18 @@ bool module_init()
 
 	if (sock == -1 || exception_check(&e))
 	{
-		LOG(LOG_ERR, "Could not create UDP Discovery socket on port %d: %s", DISCOVERY_PORT, (e == NULL)? "Unknown error" : e->message);
+		LOG(LOG_ERR, "Could not create udp discovery socket on port %d: %s", DISCOVERY_PORT, exception_message(e));
 		exception_free(e);
 		return true;
 	}
 
-	mainloop_addwatch(NULL, sock, FD_READ, discovery_newclient, NULL);
+	if (!mainloop_addwatch(NULL, sock, FD_READ, discovery_newclient, NULL, &e))
+	{
+		LOG(LOG_ERR, "Could not add udp discovery socket to mainloop: %s", exception_message(e));
+		exception_free(e);
+		return true;
+	}
+
 	return true;
 }
 

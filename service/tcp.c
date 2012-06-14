@@ -21,7 +21,7 @@ static void tcp_free(stream_t * data)
 {
 	tcpstream_t * tcp = (tcpstream_t *)data;
 
-	mainloop_removewatch(serviceloop, tcp->sockfd, FD_READ);
+	mainloop_removewatch(serviceloop, tcp->sockfd, FD_READ, NULL);
 	close(tcp->sockfd);
 }
 
@@ -172,7 +172,7 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userd
 			data->state = OKAY;
 
 			string_t str_addr = addr2string(addr.sin_addr.s_addr);
-			mainloop_addwatch(serviceloop, sock, FD_READ, tcp_newdata, data);
+			mainloop_addwatch(serviceloop, sock, FD_READ, tcp_newdata, data, NULL);
 			LOG(LOG_DEBUG, "New TCP service client (%s)", str_addr.string);
 		}
 	}
@@ -201,7 +201,7 @@ void tcp_init()
 			}
 			else
 			{
-				mainloop_addwatch(serviceloop, tcp_fd, FD_READ, tcp_newclient, NULL);
+				mainloop_addwatch(serviceloop, tcp_fd, FD_READ, tcp_newclient, NULL, NULL);
 				LOG(LOG_DEBUG, "Service TCP server awaiting clients on port %d", tcp_port);
 			}
 		}

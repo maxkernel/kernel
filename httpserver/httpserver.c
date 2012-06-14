@@ -252,7 +252,10 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 		for (i=0; i<NUM_BUFFERS; i++)
 		{
 			if (!ctx->buffers[i].inuse)
+			{
 				buffer = &ctx->buffers[i];
+				break;
+			}
 		}
 
 		if (buffer == NULL)
@@ -269,7 +272,15 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 			buffer->ctx = ctx;
 
 			// Now set up the watch on the accept'd file descriptor
-			mainloop_addwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer);
+			exception_t * e = NULL;
+			if (!mainloop_addwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
+			{
+				LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
+				exception_free(e);
+
+				// Remove the in-use flag to make it available again
+				buffer->inuse = false;
+			}
 		}
 	}
 
@@ -297,7 +308,12 @@ httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** er
 		return NULL;
 	}
 
-	mainloop_addwatch(mainloop, ctx->socket, FD_READ, http_newclient, ctx);
+	if (!mainloop_addwatch(mainloop, ctx->socket, FD_READ, http_newclient, ctx, err))
+	{
+		http_destroy(ctx);
+		return NULL;
+	}
+
 	return ctx;
 }
 

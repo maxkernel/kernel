@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/timerfd.h>
+#include <sys/eventfd.h>
 
 #include <aul/log.h>
 #include <aul/mainloop.h>
@@ -22,88 +23,144 @@ typedef struct
 
 	const char * name;
 	uint64_t nanoseconds;
-	timer_f function;
+	timerfd_f function;
 	void * userdata;
-} timerwatcher_t;
+} timerfdwatcher_t;
+
+typedef struct
+{
+	list_t empty_list;
+
+	const char * name;
+	eventfd_f function;
+	void * userdata;
+} eventfdwatcher_t;
 
 static watcher_t watchers[AUL_MAINLOOP_MAX_WATCHERS];
-static timerwatcher_t timers[AUL_MAINLOOP_MAX_TIMERS];
+static timerfdwatcher_t timerfds[AUL_MAINLOOP_MAX_TIMERFDS];
+static eventfdwatcher_t eventfds[AUL_MAINLOOP_MAX_EVENTFDS];
 
 static list_t empty_watchers;
-static list_t empty_timers;
+static list_t empty_timerfds;
+static list_t empty_eventfds;
 
 static mutex_t mainloop_lock;
 static mainloop_t * root = NULL;
 
 
-#define check_init() \
-	({ if (root == NULL) { log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Mainloop subsystem not been initialized!"); return; } })
-
-#define resolve_loop() \
-	({ if (loop == NULL) { loop = root; } })
-
-
-static bool mainloop_timerdispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
+static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
-	timerwatcher_t * timerwatcher = userdata;
+	timerfdwatcher_t * timerfdwatcher = userdata;
 
 	uint64_t timeouts = 0;
-	read(fd, &timeouts, sizeof(timeouts));
-
-	if (timeouts > 1)
+	ssize_t r = read(fd, &timeouts, sizeof(timeouts));
+	if (r != sizeof(uint64_t))
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Timer %s has been unsynchronized. It has fired %" PRIu64 " times without being dispatched!", timerwatcher->name, timeouts);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from timerfd %s", timerfdwatcher->name);
+	}
+	else if (timeouts > 1)
+	{
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Timerfd %s has been unsynchronized. It has fired %" PRIu64 " times without being dispatched!", timerfdwatcher->name, timeouts);
 	}
 
-	bool ret = timerwatcher->function(loop, timerwatcher->nanoseconds, timerwatcher->userdata);
+	bool ret = timerfdwatcher->function(loop, timerfdwatcher->nanoseconds, timerfdwatcher->userdata);
 
 	if (!ret)
 	{
-		// Listener returned false, remove the timer
+		// Listener returned false, remove the timerfd
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_timers, &timerwatcher->empty_list);
+			list_add(&empty_timerfds, &timerfdwatcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
+
+		// Close the fd
+		close(fd);
+	}
+
+	return ret;
+}
+
+static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
+{
+	eventfdwatcher_t * eventfdwatcher = userdata;
+
+	uint64_t counter = 0;
+	ssize_t r = read(fd, &counter, sizeof(counter));
+	if (r != sizeof(uint64_t))
+	{
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s", eventfdwatcher->name);
+	}
+
+	bool ret = eventfdwatcher->function(loop, counter, eventfdwatcher->userdata);
+
+	if (!ret)
+	{
+		// Listener returned false, remove the eventfd
+		mutex_lock(&mainloop_lock);
+		{
+			list_add(&empty_eventfds, &eventfdwatcher->empty_list);
+		}
+		mutex_unlock(&mainloop_lock);
+
+		// Close the fd
+		close(fd);
 	}
 
 	return ret;
 }
 
 
-void mainloop_init()
+bool mainloop_init(exception_t ** err)
 {
 	// Sanity check
-	if (root != NULL)
 	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Mainloop subsystem has already been initialized!");
-		return;
+		if unlikely(root != NULL)
+		{
+			return true;
+		}
 	}
 
 	mutex_init(&mainloop_lock, M_RECURSIVE);
 	list_init(&empty_watchers);
-	list_init(&empty_timers);
+	list_init(&empty_timerfds);
+	list_init(&empty_eventfds);
 
-	size_t i;
-	for (i=0; i<AUL_MAINLOOP_MAX_WATCHERS; i++)
+	for (size_t i = 0; i < AUL_MAINLOOP_MAX_WATCHERS; i++)
 	{
 		list_add(&empty_watchers, &watchers[i].empty_list);
 	}
-	for (i=0; i<AUL_MAINLOOP_MAX_TIMERS; i++)
+	for (size_t i = 0; i < AUL_MAINLOOP_MAX_TIMERFDS; i++)
 	{
-		list_add(&empty_timers, &timers[i].empty_list);
+		list_add(&empty_timerfds, &timerfds[i].empty_list);
+	}
+	for (size_t i = 0; i < AUL_MAINLOOP_MAX_EVENTFDS; i++)
+	{
+		list_add(&empty_eventfds, &eventfds[i].empty_list);
 	}
 	
-	root = mainloop_new(AUL_MAINLOOP_ROOT_NAME);
+	return (root = mainloop_new(AUL_MAINLOOP_ROOT_NAME, err)) != NULL;
 }
 
-mainloop_t * mainloop_new(const char * name)
+mainloop_t * mainloop_new(const char * name, exception_t ** err)
 {
+	// Sanity check
+	{
+		if unlikely(name == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+	}
+
+	int efd = epoll_create(AUL_MAINLOOP_SIZE_HINT);
+	// TODO - check for efd success!
+
 	mainloop_t * loop = malloc(sizeof(mainloop_t));
 	memset(loop, 0, sizeof(mainloop_t));
 
 	loop->name = name;
-	loop->epollfd = epoll_create(AUL_MAINLOOP_SIZE_HINT);
+	loop->epollfd = efd;
 	loop->running = false;
 	mutex_init(&loop->runlock, M_RECURSIVE);
 
@@ -112,12 +169,24 @@ mainloop_t * mainloop_new(const char * name)
 	return loop;
 }
 
-void mainloop_run(mainloop_t * loop)
+bool mainloop_run(mainloop_t * loop, exception_t ** err)
 {
-	check_init();
-	resolve_loop();
+	// Sanity check
+	{
+		if unlikely(root == NULL)
+		{
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return false;
+		}
 
-	bool isrunning;
+		if (loop == NULL)
+		{
+			loop = root;
+		}
+	}
+
+
+	volatile bool isrunning;
 	bool haswatchers;
 	struct epoll_event events[AUL_MAINLOOP_EPOLL_EVENTS];
 
@@ -131,8 +200,7 @@ void mainloop_run(mainloop_t * loop)
 
 	do
 	{
-
-		if (unlikely( !haswatchers ))
+		if unlikely(!haswatchers)
 		{
 			// We are not watching any descriptors, just sleep
 			usleep(AUL_MAINLOOP_TIMEOUT_MS * 1000);
@@ -140,7 +208,6 @@ void mainloop_run(mainloop_t * loop)
 		else
 		{
 			int bits = epoll_wait(loop->epollfd, events, AUL_MAINLOOP_EPOLL_EVENTS, AUL_MAINLOOP_TIMEOUT_MS);
-
 			if (bits == -1 && errno != EINTR)
 			{
 				log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Mainloop (%s): %s", loop->name, strerror(errno));
@@ -157,7 +224,12 @@ void mainloop_run(mainloop_t * loop)
 							watcher_t * watcher = events[i].data.ptr;
 							if (!watcher->function(loop, watcher->fd, events[i].events, watcher->userdata))
 							{
-								mainloop_removewatch(loop, watcher->fd, events[i].events);
+								exception_t * e = NULL;
+								if (!mainloop_removewatch(loop, watcher->fd, events[i].events, &e))
+								{
+									log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not remove fd watcher from mainloop %s: %s", loop->name, exception_message(e));
+									exception_free(e);
+								}
 							}
 						}
 					}
@@ -175,24 +247,51 @@ void mainloop_run(mainloop_t * loop)
 		mutex_unlock(&loop->runlock);
 
 	} while (isrunning);
+
+	return true;
 }
 
-void mainloop_stop(mainloop_t * loop)
+bool mainloop_stop(mainloop_t * loop, exception_t ** err)
 {
-	check_init();
-	resolve_loop();
+	// Sanity check
+	{
+		if unlikely(root == NULL)
+		{
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return false;
+		}
+
+		if (loop == NULL)
+		{
+			loop = root;
+		}
+	}
+
 
 	mutex_lock(&loop->runlock);
 	{
 		loop->running = false;
 	}
 	mutex_unlock(&loop->runlock);
+	return true;
 }
 
-void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata)
+bool mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err)
 {
-	check_init();
-	resolve_loop();
+	// Sanity check
+	{
+		if unlikely(root == NULL)
+		{
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return false;
+		}
+
+		if (loop == NULL)
+		{
+			loop = root;
+		}
+	}
+
 
 	watcher_t * watcher = NULL;
 
@@ -210,8 +309,8 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	if (watcher == NULL)
 	{
 		// No free watcher_t, error
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not add watch to mainloop. Out of free watchers! Consider increasing limit (currently %d)", AUL_MAINLOOP_MAX_WATCHERS);
-		return;
+		exception_set(err, ENOMEM, "Could not add watch to mainloop. Out of free watchers! Consider increasing limit (AUL_MAINLOOP_MAX_WATCHERS = %d)", AUL_MAINLOOP_MAX_WATCHERS);
+		return false;
 	}
 
 	// Initialize it and add it to the loops hashtable
@@ -232,83 +331,47 @@ void mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	event.events = cond;
 	event.data.ptr = watcher;
 
-	epoll_ctl(loop->epollfd, EPOLL_CTL_ADD, fd, &event);
+	int success = epoll_ctl(loop->epollfd, EPOLL_CTL_ADD, fd, &event);
+	if (success < 0)
+	{
+		exception_set(err, errno, "Could not configure epoll to watch fd: %s", strerror(errno));
+
+		// Remove watcher from hashtable
+		mutex_lock(&loop->runlock);
+		{
+			hashtable_remove(&watcher->watching_entry);
+		}
+		mutex_unlock(&loop->runlock);
+
+		// Add watcher back to empty pool
+		mutex_lock(&mainloop_lock);
+		{
+			list_add(&empty_watchers, &watcher->empty_list);
+		}
+		mutex_unlock(&mainloop_lock);
+
+		return false;
+	}
+
+	return true;
 }
 
-void mainloop_addtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timer_f listener, void * userdata)
+bool mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err)
 {
-	check_init();
-	resolve_loop();
-
-
-	// Retrieve a free timerwatcher_t structure
-	timerwatcher_t * timerwatcher = NULL;
-	mutex_lock(&mainloop_lock);
+	// Sanity check
 	{
-		if (!list_isempty(&empty_timers))
+		if unlikely(root == NULL)
 		{
-			timerwatcher = list_entry(empty_timers.next, timerwatcher_t, empty_list);
-			list_remove(&timerwatcher->empty_list);
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return false;
+		}
+
+		if (loop == NULL)
+		{
+			loop = root;
 		}
 	}
-	mutex_unlock(&mainloop_lock);
 
-	if (timerwatcher == NULL)
-	{
-		// No free watcher_t, error
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not add timer to mainloop. Out of free timers! Consider increasing limit (currently %d)", AUL_MAINLOOP_MAX_TIMERS);
-		return;
-	}
-
-	// Put data into timerwatcher_t structure
-	memset(timerwatcher, 0, sizeof(timerwatcher_t));
-	timerwatcher->name = name;
-	timerwatcher->nanoseconds = nanoseconds;
-	timerwatcher->function = listener;
-	timerwatcher->userdata = userdata;
-
-	// Get the current time
-	struct timespec now;
-	if (clock_gettime(CLOCK_REALTIME, &now) == -1)
-	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not get system time to create timer %s: %s", name, strerror(errno));
-		return;
-	}
-
-	// Set up the timer
-	struct itimerspec timer;
-	timer.it_interval.tv_nsec = nanoseconds % NANOS_PER_SECOND;
-	timer.it_interval.tv_sec = nanoseconds / NANOS_PER_SECOND;
-	timer.it_value.tv_nsec = now.tv_nsec + timer.it_interval.tv_nsec;
-	timer.it_value.tv_sec = now.tv_sec + timer.it_interval.tv_sec;
-
-	if (timer.it_value.tv_nsec > NANOS_PER_SECOND)
-	{
-		timer.it_value.tv_nsec -= NANOS_PER_SECOND;
-		timer.it_value.tv_sec += 1;
-	}
-
-	// Create the file descriptor
-	int fd = timerfd_create(CLOCK_REALTIME, 0);
-	if (fd == -1)
-	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not create timer %s: %s", name, strerror(errno));
-		return;
-	}
-
-	if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &timer, NULL) == -1)
-	{
-		log_write(LEVEL_ERROR, AUL_LOG_DOMAIN, "Could not set timer %s: %s", name, strerror(errno));
-		return;
-	}
-
-	mainloop_addwatch(loop, fd, FD_READ, mainloop_timerdispatch, timerwatcher);
-}
-
-void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
-{
-	check_init();
-	resolve_loop();
 
 	// Get the watcher from the hashtable
 	watcher_t * watcher = NULL;
@@ -325,16 +388,9 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 
 	if (watcher == NULL)
 	{
-		// Not prenently watching fd
-		return;
+		exception_set(err, EINVAL, "Mainloop %s not currently watching fd %d", loop->name, fd);
+		return false;
 	}
-
-	struct epoll_event event;
-	memset(&event, 0, sizeof(struct epoll_event));
-	event.events = cond;
-
-	// Remove the watcher from epoll
-	epoll_ctl(loop->epollfd, EPOLL_CTL_DEL, fd, &event);
 
 	// Add the watcher to the empty list
 	mutex_lock(&mainloop_lock);
@@ -342,4 +398,165 @@ void mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond)
 		list_add(&empty_watchers, &watcher->empty_list);
 	}
 	mutex_unlock(&mainloop_lock);
+
+	// Remove the watcher
+	struct epoll_event event;
+	memset(&event, 0, sizeof(struct epoll_event));
+	event.events = cond;
+
+	// Remove the watcher from epoll
+	int success = epoll_ctl(loop->epollfd, EPOLL_CTL_DEL, fd, &event);
+	if (success < 0)
+	{
+		exception_set(err, errno, "Could not configure epoll to unwatch fd %d: %s", fd, strerror(errno));
+		return false;
+	}
+
+	return true;
+}
+
+bool mainloop_newtimerfd(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
+{
+	// Sanity check
+	{
+		if unlikely(root == NULL)
+		{
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return false;
+		}
+
+		if (loop == NULL)
+		{
+			loop = root;
+		}
+	}
+
+
+	// Retrieve a free timerfdwatcher_t structure
+	timerfdwatcher_t * timerfdwatcher = NULL;
+	mutex_lock(&mainloop_lock);
+	{
+		if (!list_isempty(&empty_timerfds))
+		{
+			timerfdwatcher = list_entry(empty_timerfds.next, timerfdwatcher_t, empty_list);
+			list_remove(&timerfdwatcher->empty_list);
+		}
+	}
+	mutex_unlock(&mainloop_lock);
+
+	if (timerfdwatcher == NULL)
+	{
+		// No free watcher_t, error
+		exception_set(err, ENOMEM, "Could not add timerfd to mainloop. Out of free timerfds! Consider increasing limit (AUL_MAINLOOP_MAX_TIMERFDS = %d)", AUL_MAINLOOP_MAX_TIMERFDS);
+		return false;
+	}
+
+	// Put data into timerfdwatcher_t structure
+	memset(timerfdwatcher, 0, sizeof(timerfdwatcher_t));
+	timerfdwatcher->name = name;
+	timerfdwatcher->nanoseconds = nanoseconds;
+	timerfdwatcher->function = listener;
+	timerfdwatcher->userdata = userdata;
+
+	// Get the current time
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) == -1)
+	{
+		exception_set(err, EFAULT, "Could not get system time to create timerfd %s: %s", name, strerror(errno));
+		return false;
+	}
+
+	// Set up the timer
+	struct itimerspec timer;
+	timer.it_interval.tv_nsec = nanoseconds % NANOS_PER_SECOND;
+	timer.it_interval.tv_sec = nanoseconds / NANOS_PER_SECOND;
+	timer.it_value.tv_nsec = now.tv_nsec + timer.it_interval.tv_nsec;
+	timer.it_value.tv_sec = now.tv_sec + timer.it_interval.tv_sec;
+
+	if (timer.it_value.tv_nsec > NANOS_PER_SECOND)
+	{
+		timer.it_value.tv_nsec -= NANOS_PER_SECOND;
+		timer.it_value.tv_sec += 1;
+	}
+
+	// Create the file descriptor
+	int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+	if (fd == -1)
+	{
+		exception_set(err, EFAULT, "Could not create timerfd %s: %s", name, strerror(errno));
+		return false;
+	}
+
+	if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &timer, NULL) == -1)
+	{
+		exception_set(err, EFAULT, "Could not set timerfd %s: %s", name, strerror(errno));
+		return false;
+	}
+
+	return mainloop_addwatch(loop, fd, FD_READ, mainloop_timerfddispatch, timerfdwatcher, err);
+}
+
+int mainloop_neweventfd(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
+{
+	// Sanity check
+	{
+		if unlikely(root == NULL)
+		{
+			exception_set(err, EINVAL, "Root mainloop has not been initialized");
+			return -1;
+		}
+
+		if (loop == NULL)
+		{
+			loop = root;
+		}
+	}
+
+	// Retrieve a free eventfdwatcher_t structure
+	eventfdwatcher_t * eventfdwatcher = NULL;
+	mutex_lock(&mainloop_lock);
+	{
+		if (!list_isempty(&empty_eventfds))
+		{
+			eventfdwatcher = list_entry(empty_eventfds.next, eventfdwatcher_t, empty_list);
+			list_remove(&eventfdwatcher->empty_list);
+		}
+	}
+	mutex_unlock(&mainloop_lock);
+
+	if (eventfdwatcher == NULL)
+	{
+		// No free watcher_t, error
+		exception_set(err, ENOMEM, "Could not add eventfd to mainloop. Out of free eventfds! Consider increasing limit (AUL_MAINLOOP_MAX_EVENTFDS = %d)", AUL_MAINLOOP_MAX_EVENTFDS);
+		return -1;
+	}
+
+	// Put data into eventfdwatcher_t structure
+	memset(eventfdwatcher, 0, sizeof(eventfdwatcher_t));
+	eventfdwatcher->name = name;
+	eventfdwatcher->function = listener;
+	eventfdwatcher->userdata = userdata;
+
+	// Create the file descriptor
+	int fd = eventfd(initialvalue, EFD_NONBLOCK);
+	if (fd == -1)
+	{
+		exception_set(err, EFAULT, "Could not create eventfd %s: %s", name, strerror(errno));
+		return -1;
+	}
+
+	if (!mainloop_addwatch(loop, fd, FD_READ, mainloop_eventfddispatch, eventfdwatcher, err))
+	{
+		// Release watcher back to empty list
+		mutex_lock(&mainloop_lock);
+		{
+			list_add(&empty_eventfds, &eventfdwatcher->empty_list);
+		}
+		mutex_unlock(&mainloop_lock);
+		close(fd);
+
+		return -1;
+	}
+
+	return fd;
 }

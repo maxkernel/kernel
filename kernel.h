@@ -150,7 +150,7 @@ typedef void (*calmodechange_f)(void * object, calmode_t mode, calstatus_t statu
 		cal_doregister((domain), (name), (sig), constraint_parse((desc), &__e), constraint_parsepast(desc), (variable), (onpreview), (onpreview_object)); \
 		if (exception_check(&__e))			\
 		{									\
-			LOG(LOG_WARN, "Invalid constraint declaration: %s. Ignoring constraint", __e->message); \
+			LOG(LOG_WARN, "Invalid constraint declaration: %s. Ignoring constraint", exception_message(__e)); \
 			exception_free(__e);			\
 		}									\
 	})

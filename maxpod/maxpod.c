@@ -208,13 +208,30 @@ bool maxpod_init() {
 		return false;
 	}
 
-	mainloop_addwatch(NULL, pod_fd, FD_READ, maxpod_newdata, NULL);
-	mainloop_addtimer(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL);
+	// Add pod_fd to mainloop
+	{
+		exception_t * e = NULL;
+		if (!mainloop_addwatch(NULL, pod_fd, FD_READ, maxpod_newdata, NULL, &e))
+		{
+			LOG(LOG_ERR, "Could not add maxpod fd to mainloop: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
+
+	// Create a heartbeat timerfd
+	{
+		exception_t * e = NULL;
+		if (!mainloop_newtimerfd(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e))
+		{
+			LOG(LOG_ERR, "Could not add maxpod heartbeat timerfd to mainloop: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 
 	return true;
 }
 
-
+// TODO IMPORTANT - remove static block, name it something!!
 module_name("MaxPOD PWM Microcontroller");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");

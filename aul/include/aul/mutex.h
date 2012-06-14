@@ -63,7 +63,7 @@ static inline void cond_wait(cond_t * cond, mutex_t * mutex, uint64_t nanosecond
 	else
 	{
 		struct timespec tm;
-		clock_gettime(CLOCK_REALTIME, &tm);
+		clock_gettime(CLOCK_MONOTONIC, &tm);
 
 		uint64_t nanos = ((uint64_t)tm.tv_nsec) + (nanoseconds % NANOS_PER_SECOND);
 		if (nanos > NANOS_PER_SECOND)

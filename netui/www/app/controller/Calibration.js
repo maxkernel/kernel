@@ -4,13 +4,8 @@ Ext.define('Max.controller.Calibration', {
     models: ['CalibrationItem'],
     stores: ['CalibrationItems'],
     
-    requires: [
-        'Max.view.Calibration'
-    ],
-    
-    refs: [
-        {ref: 'viewer', selector: 'viewer'}
-    ],
+    requires: ['Max.view.Calibration'],
+    refs: [{ref: 'viewer', selector: 'viewer'}],
 
     init: function() {
         this.control({
@@ -86,8 +81,6 @@ Ext.define('Max.controller.Calibration', {
     },
     preview: function(evt) {
         var self = this;
-        
-        console.log(evt.value);
         
         Ext.Ajax.request({
             url: '/set/calibration/preview',
@@ -178,7 +171,6 @@ Ext.define('Max.controller.Calibration', {
             }
         });
     },
-    
     
     showMessage: function(msg) {
         Ext.Msg.show({

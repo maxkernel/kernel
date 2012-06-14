@@ -354,7 +354,7 @@ end_init:
 
 	if (exception_check(&e))
 	{
-		exception_set(err, e->code, "Module %s load error: %s", meta->path, e->message);
+		exception_set(err, exception_code(e), "Module %s load error: %s", meta->path, exception_message(e));
 		exception_free(e);
 		return false;
 	}

@@ -21,7 +21,7 @@ static int l_dosyscall(lua_State * L)
 
 	if (exception_check(&err) || syscall == NULL)
 	{
-		string_t msg = string_new("Unable to find syscall %s: %s", name, err == NULL? "Syscall doesn't exist" : err->message);
+		string_t msg = string_new("Unable to find syscall %s: %s", name, (err == NULL)? "Syscall doesn't exist" : err->message);
 		exception_free(err);
 		return luaL_error(L, "%s", msg.string);
 	}

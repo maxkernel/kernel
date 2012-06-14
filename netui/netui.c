@@ -102,7 +102,7 @@ bool module_init()
 	ctx = http_new(port, NULL, &e);
 	if (ctx == NULL || exception_check(&e))
 	{
-		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, (e == NULL)? "Unknown error" : e->message);
+		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, exception_message(e));
 		exception_free(e);
 		return true;
 	}

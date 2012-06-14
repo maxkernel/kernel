@@ -139,7 +139,7 @@ static bool config_updatebacking(const meta_variable_t * variable, const char * 
 
 	if (exception_check(&e))
 	{
-		exception_set(err, e->code, "%s", e->message);
+		exception_set(err, exception_code(e), "%s", exception_message(e));
 		exception_free(e);
 		return false;
 	}

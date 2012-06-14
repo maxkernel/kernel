@@ -57,8 +57,8 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 					else
 					{
 						// Some error happened!
-						LOG(LOG_WARN, "Could not execute syscall %s with sig %s: Code %d %s", msg->name, msg->sig, e->code, e->message);
-						string_t payload = string_new("Syscall %s with signature '%s' failed: Code %d %s", msg->name, msg->sig, e->code, e->message);
+						LOG(LOG_WARN, "Could not execute syscall %s with sig %s: %s", msg->name, msg->sig, exception_message(e));
+						string_t payload = string_new("Syscall %s with signature '%s' failed: %s", msg->name, msg->sig, exception_message(e));
 						message_writefd(fd, T_ERROR, msg->name, "s", payload.string);
 					}
 
@@ -112,6 +112,8 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 	}
 	else
 	{
+		LOG(LOG_DEBUG, "New console client.");
+
 		if (list_isempty(&free_buffers))
 		{
 			LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
@@ -120,15 +122,23 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 		}
 
 		// Get a free buffer
-		msgbuffer_t * msg = list_entry(free_buffers.next, msgbuffer_t, free_list);
-		list_remove(&msg->free_list);
+		msgbuffer_t * buffer = list_entry(free_buffers.next, msgbuffer_t, free_list);
+		list_remove(&buffer->free_list);
 
 		// Clear the message
-		message_clear(msg);
+		message_clear(buffer);
 
 		// Add socket to mainloop watch
-		mainloop_addwatch(NULL, client, FD_READ, console_clientdata, msg);
-		LOG(LOG_DEBUG, "New console client.");
+		exception_t * e = NULL;
+		if (!mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
+		{
+			LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
+
+			// Add buffer back to free list
+			list_add(&free_buffers, &buffer->free_list);
+
+			return true;
+		}
 	}
 
 	return true;
@@ -153,36 +163,50 @@ bool module_init()
 
 		if (unixsock == -1 || exception_check(&e))
 		{
-			LOG(LOG_ERR, "Error creating unix server socket: %s", (e == NULL)? "Unknown error" : e->message);
+			LOG(LOG_ERR, "Error creating unix server socket: %s", exception_message(e));
 			exception_free(e);
 		}
 		else
 		{
 			// Change permissions on socket (user:rw,group:rw,other:rw)
 			chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-			mainloop_addwatch(NULL, unixsock, FD_READ, console_newclient, NULL);
-			LOG(LOG_DEBUG, "Awaiting UNIX console clients on file %s", CONSOLE_SOCKFILE);
-		}
-	}
 
-	// Start network socket (if config'd)
-	{
-		exception_t * e = NULL;
-
-		if (enable_network)
-		{
-			LOG(LOG_DEBUG, "Creating network server socket");
-
-			int tcpsock = tcp_server(CONSOLE_TCPPORT, &e);
-			if (tcpsock == -1 || exception_check(&e))
+			exception_t * e = NULL;
+			if (!mainloop_addwatch(NULL, unixsock, FD_READ, console_newclient, NULL, &e))
 			{
-				LOG(LOG_WARN, "Error creating network server socket: %s", (e == NULL)? "Unknown error" : e->message);
+				LOG(LOG_ERR, "Could not add console unix_socket fd to mainloop: %s", exception_message(e));
 				exception_free(e);
 			}
 			else
 			{
-				mainloop_addwatch(NULL, tcpsock, FD_READ, console_newclient, NULL);
-				LOG(LOG_DEBUG, "Awaiting TCP console clients on port %d", CONSOLE_TCPPORT);
+				LOG(LOG_DEBUG, "Awaiting console clients on file %s", CONSOLE_SOCKFILE);
+			}
+		}
+	}
+
+	// Start network socket (if config'd)
+	if (enable_network)
+	{
+		LOG(LOG_DEBUG, "Creating network server socket");
+
+		exception_t * e = NULL;
+		int tcpsock = tcp_server(CONSOLE_TCPPORT, &e);
+		if (tcpsock == -1 || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Error creating network server socket: %s", exception_message(e));
+			exception_free(e);
+		}
+		else
+		{
+			exception_t * e = NULL;
+			if (!mainloop_addwatch(NULL, tcpsock, FD_READ, console_newclient, NULL, &e))
+			{
+				LOG(LOG_ERR, "Could not add console tcp fd to mainloop: %s", exception_message(e));
+				exception_free(e);
+			}
+			else
+			{
+				LOG(LOG_DEBUG, "Awaiting console clients on tcp port %d", CONSOLE_TCPPORT);
 			}
 		}
 	}

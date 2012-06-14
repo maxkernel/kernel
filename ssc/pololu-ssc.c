@@ -39,6 +39,9 @@ typedef struct
 } pololu_t;
 
 
+static void pololu_destroy(void * object);
+
+
 static void pololu_write(pololu_t * p, rxstate_t newstate, char * cmd)
 {
 	ssize_t bytes = write(p->fd, cmd, PCMD_LENGTH);
@@ -228,7 +231,18 @@ static void * pololu_new(const char * serial_port, int baud)
 	serial_setattr(p->fd, B38400);
 
 	// Register the FD and send a version request
-	mainloop_addwatch(NULL, p->fd, FD_READ, pololu_newdata, p);
+	{
+		exception_t * e = NULL;
+		if (!mainloop_addwatch(NULL, p->fd, FD_READ, pololu_newdata, p, &e))
+		{
+			LOG(LOG_ERR, "Could not add pololu fd to mainloop: %s", exception_message(e));
+			exception_free(e);
+
+			pololu_destroy(p);
+			return NULL;
+		}
+	}
+
 	pololu_disableall(p);
 	pololu_write(p, PS_VERSION, PCMD_VERSION);
 

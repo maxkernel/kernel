@@ -7,7 +7,7 @@ RELEASE		= BETA
 
 MODEL       = Max 5J
 
-MODULES		= console discovery netui httpserver map service motionmodel webcam ssc gps network maxpod jpeg
+MODULES		= console discovery netui httpserver map service service2 motionmodel webcam ssc gps network maxpod jpeg
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h

@@ -114,7 +114,7 @@ bool vsyscall_exec(const char * name, exception_t ** err, void * ret, va_list ar
 		if (wrote <= 0 || exception_check(&e))
 		{
 
-			exception_set(err, ENOMEM, "Could not pack '%s' syscall args: %s (SYSCALL_BUFSIZE = %d)", name, (e == NULL)? "Unknown error" : e->message, SYSCALL_BUFFERMAX);
+			exception_set(err, ENOMEM, "Could not pack '%s' syscall args: %s (SYSCALL_BUFSIZE = %d)", name, exception_message(e), SYSCALL_BUFFERMAX);
 			return false;
 		}
 	}

@@ -95,12 +95,12 @@ static bool trigger_waitclock(trigger_t * trigger)
 	if (clk->last_trigger.tv_sec == 0 && clk->last_trigger.tv_nsec == 0)
 	{
 		// Clock hasn't been init yet
-		clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
+		clock_gettime(CLOCK_MONOTONIC, &clk->last_trigger);
 		return true;
 	}
 
 	struct timespec now;
-	clock_gettime(CLOCK_REALTIME, &now);
+	clock_gettime(CLOCK_MONOTONIC, &now);
 
 	uint64_t diff = diffnanos(&now, &clk->last_trigger);
 	if (diff >= clk->interval_nsec)
@@ -108,7 +108,7 @@ static bool trigger_waitclock(trigger_t * trigger)
 		if ((diff - WARN_NSEC_TOLLERENCE) > clk->interval_nsec)
 		{
 			LOGK(LOG_WARN, "Trigger %s has become unsynchronized (clock overshoot of %" PRIu64 " nanoseconds)", kobj_objectname(kobj_cast(trigger_cast(clk))), (diff - clk->interval_nsec));
-			clock_gettime(CLOCK_REALTIME, &clk->last_trigger);
+			clock_gettime(CLOCK_MONOTONIC, &clk->last_trigger);
 		}
 		else
 		{
@@ -182,7 +182,7 @@ static bool trigger_waitvarclock(trigger_t * trigger)
 		clk->freq_hz = *new_freq_hz;
 
 		struct timespec now, trigger;
-		clock_gettime(CLOCK_REALTIME, &now);
+		clock_gettime(CLOCK_MONOTONIC, &now);
 		memcpy(&trigger, &clk->last_trigger, sizeof(struct timespec));
 
 		uint64_t diff = diffnanos(&now, &trigger);
