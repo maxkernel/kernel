@@ -130,7 +130,7 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 
 		// Add socket to mainloop watch
 		exception_t * e = NULL;
-		if (!mainloop_addwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
+		if (!mainloop_addfdwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
 		{
 			LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
 
@@ -172,7 +172,7 @@ bool module_init()
 			chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
 			exception_t * e = NULL;
-			if (!mainloop_addwatch(NULL, unixsock, FD_READ, console_newclient, NULL, &e))
+			if (!mainloop_addfdwatch(NULL, unixsock, FD_READ, console_newclient, NULL, &e))
 			{
 				LOG(LOG_ERR, "Could not add console unix_socket fd to mainloop: %s", exception_message(e));
 				exception_free(e);
@@ -199,7 +199,7 @@ bool module_init()
 		else
 		{
 			exception_t * e = NULL;
-			if (!mainloop_addwatch(NULL, tcpsock, FD_READ, console_newclient, NULL, &e))
+			if (!mainloop_addfdwatch(NULL, tcpsock, FD_READ, console_newclient, NULL, &e))
 			{
 				LOG(LOG_ERR, "Could not add console tcp fd to mainloop: %s", exception_message(e));
 				exception_free(e);

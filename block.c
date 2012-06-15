@@ -171,7 +171,7 @@ iterator_t block_ioitr(const block_t * block)
 		while (true)
 		{
 			const meta_blockio_t * blockio = NULL;
-			if (!meta_blockionext(*meta_bitr, &blockio))
+			if (!meta_nextblockio(*meta_bitr, &blockio))
 			{
 				return NULL;
 			}
@@ -200,7 +200,7 @@ iterator_t block_ioitr(const block_t * block)
 	}
 
 	iterator_t * meta_bitr = malloc(sizeof(iterator_t));
-	*meta_bitr = meta_blockioitr(module_meta(block->module));
+	*meta_bitr = meta_itrblockio(module_meta(block->module));
 
 	return iterator_new("block_io", ioitr_next, ioitr_free, block->name, meta_bitr);
 }

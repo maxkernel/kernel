@@ -19,6 +19,7 @@ void config_destroy(kobject_t * object)
 {
 	config_t * config = (config_t *)object;
 	free(config->name);
+	free(config->desc);
 }
 
 static bool config_updatecache(const meta_variable_t * variable, char * cachebacking, exception_t ** err)

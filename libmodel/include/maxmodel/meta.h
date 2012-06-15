@@ -336,26 +336,26 @@ void meta_getinfo(const meta_t * meta, const char ** path, const char ** name, c
 void meta_getactivators(const meta_t * meta, meta_initializer * init, meta_destroyer * destroy, meta_activator * preact, meta_activator * postact);
 
 bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_block_t ** block);
-iterator_t meta_blockitr(const meta_t * meta);
-bool meta_blocknext(iterator_t itr, const meta_block_t ** block);
+iterator_t meta_itrblock(const meta_t * meta);
+bool meta_nextblock(iterator_t itr, const meta_block_t ** block);
 
 bool meta_lookupblockcbs(const meta_t * meta, const meta_block_t * block, const meta_blockcallback_t ** update, const meta_blockcallback_t ** destroy);
 
 bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const char * ioname, meta_iotype_t type, const meta_blockio_t ** blockio);
-iterator_t meta_blockioitr(const meta_t * meta);
-bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio);
+iterator_t meta_itrblockio(const meta_t * meta);
+bool meta_nextblockio(iterator_t itr, const meta_blockio_t ** blockio);
 
 bool meta_lookupdependency(const meta_t * meta, const char * name, const meta_dependency_t ** dependency);
-iterator_t meta_dependencyitr(const meta_t * meta);
-bool meta_dependencynext(iterator_t itr, const meta_dependency_t ** dependency);
+iterator_t meta_itrdependency(const meta_t * meta);
+bool meta_nextdependency(iterator_t itr, const meta_dependency_t ** dependency);
 
 bool meta_lookupconfig(const meta_t * meta, const char * configname, const meta_variable_t ** config);
-iterator_t meta_configitr(const meta_t * meta);
-bool meta_confignext(iterator_t itr, const meta_variable_t ** config);
+iterator_t meta_itrconfig(const meta_t * meta);
+bool meta_nextconfig(iterator_t itr, const meta_variable_t ** config);
 
 bool meta_lookupsyscall(const meta_t * meta, const char * syscallname, const meta_callback_t ** syscall);
-iterator_t meta_syscallitr(const meta_t * meta);
-bool meta_syscallnext(iterator_t itr, const meta_callback_t ** syscall);
+iterator_t meta_itrsyscall(const meta_t * meta);
+bool meta_nextsyscall(iterator_t itr, const meta_callback_t ** syscall);
 
 void meta_getdependency(const meta_dependency_t * dependency, const char ** name);
 void meta_getvariable(const meta_variable_t * variable, const char ** name, char * sig, const char ** desc, meta_variable_m * value);

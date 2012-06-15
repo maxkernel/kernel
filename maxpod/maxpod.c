@@ -211,7 +211,7 @@ bool maxpod_init() {
 	// Add pod_fd to mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addwatch(NULL, pod_fd, FD_READ, maxpod_newdata, NULL, &e))
+		if (!mainloop_addfdwatch(NULL, pod_fd, FD_READ, maxpod_newdata, NULL, &e))
 		{
 			LOG(LOG_ERR, "Could not add maxpod fd to mainloop: %s", exception_message(e));
 			exception_free(e);
@@ -221,7 +221,7 @@ bool maxpod_init() {
 	// Create a heartbeat timerfd
 	{
 		exception_t * e = NULL;
-		if (!mainloop_newtimerfd(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e))
+		if (mainloop_newfdtimer(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not add maxpod heartbeat timerfd to mainloop: %s", exception_message(e));
 			exception_free(e);

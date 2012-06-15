@@ -143,7 +143,7 @@ void udp_init()
 			}
 			else
 			{
-				mainloop_addwatch(serviceloop, udp_fd, FD_READ, udp_newdata, NULL, NULL);
+				mainloop_addfdwatch(serviceloop, udp_fd, FD_READ, udp_newdata, NULL, NULL);
 				LOG(LOG_DEBUG, "Service UDP server awaiting clients on port %d", udp_port);
 			}
 		}

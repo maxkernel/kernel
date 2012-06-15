@@ -256,7 +256,7 @@ bool module_init()
 
 	serviceloop = mainloop_new("Service network loop", NULL);
 
-	mainloop_newtimerfd(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL, NULL);
+	mainloop_newfdtimer(serviceloop, "Service timeout checker", SERVICE_TIMEOUT_US * MILLIS_PER_SECOND, service_checktimeout, NULL, NULL);
 	if (!kthread_newthread("Service server", KTH_PRIO_MEDIUM, service_runloop, service_stoploop, NULL, NULL))
 	{
 		LOG(LOG_ERR, "Could not start service server thread!");

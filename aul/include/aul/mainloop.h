@@ -16,8 +16,8 @@ extern "C" {
 #define AUL_MAINLOOP_ROOT_NAME			"Root"
 #define AUL_MAINLOOP_TIMEOUT_MS			10
 #define AUL_MAINLOOP_MAX_WATCHERS		300
-#define AUL_MAINLOOP_MAX_TIMERFDS			100
-#define AUL_MAINLOOP_MAX_EVENTFDS			100
+#define AUL_MAINLOOP_MAX_TIMERFDS		100
+#define AUL_MAINLOOP_MAX_EVENTFDS		100
 
 #define AUL_MAINLOOP_SIZE_HINT			10
 #define AUL_MAINLOOP_EPOLL_EVENTS		100
@@ -51,11 +51,11 @@ mainloop_t * mainloop_new(const char * name, exception_t ** err);
 bool mainloop_run(mainloop_t * loop, exception_t ** err);
 bool mainloop_stop(mainloop_t * loop, exception_t ** err);
 
-bool mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err);
-bool mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err);
+bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err);
+bool mainloop_removefdwatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err);
 
-bool mainloop_newtimerfd(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
-int mainloop_neweventfd(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
+int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
+int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
 
 #ifdef __cplusplus
 }

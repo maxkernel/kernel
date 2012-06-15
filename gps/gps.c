@@ -168,11 +168,11 @@ static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * user
 		// Fixes bug where computer can't read serial data from GPS (FIXME)
 		LOG(LOG_WARN, "Haven't received any GPS data from serial port %s. Retrying connection", gps->serial_port);
 	
-		mainloop_removewatch(NULL, gps->fd, FD_READ, NULL);
+		mainloop_removefdwatch(NULL, gps->fd, FD_READ, NULL);
 		close(gps->fd);
 
 		gps->fd = serial_open(gps->serial_port, gps->serial_speed);
-		mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, NULL, NULL);
+		mainloop_addfdwatch(NULL, gps->fd, FD_READ, gps_newdata, NULL, NULL);
 		
 		return true;
 	}
@@ -248,7 +248,7 @@ void * gps_new(char * serial_port, int baud)
 	// Add gps fd to mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addwatch(NULL, gps->fd, FD_READ, gps_newdata, gps, &e))
+		if (!mainloop_addfdwatch(NULL, gps->fd, FD_READ, gps_newdata, gps, &e))
 		{
 			LOG(LOG_ERR, "Could not add GPS fd to mainloop: %s", exception_message(e));
 			exception_free(e);
@@ -260,7 +260,7 @@ void * gps_new(char * serial_port, int baud)
 	{
 		// TODO IMPORTANT - we should NOT need this! Find out why we do or if it even helps!
 		exception_t * e = NULL;
-		if (!mainloop_newtimerfd(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e))
+		if (mainloop_newfdtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not create GPS read monitor: %s", exception_message(e));
 			exception_free(e);

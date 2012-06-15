@@ -523,7 +523,7 @@ bool meta_lookupblock(const meta_t * meta, const char * blockname, const meta_bl
 	return false;
 }
 
-iterator_t meta_blockitr(const meta_t * meta)
+iterator_t meta_itrblock(const meta_t * meta)
 {
 	// Sanity check
 	{
@@ -545,7 +545,7 @@ iterator_t meta_blockitr(const meta_t * meta)
 	return iterator_new("meta_block", bitr_next, NULL, meta, (void *)&meta->blocks[0]);
 }
 
-bool meta_blocknext(iterator_t itr, const meta_block_t ** block)
+bool meta_nextblock(iterator_t itr, const meta_block_t ** block)
 {
 	const meta_block_t * nextblock = iterator_next(itr, "meta_block");
 	if (nextblock != NULL)
@@ -628,7 +628,7 @@ bool meta_lookupblockio(const meta_t * meta, const meta_block_t * block, const c
 	return false;
 }
 
-iterator_t meta_blockioitr(const meta_t * meta)
+iterator_t meta_itrblockio(const meta_t * meta)
 {
 	// Sanity check
 	{
@@ -650,7 +650,7 @@ iterator_t meta_blockioitr(const meta_t * meta)
 	return iterator_new("meta_blockio", biitr_next, NULL, meta, (void *)&meta->blockios[0]);
 }
 
-bool meta_blockionext(iterator_t itr, const meta_blockio_t ** blockio)
+bool meta_nextblockio(iterator_t itr, const meta_blockio_t ** blockio)
 {
 	const meta_blockio_t * nextblockio = iterator_next(itr, "meta_blockio");
 	if (nextblockio != NULL)
@@ -690,7 +690,7 @@ bool meta_lookupdependency(const meta_t * meta, const char * name, const meta_de
 	return false;
 }
 
-iterator_t meta_dependencyitr(const meta_t * meta)
+iterator_t meta_itrdependency(const meta_t * meta)
 {
 	// Sanity check
 	{
@@ -712,7 +712,7 @@ iterator_t meta_dependencyitr(const meta_t * meta)
 	return iterator_new("meta_dependency", ditr_next, NULL, meta, (void *)&meta->dependencies[0]);
 }
 
-bool meta_dependencynext(iterator_t itr, const meta_dependency_t ** dependency)
+bool meta_nextdependency(iterator_t itr, const meta_dependency_t ** dependency)
 {
 	const meta_dependency_t * nextdependency = iterator_next(itr, "meta_dependency");
 	if (nextdependency != NULL)
@@ -752,7 +752,7 @@ bool meta_lookupconfig(const meta_t * meta, const char * configname, const meta_
 	return false;
 }
 
-iterator_t meta_configitr(const meta_t * meta)
+iterator_t meta_itrconfig(const meta_t * meta)
 {
 	// Sanity check
 	{
@@ -774,7 +774,7 @@ iterator_t meta_configitr(const meta_t * meta)
 	return iterator_new("meta_config", citr_next, NULL, meta, (void *)&meta->configs[0]);
 }
 
-bool meta_confignext(iterator_t itr, const meta_variable_t ** variable)
+bool meta_nextconfig(iterator_t itr, const meta_variable_t ** variable)
 {
 	const meta_variable_t * nextconfig = iterator_next(itr, "meta_config");
 	if (nextconfig != NULL)
@@ -814,7 +814,7 @@ bool meta_lookupsyscall(const meta_t * meta, const char * syscallname, const met
 	return false;
 }
 
-iterator_t meta_syscallitr(const meta_t * meta)
+iterator_t meta_itrsyscall(const meta_t * meta)
 {
 	// Sanity check
 	{
@@ -836,7 +836,7 @@ iterator_t meta_syscallitr(const meta_t * meta)
 	return iterator_new("meta_syscall", sitr_next, NULL, meta, (void *)&meta->syscalls[0]);
 }
 
-bool meta_syscallnext(iterator_t itr, const meta_callback_t ** callback)
+bool meta_nextsyscall(iterator_t itr, const meta_callback_t ** callback)
 {
 	const meta_callback_t * nextsyscall = iterator_next(itr, "meta_syscall");
 	if (nextsyscall != NULL)

@@ -56,7 +56,7 @@ static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 	ssize_t r = read(fd, &timeouts, sizeof(timeouts));
 	if (r != sizeof(uint64_t))
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from timerfd %s", timerfdwatcher->name);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from timerfd %s. Read %zd/%zu bytes.", timerfdwatcher->name, r, sizeof(uint64_t));
 	}
 	else if (timeouts > 1)
 	{
@@ -89,7 +89,7 @@ static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 	ssize_t r = read(fd, &counter, sizeof(counter));
 	if (r != sizeof(uint64_t))
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s", eventfdwatcher->name);
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s. Read %zd/%zu bytes.", eventfdwatcher->name, r, sizeof(uint64_t));
 	}
 
 	bool ret = eventfdwatcher->function(loop, counter, eventfdwatcher->userdata);
@@ -115,6 +115,11 @@ bool mainloop_init(exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root != NULL)
 		{
 			return true;
@@ -146,6 +151,11 @@ mainloop_t * mainloop_new(const char * name, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
 		if unlikely(name == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
@@ -173,6 +183,11 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -225,7 +240,7 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 							if (!watcher->function(loop, watcher->fd, events[i].events, watcher->userdata))
 							{
 								exception_t * e = NULL;
-								if (!mainloop_removewatch(loop, watcher->fd, events[i].events, &e))
+								if (!mainloop_removefdwatch(loop, watcher->fd, events[i].events, &e))
 								{
 									log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not remove fd watcher from mainloop %s: %s", loop->name, exception_message(e));
 									exception_free(e);
@@ -255,6 +270,11 @@ bool mainloop_stop(mainloop_t * loop, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -276,10 +296,15 @@ bool mainloop_stop(mainloop_t * loop, exception_t ** err)
 	return true;
 }
 
-bool mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err)
+bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -356,10 +381,15 @@ bool mainloop_addwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listene
 	return true;
 }
 
-bool mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err)
+bool mainloop_removefdwatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -415,10 +445,15 @@ bool mainloop_removewatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t 
 	return true;
 }
 
-bool mainloop_newtimerfd(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
+int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -493,13 +528,31 @@ bool mainloop_newtimerfd(mainloop_t * loop, const char * name, uint64_t nanoseco
 		return false;
 	}
 
-	return mainloop_addwatch(loop, fd, FD_READ, mainloop_timerfddispatch, timerfdwatcher, err);
+	if (!mainloop_addfdwatch(loop, fd, FD_READ, mainloop_timerfddispatch, timerfdwatcher, err))
+	{
+		// Release watcher back to empty list
+		mutex_lock(&mainloop_lock);
+		{
+			list_add(&empty_timerfds, &timerfdwatcher->empty_list);
+		}
+		mutex_unlock(&mainloop_lock);
+		close(fd);
+
+		return -1;
+	}
+
+	return fd;
 }
 
-int mainloop_neweventfd(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
+int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
+		if unlikely(exception_check(err))
+		{
+			return -1;
+		}
+
 		if unlikely(root == NULL)
 		{
 			exception_set(err, EINVAL, "Root mainloop has not been initialized");
@@ -545,7 +598,7 @@ int mainloop_neweventfd(mainloop_t * loop, const char * name, unsigned int initi
 		return -1;
 	}
 
-	if (!mainloop_addwatch(loop, fd, FD_READ, mainloop_eventfddispatch, eventfdwatcher, err))
+	if (!mainloop_addfdwatch(loop, fd, FD_READ, mainloop_eventfddispatch, eventfdwatcher, err))
 	{
 		// Release watcher back to empty list
 		mutex_lock(&mainloop_lock);

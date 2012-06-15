@@ -273,7 +273,7 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 
 			// Now set up the watch on the accept'd file descriptor
 			exception_t * e = NULL;
-			if (!mainloop_addwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
+			if (!mainloop_addfdwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
 			{
 				LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
 				exception_free(e);
@@ -308,7 +308,7 @@ httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** er
 		return NULL;
 	}
 
-	if (!mainloop_addwatch(mainloop, ctx->socket, FD_READ, http_newclient, ctx, err))
+	if (!mainloop_addfdwatch(mainloop, ctx->socket, FD_READ, http_newclient, ctx, err))
 	{
 		http_destroy(ctx);
 		return NULL;

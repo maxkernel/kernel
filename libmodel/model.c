@@ -1210,7 +1210,7 @@ bool model_lookupscript(const model_t * model, const char * path, const model_sc
 	return false;
 }
 
-iterator_t model_scriptitr(const model_t * model)
+iterator_t model_itrscript(const model_t * model)
 {
 	// Sanity check
 	{
@@ -1232,7 +1232,7 @@ iterator_t model_scriptitr(const model_t * model)
 	return iterator_new("model_script", sitr_next, NULL, model, (void *)&model->scripts[0]);
 }
 
-bool model_scriptnext(iterator_t itr, const model_script_t ** script)
+bool model_nextscript(iterator_t itr, const model_script_t ** script)
 {
 	const model_script_t * nextscript = iterator_next(itr, "model_script");
 	if (nextscript != NULL)
@@ -1300,7 +1300,7 @@ bool model_lookupmodule(const model_t * model, model_script_t * script, const ch
 	return false;
 }
 
-iterator_t model_moduleitr(const model_t * model, const model_script_t * script)
+iterator_t model_itrmodule(const model_t * model, const model_script_t * script)
 {
 	// Sanity check
 	{
@@ -1322,7 +1322,7 @@ iterator_t model_moduleitr(const model_t * model, const model_script_t * script)
 	return iterator_new("model_module", mitr_next, NULL, script, (void *)&script->modules[0]);
 }
 
-bool model_modulenext(iterator_t itr, const model_module_t ** module)
+bool model_nextmodule(iterator_t itr, const model_module_t ** module)
 {
 	const model_module_t * nextmodule = iterator_next(itr, "model_module");
 	if (nextmodule != NULL)
@@ -1357,7 +1357,7 @@ bool model_lookupconfig(const model_t * model, const model_module_t * module, co
 	return false;
 }
 
-iterator_t model_configitr(const model_t * model, const model_module_t * module)
+iterator_t model_itrconfig(const model_t * model, const model_module_t * module)
 {
 	// Sanity check
 	{
@@ -1379,7 +1379,7 @@ iterator_t model_configitr(const model_t * model, const model_module_t * module)
 	return iterator_new("model_config", citr_next, NULL, module, (void *)&module->configs[0]);
 }
 
-bool model_confignext(iterator_t itr, const model_config_t ** config)
+bool model_nextconfig(iterator_t itr, const model_config_t ** config)
 {
 	const model_config_t * nextconfig = iterator_next(itr, "model_config");
 	if (nextconfig != NULL)
@@ -1391,7 +1391,7 @@ bool model_confignext(iterator_t itr, const model_config_t ** config)
 	return false;
 }
 
-iterator_t model_linkableitr(const model_t * model, const model_script_t * script)
+iterator_t model_itrlinkable(const model_t * model, const model_script_t * script)
 {
 	// Sanity check
 	{
@@ -1413,7 +1413,7 @@ iterator_t model_linkableitr(const model_t * model, const model_script_t * scrip
 	return iterator_new("model_linkable", litr_next, NULL, script, (void *)&script->linkables[0]);
 }
 
-bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type)
+bool model_nextlinkable(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type)
 {
 	const model_linkable_t * nextlinkable = iterator_next(itr, "model_linkable");
 	if (nextlinkable != NULL)
@@ -1426,7 +1426,7 @@ bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, mode
 	return false;
 }
 
-iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkable_t * rategroup)
+iterator_t model_itrrategroupblockinst(const model_t * model, const model_linkable_t * rategroup)
 {
 	// Sanity check
 	{
@@ -1449,7 +1449,7 @@ iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkab
 	return iterator_new("model_rategroupblockinst", rgbiitr_next, NULL, rg, (void *)&rg->blockinsts[0]);
 }
 
-bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** blockinst)
+bool model_nextrategroupblockinst(iterator_t itr, const model_linkable_t ** blockinst)
 {
 	const model_linkable_t * nextblockinst = iterator_next(itr, "model_rategroupblockinst");
 	if (nextblockinst != NULL)
@@ -1461,7 +1461,7 @@ bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** bloc
 	return false;
 }
 
-iterator_t model_linkitr(const model_t * model, const model_script_t * script, const model_linkable_t * linkable)
+iterator_t model_itrlink(const model_t * model, const model_script_t * script, const model_linkable_t * linkable)
 {
 	// Sanity check
 	{
@@ -1474,7 +1474,15 @@ iterator_t model_linkitr(const model_t * model, const model_script_t * script, c
 	const void * litr_next(const void * object, void ** itrobject)
 	{
 		const model_linkable_t * linkable = object;
+		model_link_t ** lnk = (model_link_t **)*itrobject;
+		*itrobject = (*lnk == NULL)? *lnk : (void *)&lnk[1];
 
+		if (*lnk != NULL && (*lnk)->out.linkable != linkable && (*lnk)->in.linkable != linkable)
+			return litr_next(object, itrobject);
+
+		return *lnk;
+
+		/*
 		while (true)
 		{
 			model_link_t ** lnk = (model_link_t **)*itrobject;
@@ -1486,12 +1494,13 @@ iterator_t model_linkitr(const model_t * model, const model_script_t * script, c
 			if ((*lnk)->out.linkable == linkable || (*lnk)->in.linkable == linkable)
 				return *lnk;
 		}
+		*/
 	}
 
 	return iterator_new("model_link", litr_next, NULL, linkable, (void *)&script->links[0]);
 }
 
-bool model_linknext(iterator_t itr, const model_linksymbol_t ** out, const model_linksymbol_t ** in)
+bool model_nextlink(iterator_t itr, const model_linksymbol_t ** out, const model_linksymbol_t ** in)
 {
 	const model_link_t * nextlink = iterator_next(itr, "model_link");
 	if (nextlink != NULL)

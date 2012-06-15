@@ -12,7 +12,7 @@ extern list_t modules;
 static ssize_t module_desc(const kobject_t * object, char * buffer, size_t length)
 {
 	const module_t * module = (const module_t *)object;
-	return meta_yamlinfo(module->backing, buffer, length);
+	return meta_yamlinfo(module_meta(module), buffer, length);
 }
 
 static void module_destroy(kobject_t * object)
@@ -57,18 +57,18 @@ static void module_destroy(kobject_t * object)
 
 	// Call destroyer
 	{
-		const meta_t * meta = module->backing;
 		meta_destroyer destroyer = NULL;
-		meta_getactivators(meta, NULL, &destroyer, NULL, NULL);
+		meta_getactivators(module_meta(module), NULL, &destroyer, NULL, NULL);
 
 		if (destroyer != NULL)
 		{
-			LOGK(LOG_DEBUG, "Calling destroy function for module %s", module->kobject.object_name);
+			LOGK(LOG_DEBUG, "Calling destroy function for module %s", kobj_objectname(kobj_cast(module)));
 			destroyer();
 		}
 	}
 
-	//meta_destroy((meta_t *)module->backing);
+	// Destroy the meta backing object
+	meta_destroy(module->meta);
 
 	//do not dlclose module because that address space might still be in use
 	// TODO - we can check that and unload if not in use!
@@ -76,6 +76,14 @@ static void module_destroy(kobject_t * object)
 
 module_t * module_lookup(const char * name)
 {
+	// Sanity check
+	{
+		if unlikely(name == NULL)
+		{
+			return NULL;
+		}
+	}
+
 	const char * prefix = path_resolve(name, P_MODULE);
 	if (prefix == NULL)
 	{
@@ -94,7 +102,7 @@ module_t * module_lookup(const char * name)
 		module_t * tester = list_entry(pos, module_t, global_list);
 
 		const char * testerpath = NULL;
-		meta_getinfo(tester->backing, &testerpath, NULL, NULL, NULL, NULL);
+		meta_getinfo(module_meta(tester), &testerpath, NULL, NULL, NULL, NULL);
 
 		if (testerpath != NULL && strcmp(testerpath, path.string) == 0)
 		{
@@ -133,7 +141,7 @@ bool module_exists(const char * name)
 	return module_lookup(name) != NULL;
 }
 
-module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exception_t ** err)
+module_t * module_load(meta_t * meta, metalookup_f lookup, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -173,10 +181,10 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 	// Handle dependencies
 	// TODO IMPORTANT - handle circular dependencies, somehow...
 	{
-		iterator_t ditr = meta_dependencyitr(meta);
+		iterator_t ditr = meta_itrdependency(meta);
 		{
 			const meta_dependency_t * dependency = NULL;
-			while (meta_dependencynext(ditr, &dependency))
+			while (meta_nextdependency(ditr, &dependency))
 			{
 				const char * depname = NULL;
 				meta_getdependency(dependency, &depname);
@@ -189,32 +197,13 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 					return NULL;
 				}
 
-				// Now add it to the model
-				// **This will add a copy of the meta, so we must free it and re-resolve it**
-				if (!model_addmeta(model, depmeta, err))
-				{
-					return NULL;
-				}
-
-				const char * deppath = NULL;
-				meta_getinfo(depmeta, &deppath, NULL, NULL, NULL, NULL);
-
-				const meta_t * newdepmeta = NULL;
-				if (!model_lookupmeta(model, deppath, &newdepmeta))
-				{
-					exception_set(err, EFAULT, "Could not re-resolve the dependency meta object for %s", depname);
-					return NULL;
-				}
-
-				// Now set the dependency meta object to the model meta object
-				meta_destroy(depmeta);
-				depmeta = (meta_t *)newdepmeta;
-
-				module_t * depmodule = module_load(model, depmeta, lookup, err);
+				module_t * depmodule = module_load(depmeta, lookup, err);
 				if (depmodule == NULL || exception_check(err))
 				{
 					return NULL;
 				}
+
+				meta_destroy(depmeta);
 			}
 		}
 		iterator_free(ditr);
@@ -227,7 +216,7 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 	}
 
 	module_t * module = kobj_new("Module", name, module_desc, module_destroy, sizeof(module_t));
-	module->backing = meta; //meta_copy(meta);
+	module->meta = meta_copy(meta);
 	list_init(&module->syscalls);
 	list_init(&module->configs);
 	list_init(&module->blocks);
@@ -235,10 +224,10 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 
 	// Create configs
 	{
-		iterator_t citr = meta_configitr(meta);
+		iterator_t citr = meta_itrconfig(meta);
 		{
 			const meta_variable_t * variable = NULL;
-			while (meta_confignext(citr, &variable))
+			while (meta_nextconfig(citr, &variable))
 			{
 				config_t * config = config_new(meta, variable, err);
 				if (config == NULL || exception_check(err))
@@ -255,10 +244,10 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 
 	// Create syscalls
 	{
-		iterator_t sitr = meta_syscallitr(meta);
+		iterator_t sitr = meta_itrsyscall(meta);
 		{
 			const meta_callback_t * callback = NULL;
-			while(meta_syscallnext(sitr, &callback))
+			while(meta_nextsyscall(sitr, &callback))
 			{
 				const char * name = NULL, * sig = NULL, * desc = NULL;
 				syscall_f func = NULL;
@@ -280,9 +269,9 @@ module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exce
 	// Create blocks
 	{
 		const meta_block_t * block = NULL;
-		iterator_t bitr = meta_blockitr(meta);
+		iterator_t bitr = meta_itrblock(meta);
 		{
-			while (meta_blocknext(bitr, &block))
+			while (meta_nextblock(bitr, &block))
 			{
 				block_t * blk = block_new(module, block, err);
 				if (blk == NULL || exception_check(err))
@@ -306,7 +295,7 @@ void module_init(const module_t * module)
 {
 	// Sanity check
 	{
-		if (module == NULL)
+		if unlikely(module == NULL)
 		{
 			LOGK(LOG_ERR, "Module is NULL (module_init)");
 			return;
@@ -315,17 +304,16 @@ void module_init(const module_t * module)
 
 	// Call initializer function
 	{
-		const meta_t * meta = module->backing;
 		meta_initializer initializer = NULL;
-		meta_getactivators(meta, &initializer, NULL, NULL, NULL);
+		meta_getactivators(module_meta(module), &initializer, NULL, NULL, NULL);
 
 		if (initializer != NULL)
 		{
-			LOGK(LOG_DEBUG, "Calling initializer function for module %s", module->kobject.object_name);
+			LOGK(LOG_DEBUG, "Calling initializer function for module %s", kobj_objectname(kobj_cast(module)));
 
 			if (!initializer())
 			{
-				LOGK(LOG_FATAL, "Module initialization failed (%s).", module->kobject.object_name);
+				LOGK(LOG_FATAL, "Module initialization failed (%s).", kobj_objectname(kobj_cast(module)));
 				// Will exit
 			}
 		}
@@ -336,29 +324,27 @@ void module_activate(const module_t * module, moduleact_t act)
 {
 	// Sanity check
 	{
-		if (module == NULL)
+		if unlikely(module == NULL)
 		{
-			LOGK(LOG_ERR, "Module is NULL (module_act)");
+			LOGK(LOG_ERR, "Bad arguments!");
 			return;
 		}
 	}
 
-	// Call initializer function
+	// Call activator function
 	{
-		const meta_t * meta = module->backing;
-
 		meta_activator activator = NULL;
-		const char * activator_name = "";
+		const char * activator_name = "(unknown)";
 
 		switch (act)
 		{
 			case act_preact:
-				meta_getactivators(meta, NULL, NULL, &activator, NULL);
+				meta_getactivators(module_meta(module), NULL, NULL, &activator, NULL);
 				activator_name = "preactivator";
 				break;
 
 			case act_postact:
-				meta_getactivators(meta, NULL, NULL, NULL, &activator);
+				meta_getactivators(module_meta(module), NULL, NULL, NULL, &activator);
 				activator_name = "postactivator";
 				break;
 		}

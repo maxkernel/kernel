@@ -61,7 +61,7 @@ bool module_init()
 		return true;
 	}
 
-	if (!mainloop_addwatch(NULL, sock, FD_READ, discovery_newclient, NULL, &e))
+	if (!mainloop_addfdwatch(NULL, sock, FD_READ, discovery_newclient, NULL, &e))
 	{
 		LOG(LOG_ERR, "Could not add udp discovery socket to mainloop: %s", exception_message(e));
 		exception_free(e);

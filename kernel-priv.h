@@ -87,7 +87,7 @@ typedef struct
 	kobject_t kobject;
 	list_t global_list;
 
-	const meta_t * backing;		// TODO - rename this 'meta'
+	meta_t * meta;
 	list_t syscalls;			// The list of syscalls defined in the meta section of the module
 	list_t configs;				// The list of config entries defined
 	list_t blocks;				// The list of all blocks defined in this module
@@ -329,9 +329,9 @@ module_t * module_lookup(const char * name);
 bool module_exists(const char * name);
 void module_init(const module_t * module);
 void module_activate(const module_t * module, moduleact_t act);
-module_t * module_load(model_t * model, meta_t * meta, metalookup_f lookup, exception_t ** err);
+module_t * module_load(meta_t * meta, metalookup_f lookup, exception_t ** err);
 block_t * module_lookupblock(module_t * module, const char * blockname);
-#define module_meta(module)		((module)->backing)
+#define module_meta(module)		((module)->meta)
 
 // Memfs functions
 // TODO - clean these up and determine which ones to keep

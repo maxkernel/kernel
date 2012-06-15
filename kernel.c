@@ -642,7 +642,7 @@ static int modules_itr()
 			module_t * module = list_entry(list, module_t, global_list);
 
 			const char * path = NULL;
-			meta_getinfo(module->backing, &path, NULL, NULL, NULL, NULL);
+			meta_getinfo(module_meta(module), &path, NULL, NULL, NULL, NULL);
 			return path;
 		}
 	}
@@ -764,6 +764,15 @@ int main(int argc, char * argv[])
 			if (!testtl)
 			{
 				LOGK(LOG_FATAL, "Failed thread-local runtime check!");
+				// Will exit
+			}
+		}
+
+		// Ensure proper void pointer arithmetic
+		{
+			if (((void *)0 + (size_t)1) != (void *)1)
+			{
+				LOGK(LOG_FATAL, "Failed void pointer arithmetic runtime check!");
 				// Will exit
 			}
 		}
@@ -1371,7 +1380,7 @@ int main(int argc, char * argv[])
 
 				// Loading the module *will* change the underlying struct (ptrs will resolve),
 				// so we must cast to get rid of const qualifier
-				module_t * m = module_load((model_t *)model, (meta_t *)meta, meta_lookup, &e);
+				module_t * m = module_load((meta_t *)meta, meta_lookup, &e);
 				if (m == NULL || exception_check(&e))
 				{
 					LOGK(LOG_FATAL, "Module loading failed: %s", exception_message(e));
@@ -1523,10 +1532,10 @@ int main(int argc, char * argv[])
 
 				// Iterator over the blockinsts and add them to the rategroup
 				{
-					iterator_t bitr = model_rategroupblockinstitr(model, linkable);
+					iterator_t bitr = model_itrrategroupblockinst(model, linkable);
 					{
 						const model_linkable_t * blockinst = NULL;
-						while (model_rategroupblockinstnext(bitr, &blockinst))
+						while (model_nextrategroupblockinst(bitr, &blockinst))
 						{
 							blockinst_t * bi = model_userdata(model_object(blockinst));
 
@@ -1836,7 +1845,7 @@ int main(int argc, char * argv[])
 		// Check for new kernel thread tasks every second
 		{
 			exception_t * e = NULL;
-			if (!mainloop_newtimerfd(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e))
+			if (mainloop_newfdtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) < 0)
 			{
 				LOGK(LOG_FATAL, "Could not create kthread task handler: %s", exception_message(e));
 				// Will exit

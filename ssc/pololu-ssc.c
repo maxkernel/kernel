@@ -233,7 +233,7 @@ static void * pololu_new(const char * serial_port, int baud)
 	// Register the FD and send a version request
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addwatch(NULL, p->fd, FD_READ, pololu_newdata, p, &e))
+		if (!mainloop_addfdwatch(NULL, p->fd, FD_READ, pololu_newdata, p, &e))
 		{
 			LOG(LOG_ERR, "Could not add pololu fd to mainloop: %s", exception_message(e));
 			exception_free(e);

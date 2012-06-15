@@ -227,26 +227,26 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 void model_analyse(model_t * model, const model_analysis_t * funcs);
 
 bool model_lookupscript(const model_t * model, const char * path, const model_script_t ** script);
-iterator_t model_scriptitr(const model_t * model);
-bool model_scriptnext(iterator_t itr, const model_script_t ** script);
+iterator_t model_itrscript(const model_t * model);
+bool model_nextscript(iterator_t itr, const model_script_t ** script);
 
 bool model_lookupmeta(const model_t * model, const char * path, const meta_t ** meta);
 bool model_lookupmodule(const model_t * model, model_script_t * script, const char * path, model_module_t ** module);
-iterator_t model_moduleitr(const model_t * model, const model_script_t * script);
-bool model_modulenext(iterator_t itr, const model_module_t ** module);
+iterator_t model_itrmodule(const model_t * model, const model_script_t * script);
+bool model_nextmodule(iterator_t itr, const model_module_t ** module);
 
 bool model_lookupconfig(const model_t * model, const model_module_t * module, const char * name, const model_config_t ** config);
-iterator_t model_configitr(const model_t * model, const model_module_t * module);
-bool model_confignext(iterator_t itr, const model_config_t ** config);
+iterator_t model_itrconfig(const model_t * model, const model_module_t * module);
+bool model_nextconfig(iterator_t itr, const model_config_t ** config);
 
-iterator_t model_linkableitr(const model_t * model, const model_script_t * script);
-bool model_linkablenext(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type);
+iterator_t model_itrlinkable(const model_t * model, const model_script_t * script);
+bool model_nextlinkable(iterator_t itr, const model_linkable_t ** linkable, modeltype_t * type);
 
-iterator_t model_rategroupblockinstitr(const model_t * model, const model_linkable_t * rategroup);
-bool model_rategroupblockinstnext(iterator_t itr, const model_linkable_t ** blockinst);
+iterator_t model_itrrategroupblockinst(const model_t * model, const model_linkable_t * rategroup);
+bool model_nextrategroupblockinst(iterator_t itr, const model_linkable_t ** blockinst);
 
-iterator_t model_linkitr(const model_t * model, const model_script_t * script, const model_linkable_t * linkable);
-bool model_linknext(iterator_t itr, const model_linksymbol_t ** out, const model_linksymbol_t ** in);
+iterator_t model_itrlink(const model_t * model, const model_script_t * script, const model_linkable_t * linkable);
+bool model_nextlink(iterator_t itr, const model_linksymbol_t ** out, const model_linksymbol_t ** in);
 
 
 void model_getscript(const model_script_t * script, const char ** path);
