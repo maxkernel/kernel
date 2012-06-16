@@ -50,10 +50,25 @@ void service_writedata(service_h service, uint64_t timestamp_us, const buffer_t 
 void service_writeclientdata(service_h service, stream_h stream, uint64_t timestamp_us, const buffer_t buffer);
 */
 
+#define SC_BUFFERSIZE		128
+
+#define SC_GOODBYE			0x00
+#define SC_AUTH				0x01			// TODO - add (optional) authentication
+#define SC_HEARTBEAT		0x02
+#define SC_DATA				0x03
+#define SC_SUBSCRIBE		0x04
+#define SC_UNSUBSCRIBE		0x05
+
+#define SC_LISTXML			0xA1
+
+
+
 #define SERVICE_CLIENTS_PER_STREAM		25
 
-#define DEFAULT_TCP_PORT	10001
-#define DEFAULT_UDP_PORT	10002
+#define DEFAULT_NET_TIMEOUT		(3 * MICROS_PER_SECOND)
+
+#define DEFAULT_TCP_PORT		10001
+#define DEFAULT_UDP_PORT		10002
 
 typedef struct __service_t service_t;
 typedef struct __stream_t stream_t;
@@ -72,6 +87,7 @@ struct __service_t
 	mutex_t service_lock;
 
 	char * name;
+	char * format;
 	char * desc;
 
 	list_t clients;
@@ -96,21 +112,30 @@ struct __client_t
 	list_t stream_list;
 
 	service_t * service;
-	stream_t * stream;
-
+	stream_t * stream;			// TODO - is this field needed? (maybe replace with a mutex_t * to the mutex in stream_t?)
 	clientdestroy_f destroyer;
+
+	bool inuse;
+	int64_t lastheartbeat;
 	uint8_t data[0];
 };
 
-
+bool service_subscribe(service_t * service, client_t * client, exception_t ** err);
+void service_unsubscribe(client_t * client);
+void service_listxml(buffer_t * buffer);
 stream_t * service_newstream(const char * name, size_t objectsize, streamsend_f sender, streamcheck_f checker, clientdestroy_f destroyer, exception_t ** err);
 
 client_t * stream_newclient(stream_t * stream, exception_t ** err);
-#define stream_mainloop(s)	((s)->loop)
+void stream_freeclient(client_t * client);
+#define stream_mainloop(s)		((s)->loop)
 
-
-#define client_data(c)		((void *)(c)->data)
-
+ssize_t client_control(client_t * client, void * buffer, size_t length);
+#define client_service(c)		((c)->service)
+#define client_stream(c)		((c)->stream)
+#define client_destroyer(c)		((c)->destroyer)
+#define client_inuse(c)			((c)->inuse)
+#define client_lastheartbeat(c)	((c)->lastheartbeat)
+#define client_data(c)			((void *)(c)->data)
 
 #ifdef __cplusplus
 }

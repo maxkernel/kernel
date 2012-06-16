@@ -362,7 +362,7 @@ end_init:
 	char * error = dlerror();
 	if (error != NULL)
 	{
-		exception_set(err, EFAULT, "Could not load module. DL error: %s", error);
+		exception_set(err, EFAULT, "DL error: %s", error);
 		return false;
 	}
 

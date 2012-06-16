@@ -33,39 +33,31 @@ static mutex_t services_lock;
 
 static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
-	/*
-	GHashTableIter itr;
-	client_t * client = NULL;
-	int64_t now = kernel_timestamp();
-
-	mutex_lock(&service_lock);
+	mutex_lock(&services_lock);
 	{
-		g_hash_table_iter_init(&itr, client_table);
-		while (g_hash_table_iter_next(&itr, NULL, (void **)&client))
+		list_t * pos = NULL;
+		list_foreach(pos, &services)
 		{
-			if ((now - client->timeout_us) > SERVICE_TIMEOUT_US)
+			service_t * service = list_entry(pos, service_t, service_list);
+
+			mutex_lock(&service->service_lock);
 			{
-				LOG(LOG_DEBUG, "Service client '%s' disconnected (timeout)", client->handle);
-
-				g_hash_table_iter_remove(&itr);
-
-				mutex_lock(&client->lock);
+				list_t * pos = NULL, * n = NULL;
+				list_foreach_safe(pos, n, &service->clients)
 				{
-					size_t i;
-					for (i=0; i<PROTOCOL_NUM; i++)
-					{
-						service_freestream(client->streams[i]);
-					}
+					client_t * client = list_entry(pos, client_t, service_list);
 
-					client->inuse = false;
+					if (!stream_checkclient(client_stream(client), client))
+					{
+						stream_freeclient(client);
+					}
 				}
-				mutex_unlock(&client->lock);
 			}
+			mutex_unlock(&service->service_lock);
 		}
 	}
+	mutex_unlock(&services_lock);
 
-	mutex_unlock(&service_lock);
-*/
 	return true;
 }
 
@@ -79,16 +71,32 @@ static void service_destroyservice(kobject_t * object)
 {
 	service_t * service = (service_t *)object;
 
-	// TODO - free all registered clients!
+	mutex_lock(&service->service_lock);
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &service->clients)
+		{
+			client_t * client = list_entry(pos, client_t, service_list);
+			stream_freeclient(client);
+		}
+	}
+	mutex_unlock(&service->service_lock);
 
 	free(service->name);
+	free(service->format);
 	if (service->desc != NULL)
 	{
 		free(service->desc);
 	}
+
+	mutex_lock(&services_lock);
+	{
+		list_remove(&service->service_list);
+	}
+	mutex_unlock(&services_lock);
 }
 
-service_t * service_newservice(const char * name, const char * desc, exception_t ** err)
+service_t * service_newservice(const char * name, char * format, const char * desc, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -97,7 +105,7 @@ service_t * service_newservice(const char * name, const char * desc, exception_t
 			return NULL;
 		}
 
-		if unlikely(name == NULL)
+		if unlikely(name == NULL || format == NULL)
 		{
 			exception_set(err, EINVAL, "Bad arguments!");
 			return NULL;
@@ -107,6 +115,7 @@ service_t * service_newservice(const char * name, const char * desc, exception_t
 	service_t * service = kobj_new("Service", name, service_descservice, service_destroyservice, sizeof(service_t));
 	mutex_init(&service->service_lock, M_RECURSIVE);
 	service->name = strdup(name);
+	service->format = strdup(format);
 	service->desc = (desc == NULL)? NULL : strdup(desc);
 	list_init(&service->clients);
 
@@ -169,6 +178,11 @@ stream_t * service_newstream(const char * name, size_t objectsize, streamsend_f 
 	}
 
 	return stream;
+}
+
+void service_listxml(buffer_t * buffer)
+{
+	size_t index = 0;
 }
 
 static bool service_runloop(void * userdata)

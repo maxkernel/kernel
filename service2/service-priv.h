@@ -22,3 +22,4 @@ typedef struct
 bool tcp_init(exception_t ** err);
 bool udp_init(exception_t ** err);
 
+bool stream_checkclient(stream_t * stream, client_t * client);
