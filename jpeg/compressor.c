@@ -45,8 +45,7 @@ typedef struct
 
 static bool jpeg_getfmtinfo(char * fmt, convert_f * converter, sizecheck_f * sizechecker)
 {
-	size_t len = strlen(fmt), i = 0;
-	for (; i<len; i++)
+	for (size_t i = 0; i < strlen(fmt); i++)
 	{
 		fmt[i] = (char)tolower(fmt[i]);
 	}

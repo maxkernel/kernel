@@ -5,6 +5,7 @@
 #include <inttypes.h>
 
 #include <aul/common.h>
+#include <aul/list.h>
 #include <aul/mainloop.h>
 
 #include <buffer.h>
@@ -62,9 +63,6 @@ void service_writeclientdata(service_h service, stream_h stream, uint64_t timest
 #define SC_LISTXML			0xA1
 
 
-
-#define SERVICE_CLIENTS_PER_STREAM		25
-
 #define DEFAULT_NET_TIMEOUT		(3 * MICROS_PER_SECOND)
 
 #define DEFAULT_TCP_PORT		10001
@@ -74,8 +72,9 @@ typedef struct __service_t service_t;
 typedef struct __stream_t stream_t;
 typedef struct __client_t client_t;
 
-typedef void (*streamsend_f)(client_t * client, buffer_t data);
-typedef bool (*streamcheck_f)(client_t * client);
+typedef void (*streamdestroy_f)(stream_t * stream);
+typedef bool (*clientsend_f)(client_t * client, int64_t microtimestamp, buffer_t * data);
+typedef bool (*clientcheck_f)(client_t * client);
 typedef void (*clientdestroy_f)(client_t * client);
 
 
@@ -84,7 +83,7 @@ struct __service_t
 	kobject_t kobject;
 	list_t service_list;
 
-	mutex_t service_lock;
+	mutex_t lock;
 
 	char * name;
 	char * format;
@@ -98,12 +97,12 @@ struct __stream_t
 	kobject_t kobject;
 
 	mainloop_t * loop;
-	mutex_t stream_lock;
+	mutex_t lock;
 
-	streamsend_f sender;
-	streamcheck_f checker;
+	streamdestroy_f destroyer;
 
 	list_t clients;
+	uint8_t data[0];
 };
 
 struct __client_t
@@ -112,7 +111,10 @@ struct __client_t
 	list_t stream_list;
 
 	service_t * service;
-	stream_t * stream;			// TODO - is this field needed? (maybe replace with a mutex_t * to the mutex in stream_t?)
+	mutex_t * lock;
+
+	clientsend_f sender;
+	clientcheck_f checker;
 	clientdestroy_f destroyer;
 
 	bool inuse;
@@ -120,22 +122,34 @@ struct __client_t
 	uint8_t data[0];
 };
 
+service_t * service_new(const char * name, const char * format, const char * desc, exception_t ** err);
+void service_destroy(service_t * service);
+service_t * service_lookup(const char * name);
+void service_send(service_t * service, const buffer_t * buffer);
 bool service_subscribe(service_t * service, client_t * client, exception_t ** err);
 void service_unsubscribe(client_t * client);
 void service_listxml(buffer_t * buffer);
-stream_t * service_newstream(const char * name, size_t objectsize, streamsend_f sender, streamcheck_f checker, clientdestroy_f destroyer, exception_t ** err);
+#define service_name(s)			((s)->name)
+#define service_format(s)		((s)->format)
+#define service_desc(s)			((s)->desc)
+#define service_hasclients(s)	(!list_isempty(&(s)->clients))
+#define service_numclients(s)	(list_size(&(s)->clients))
 
-client_t * stream_newclient(stream_t * stream, exception_t ** err);
-void stream_freeclient(client_t * client);
+stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err);
+void stream_destroy(stream_t * stream);
 #define stream_mainloop(s)		((s)->loop)
+#define stream_data(s)			((void *)(s)->data)
 
-ssize_t client_control(client_t * client, void * buffer, size_t length);
+client_t * client_new(stream_t * stream, exception_t ** err);
+void client_destroy(client_t * client);
+static inline bool client_send(client_t * client, int64_t microtimestamp, buffer_t * buffer) { return client->sender(client, microtimestamp, buffer); }
 #define client_service(c)		((c)->service)
-#define client_stream(c)		((c)->stream)
-#define client_destroyer(c)		((c)->destroyer)
+#define client_lock(c)			((c)->lock)
 #define client_inuse(c)			((c)->inuse)
 #define client_lastheartbeat(c)	((c)->lastheartbeat)
 #define client_data(c)			((void *)(c)->data)
+
+ssize_t clienthelper_control(client_t * client, void * buffer, size_t length);
 
 #ifdef __cplusplus
 }

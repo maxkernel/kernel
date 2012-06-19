@@ -18,9 +18,8 @@ static FILE * log = NULL;
 
 void printheader(const char * title)
 {
-	int i=0;
 	printf("%s ", title);
-	for (; i<term_width-(strlen(title)+1); i++)
+	for (size_t i = 0; i < term_width-(strlen(title)+1); i++)
 		printf("=");
 	printf("\n");
 }

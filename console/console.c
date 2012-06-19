@@ -9,6 +9,7 @@
 #include <aul/net.h>
 #include <aul/mainloop.h>
 #include <aul/list.h>
+#include <aul/stack.h>
 
 #include <kernel.h>
 #include <serialize.h>
@@ -18,7 +19,7 @@
 
 bool enable_network = false;
 
-static list_t free_buffers;
+static stack_t free_buffers;
 
 static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
@@ -28,7 +29,7 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 	if (state >= P_ERROR)
 	{
 		// Add buffer back to free list
-		list_add(&free_buffers, &buffer->free_list);
+		stack_push(&free_buffers, &buffer->free_list);
 
 		return false;
 	}
@@ -114,16 +115,16 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 	{
 		LOG(LOG_DEBUG, "New console client.");
 
-		if (list_isempty(&free_buffers))
+		// Get a free buffer
+		list_t * entry = stack_pop(&free_buffers);
+		if (entry == NULL)
 		{
 			LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
 			close(client);
 			return true;
 		}
 
-		// Get a free buffer
-		msgbuffer_t * buffer = list_entry(free_buffers.next, msgbuffer_t, free_list);
-		list_remove(&buffer->free_list);
+		msgbuffer_t * buffer = list_entry(entry, msgbuffer_t, free_list);
 
 		// Clear the message
 		message_clear(buffer);
@@ -135,7 +136,7 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 			LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
 
 			// Add buffer back to free list
-			list_add(&free_buffers, &buffer->free_list);
+			stack_push(&free_buffers, &buffer->free_list);
 
 			return true;
 		}
@@ -147,13 +148,13 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 bool module_init()
 {
 	// Initialize buffers
-	list_init(&free_buffers);
+	stack_init(&free_buffers);
 	msgbuffer_t * buffers = malloc(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 	memset(buffers, 0, sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
 
 	for (size_t i = 0; i<CONSOLE_BUFFERS; i++)
 	{
-		list_add(&free_buffers, &buffers[i].free_list);
+		stack_push(&free_buffers, &buffers[i].free_list);
 	}
 
 	// Start unix socket

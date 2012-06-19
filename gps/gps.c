@@ -260,7 +260,7 @@ void * gps_new(char * serial_port, int baud)
 	{
 		// TODO IMPORTANT - we should NOT need this! Find out why we do or if it even helps!
 		exception_t * e = NULL;
-		if (mainloop_newfdtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e) < 0)
+		if (mainloop_addnewfdtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not create GPS read monitor: %s", exception_message(e));
 			exception_free(e);

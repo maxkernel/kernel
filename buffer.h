@@ -18,7 +18,7 @@ buffer_t buffer_dup(const buffer_t src);
 
 void buffer_write(buffer_t buffer, const void * data, off_t offset, size_t length);
 size_t buffer_read(const buffer_t buffer, void * data, off_t offset, size_t length);
-//bool buffer_send(buffer_t buffer, int sock); // TODO - create this function
+ssize_t buffer_send(buffer_t buffer, int fd, off_t offset, size_t length);
 
 size_t buffer_size(const buffer_t buffer);
 void buffer_free(buffer_t buffer);

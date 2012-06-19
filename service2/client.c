@@ -5,7 +5,99 @@
 #include <service.h>
 #include "service-priv.h"
 
-ssize_t client_control(client_t * client, void * buffer, size_t length)
+
+client_t * client_new(stream_t * stream, exception_t ** err)
+{
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
+		if unlikely(stream == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+	}
+
+	client_t * client = NULL;
+
+	mutex_lock(&stream->lock);
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &stream->clients)
+		{
+			client_t * testclient = list_entry(pos, client_t, stream_list);
+			if (testclient->service == NULL)
+			{
+				client = testclient;
+				client->inuse = true;
+				break;
+			}
+		}
+	}
+	mutex_unlock(&stream->lock);
+
+	if (client == NULL)
+	{
+		exception_set(err, ENOMEM, "No free clients!");
+		return NULL;
+	}
+
+	client->lastheartbeat = kernel_elapsed();
+	return client;
+}
+
+void client_destroy(client_t * client)
+{
+	// Sanity check
+	{
+		if unlikely(client == NULL)
+		{
+			return;
+		}
+	}
+
+	mutex_lock(client_lock(client));
+	{
+		if (client_inuse(client))
+		{
+			// Unsubscribe for service (if registered)
+			service_t * service = client_service(client);
+			if (service != NULL)
+			{
+				service_unsubscribe(client);
+			}
+
+			// Call the destroyer
+			clientdestroy_f destroyer = client->destroyer;
+			if (destroyer != NULL)
+			{
+				destroyer(client);
+			}
+
+			// Set the inuse flag
+			client_inuse(client) = false;
+		}
+	}
+	mutex_unlock(client_lock(client));
+}
+
+bool client_check(client_t * client)
+{
+	bool check = true;
+	mutex_lock(client_lock(client));
+	{
+		check = client->checker(client);
+	}
+	mutex_unlock(client_lock(client));
+
+	return check;
+}
+
+ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 {
 	// Sanity check
 	{
@@ -49,19 +141,52 @@ ssize_t client_control(client_t * client, void * buffer, size_t length)
 
 		case SC_SUBSCRIBE:
 		{
-			// TODO - finish me
-			return 0;
+			buffer += sizeof(uint8_t);
+			length -= sizeof(uint8_t);
+
+			char * name = (char *)buffer;
+			size_t strlen = strnlen(name, length);
+			if (strlen == length)
+			{
+				// Not full command in buffer, return 0 to indicate nothing to do
+				return 0;
+			}
+
+			service_t * service = service_lookup(name);
+			if (service == NULL)
+			{
+				LOG(LOG_WARN, "Attempting to subscribe client to invalid service %s", name);
+				return -1;
+			}
+
+			exception_t * e = NULL;
+			if (!service_subscribe(service, client, &e))
+			{
+				LOG(LOG_WARN, "Could not subscribe client to service %s: %s", name, exception_message(e));
+				exception_free(e);
+
+				return -1;
+			}
+
+			return sizeof(uint8_t) + (strlen + 1);
 		}
 
 		case SC_UNSUBSCRIBE:
 		{
-			// TODO - finish me
-			return 0;
+			service_unsubscribe(client);
+			return sizeof(uint8_t);
 		}
 
 		case SC_LISTXML:
 		{
-
+			bool success = false;
+			buffer_t buffer = buffer_new();
+			{
+				service_listxml(&buffer);
+				success = client_send(client, kernel_timestamp(), &buffer);
+			}
+			buffer_free(buffer);
+			return (success)? sizeof(uint8_t) : -1;
 		}
 
 		default:

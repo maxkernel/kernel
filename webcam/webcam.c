@@ -38,8 +38,7 @@ typedef struct
 
 static unsigned int webcam_getformat(char * fmt)
 {
-	size_t len = strlen(fmt), i = 0;
-	for (; i<len; i++)
+	for (size_t i = 0; i < strlen(fmt); i++)
 	{
 		fmt[i] = tolower(fmt[i]);
 	}
@@ -223,8 +222,7 @@ static bool webcam_stop(webcam_t * webcam)
 
 	if (webcam->buffers != NULL)
 	{
-		size_t i = 0;
-		for (; i<webcam->n_buffers; i++)
+		for (size_t i = 0; i < webcam->n_buffers; i++)
 		{
 			if (munmap(webcam->buffers[i].start, webcam->buffers[i].length) == -1)
 			{

@@ -1,10 +1,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/timerfd.h>
-#include <sys/eventfd.h>
 
 #include <aul/log.h>
 #include <aul/mainloop.h>
+#include <aul/stack.h>
 
 
 typedef struct
@@ -40,9 +40,9 @@ static watcher_t watchers[AUL_MAINLOOP_MAX_WATCHERS];
 static timerfdwatcher_t timerfds[AUL_MAINLOOP_MAX_TIMERFDS];
 static eventfdwatcher_t eventfds[AUL_MAINLOOP_MAX_EVENTFDS];
 
-static list_t empty_watchers;
-static list_t empty_timerfds;
-static list_t empty_eventfds;
+static stack_t empty_watchers;
+static stack_t empty_timerfds;
+static stack_t empty_eventfds;
 
 static mutex_t mainloop_lock;
 static mainloop_t * root = NULL;
@@ -70,7 +70,7 @@ static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 		// Listener returned false, remove the timerfd
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_timerfds, &timerfdwatcher->empty_list);
+			stack_push(&empty_timerfds, &timerfdwatcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
 
@@ -85,11 +85,10 @@ static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 {
 	eventfdwatcher_t * eventfdwatcher = userdata;
 
-	uint64_t counter = 0;
-	ssize_t r = read(fd, &counter, sizeof(counter));
-	if (r != sizeof(uint64_t))
+	eventfd_t counter = 0;
+	if (eventfd_read(fd, &counter) < 0)
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s. Read %zd/%zu bytes.", eventfdwatcher->name, r, sizeof(uint64_t));
+		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s.", eventfdwatcher->name);
 	}
 
 	bool ret = eventfdwatcher->function(loop, counter, eventfdwatcher->userdata);
@@ -99,7 +98,7 @@ static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 		// Listener returned false, remove the eventfd
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_eventfds, &eventfdwatcher->empty_list);
+			stack_push(&empty_eventfds, &eventfdwatcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
 
@@ -127,21 +126,21 @@ bool mainloop_init(exception_t ** err)
 	}
 
 	mutex_init(&mainloop_lock, M_RECURSIVE);
-	list_init(&empty_watchers);
-	list_init(&empty_timerfds);
-	list_init(&empty_eventfds);
+	stack_init(&empty_watchers);
+	stack_init(&empty_timerfds);
+	stack_init(&empty_eventfds);
 
 	for (size_t i = 0; i < AUL_MAINLOOP_MAX_WATCHERS; i++)
 	{
-		list_add(&empty_watchers, &watchers[i].empty_list);
+		stack_push(&empty_watchers, &watchers[i].empty_list);
 	}
 	for (size_t i = 0; i < AUL_MAINLOOP_MAX_TIMERFDS; i++)
 	{
-		list_add(&empty_timerfds, &timerfds[i].empty_list);
+		stack_push(&empty_timerfds, &timerfds[i].empty_list);
 	}
 	for (size_t i = 0; i < AUL_MAINLOOP_MAX_EVENTFDS; i++)
 	{
-		list_add(&empty_eventfds, &eventfds[i].empty_list);
+		stack_push(&empty_eventfds, &eventfds[i].empty_list);
 	}
 	
 	return (root = mainloop_new(AUL_MAINLOOP_ROOT_NAME, err)) != NULL;
@@ -233,8 +232,7 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 				{
 					if (&loop->running)
 					{
-						int i = 0;
-						for (; i<bits; i++)
+						for (size_t i = 0; i < bits; i++)
 						{
 							watcher_t * watcher = events[i].data.ptr;
 							if (!watcher->function(loop, watcher->fd, events[i].events, watcher->userdata))
@@ -323,10 +321,10 @@ bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f liste
 	// Retrieve a free watcher_t structure
 	mutex_lock(&mainloop_lock);
 	{
-		if (!list_isempty(&empty_watchers))
+		list_t * entry = stack_pop(&empty_watchers);
+		if (entry != NULL)
 		{
-			watcher = list_entry(empty_watchers.next, watcher_t, empty_list);
-			list_remove(&watcher->empty_list);
+			watcher = list_entry(entry, watcher_t, empty_list);
 		}
 	}
 	mutex_unlock(&mainloop_lock);
@@ -371,7 +369,7 @@ bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f liste
 		// Add watcher back to empty pool
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_watchers, &watcher->empty_list);
+			stack_push(&empty_watchers, &watcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
 
@@ -425,7 +423,7 @@ bool mainloop_removefdwatch(mainloop_t * loop, int fd, fdcond_t cond, exception_
 	// Add the watcher to the empty list
 	mutex_lock(&mainloop_lock);
 	{
-		list_add(&empty_watchers, &watcher->empty_list);
+		stack_push(&empty_watchers, &watcher->empty_list);
 	}
 	mutex_unlock(&mainloop_lock);
 
@@ -445,7 +443,7 @@ bool mainloop_removefdwatch(mainloop_t * loop, int fd, fdcond_t cond, exception_
 	return true;
 }
 
-int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
+int mainloop_addnewfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -471,10 +469,10 @@ int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanosecon
 	timerfdwatcher_t * timerfdwatcher = NULL;
 	mutex_lock(&mainloop_lock);
 	{
-		if (!list_isempty(&empty_timerfds))
+		list_t * entry = stack_pop(&empty_timerfds);
+		if (entry != NULL)
 		{
-			timerfdwatcher = list_entry(empty_timerfds.next, timerfdwatcher_t, empty_list);
-			list_remove(&timerfdwatcher->empty_list);
+			timerfdwatcher = list_entry(entry, timerfdwatcher_t, empty_list);
 		}
 	}
 	mutex_unlock(&mainloop_lock);
@@ -515,7 +513,7 @@ int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanosecon
 	}
 
 	// Create the file descriptor
-	int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+	int fd = timerfd_create(CLOCK_MONOTONIC, 0 /* TFD_NONBLOCK */);		// TODO - should we use NONBLOCK?
 	if (fd == -1)
 	{
 		exception_set(err, EFAULT, "Could not create timerfd %s: %s", name, strerror(errno));
@@ -533,7 +531,7 @@ int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanosecon
 		// Release watcher back to empty list
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_timerfds, &timerfdwatcher->empty_list);
+			stack_push(&empty_timerfds, &timerfdwatcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
 		close(fd);
@@ -544,7 +542,7 @@ int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanosecon
 	return fd;
 }
 
-int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
+int mainloop_addnewfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -569,10 +567,10 @@ int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initi
 	eventfdwatcher_t * eventfdwatcher = NULL;
 	mutex_lock(&mainloop_lock);
 	{
-		if (!list_isempty(&empty_eventfds))
+		list_t * entry = stack_pop(&empty_eventfds);
+		if (entry != NULL)
 		{
-			eventfdwatcher = list_entry(empty_eventfds.next, eventfdwatcher_t, empty_list);
-			list_remove(&eventfdwatcher->empty_list);
+			eventfdwatcher = list_entry(entry, eventfdwatcher_t, empty_list);
 		}
 	}
 	mutex_unlock(&mainloop_lock);
@@ -591,7 +589,7 @@ int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initi
 	eventfdwatcher->userdata = userdata;
 
 	// Create the file descriptor
-	int fd = eventfd(initialvalue, EFD_NONBLOCK);
+	int fd = eventfd(initialvalue, 0 /* EFD_NONBLOCK */);			// TODO - should we use NONBLOCK?
 	if (fd == -1)
 	{
 		exception_set(err, EFAULT, "Could not create eventfd %s: %s", name, strerror(errno));
@@ -603,7 +601,7 @@ int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initi
 		// Release watcher back to empty list
 		mutex_lock(&mainloop_lock);
 		{
-			list_add(&empty_eventfds, &eventfdwatcher->empty_list);
+			stack_push(&empty_eventfds, &eventfdwatcher->empty_list);
 		}
 		mutex_unlock(&mainloop_lock);
 		close(fd);

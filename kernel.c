@@ -323,7 +323,7 @@ iterator_t kobj_itr()
 	{
 		unused(object);
 
-		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		list_t * list = *itrobject = list_next((list_t *)*itrobject);
 		if (list == &kobjects)
 		{
 			return NULL;
@@ -631,7 +631,7 @@ static int modules_itr()
 	{
 		unused(object);
 
-		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		list_t * list = *itrobject = list_next((list_t *)*itrobject);
 
 		if (list == &modules)
 		{
@@ -662,7 +662,7 @@ static int syscalls_itr()
 	{
 		unused(object);
 
-		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		list_t * list = *itrobject = list_next((list_t *)*itrobject);
 		return (list == hashtable_itr(&syscalls))? NULL : hashtable_itrentry(list, syscall_t, global_entry)->name;
 	}
 
@@ -703,7 +703,7 @@ static int properties_itr()
 	{
 		unused(object);
 
-		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		list_t * list = *itrobject = list_next((list_t *)*itrobject);
 		return (list == hashtable_itr(&properties))? NULL : hashtable_itrentry(list, property_t, entry)->name;
 	}
 
@@ -891,11 +891,7 @@ int main(int argc, char * argv[])
 	// Make pid file
 	{
 		int pfd = open(PIDFILE, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
-		if (pfd == -1)
-		{
-			LOGK(LOG_WARN, "Could not create pid file %s: %s", PIDFILE, strerror(errno));
-		}
-		else
+		if (pfd >= 0)
 		{
 			string_t data = string_new("%u\n", getpid());
 			if (write(pfd, data.string, data.length) != (ssize_t)data.length)
@@ -903,6 +899,10 @@ int main(int argc, char * argv[])
 				LOGK(LOG_WARN, "Could not write all data to pid file %s", PIDFILE);
 			}
 			close(pfd);
+		}
+		else
+		{
+			LOGK(LOG_WARN, "Could not create pid file %s: %s", PIDFILE, strerror(errno));
 		}
 	}
 
@@ -1821,7 +1821,7 @@ int main(int argc, char * argv[])
 			{
 				module_t * ma = list_entry(a, module_t, global_list);
 				module_t * mb = list_entry(b, module_t, global_list);
-				return strcmp(ma->kobject.object_name, mb->kobject.object_name);
+				return strcmp(kobj_objectname(kobj_cast(ma)), kobj_objectname(kobj_cast(mb)));
 			}
 
 			list_sort(&modules, module_compare);
@@ -1845,7 +1845,7 @@ int main(int argc, char * argv[])
 		// Check for new kernel thread tasks every second
 		{
 			exception_t * e = NULL;
-			if (mainloop_newfdtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) < 0)
+			if (mainloop_addnewfdtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) < 0)
 			{
 				LOGK(LOG_FATAL, "Could not create kthread task handler: %s", exception_message(e));
 				// Will exit
@@ -1918,7 +1918,7 @@ int main(int argc, char * argv[])
 
 		// Clear all the properties
 		{
-			list_t * pos, * n;
+			list_t * pos = NULL, * n = NULL;
 			hashtable_foreach_safe(pos, n, &properties)
 			{
 				property_t * prop = hashtable_itrentry(pos, property_t, entry);

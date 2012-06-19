@@ -150,8 +150,7 @@ static struct
 
 void log_destroy()
 {
-	size_t i=0;
-	for (; i<AUL_LOG_MAXLISTENERS; i++)
+	for (size_t i = 0; i < AUL_LOG_MAXLISTENERS; i++)
 	{
 		if (log_listeners[i].closer != NULL)
 		{
@@ -300,8 +299,7 @@ void log_dispatch(level_t level, const char * domain, const char * fmt, va_list 
 	string_clear(&str);
 	string_vappend(&str, fmt, args);
 	
-	size_t i=0;
-	for (; i<AUL_LOG_MAXLISTENERS; i++)
+	for (size_t i = 0; i < AUL_LOG_MAXLISTENERS; i++)
 	{
 		if (log_listeners[i].function != NULL)
 		{
@@ -317,8 +315,7 @@ void log_dispatch(level_t level, const char * domain, const char * fmt, va_list 
 
 void log_addlistener(log_f listener, logclose_f closer, void * userdata)
 {
-	size_t i = 0;
-	for (; i<AUL_LOG_MAXLISTENERS; i++)
+	for (size_t i = 0; i < AUL_LOG_MAXLISTENERS; i++)
 	{
 		if (log_listeners[i].function == NULL)
 		{
@@ -334,8 +331,7 @@ void log_addlistener(log_f listener, logclose_f closer, void * userdata)
 
 void log_removelistener(log_f listener)
 {
-	size_t i = 0;
-	for (; i<AUL_LOG_MAXLISTENERS; i++)
+	for (size_t i = 0; i < AUL_LOG_MAXLISTENERS; i++)
 	{
 		if (log_listeners[i].function == listener)
 		{

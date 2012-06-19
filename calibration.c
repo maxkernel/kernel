@@ -277,7 +277,7 @@ iterator_t cal_iterator()
 	{
 		unused(object);
 
-		list_t * list = *itrobject = ((list_t *)*itrobject)->next;
+		list_t * list = *itrobject = list_next((list_t *)*itrobject);
 		return (list == &calibration.entries)? NULL : list_entry(list, calentry_t, calibration_list);
 	}
 

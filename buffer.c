@@ -1,10 +1,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/uio.h>
 
 #include <aul/common.h>
 #include <aul/atomic.h>
 #include <aul/list.h>
+#include <aul/stack.h>
 #include <aul/mutex.h>
 #include <kernel-priv.h>
 #include <buffer.h>
@@ -35,8 +37,8 @@ static ssize_t BUFFERSIZE;
 static mutex_t buffers_lock;
 static mutex_t pages_lock;
 
-static list_t empty_buffers;
-static list_t empty_pages;
+static stack_t empty_buffers;
+static stack_t empty_pages;
 
 static inline bool buffer_invalid(const buffer_t b)
 {
@@ -48,11 +50,7 @@ static void * page_getnew()
 	void * page = NULL;
 	mutex_lock(&pages_lock);
 	{
-		if (!list_isempty(&empty_pages))
-		{
-			list_t * list = page = empty_pages.next;
-			list_remove(list);
-		}
+		page = stack_pop(&empty_pages);
 	}
 	mutex_unlock(&pages_lock);
 
@@ -65,10 +63,10 @@ static int buffer_getnew()
 
 	mutex_lock(&buffers_lock);
 	{
-		if (!list_isempty(&empty_buffers))
+		list_t * entry = stack_pop(&empty_buffers);
+		if (entry != NULL)
 		{
-			buffermem_t * buf = list_entry(empty_buffers.next, buffermem_t, empty_list);
-			list_remove(&buf->empty_list);
+			buffermem_t * buf = list_entry(entry, buffermem_t, empty_list);
 
 			memset(buf->pages, 0, sizeof(buf->pages));
 			buf->length = 0;
@@ -139,8 +137,8 @@ void buffer_init()
 {
 	PAGESIZE = getpagesize();
 	BUFFERSIZE = PAGESIZE * BUFFER_MAX_PAGES;
-	list_init(&empty_buffers);
-	list_init(&empty_pages);
+	stack_init(&empty_buffers);
+	stack_init(&empty_pages);
 	mutex_init(&buffers_lock, M_RECURSIVE);
 	mutex_init(&pages_lock, M_RECURSIVE);
 	
@@ -155,8 +153,7 @@ void buffer_init()
 	{
 		buffermem_t * buf = &buffers_mem[i];
 		mutex_init(&buf->access_lock, M_RECURSIVE);
-
-		list_add(&empty_buffers, &buf->empty_list);
+		stack_push(&empty_buffers, &buf->empty_list);
 	}
 
 	// Allocate the *huge* page pool
@@ -169,10 +166,10 @@ void buffer_init()
 	}
 
 	// Add pages to free list
-	for (size_t i=0; i<pages; i++)
+	for (size_t i = 0; i < pages; i++)
 	{
 		list_t * list = (list_t *)&pages_mem[PAGESIZE * i];
-		list_add(&empty_pages, list);
+		stack_push(&empty_pages, list);
 	}
 }
 
@@ -325,12 +322,73 @@ size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
 	return length;
 }
 
-/*
-bool buffer_send(buffer_t buffer, int sock)
+ssize_t buffer_send(buffer_t b, int fd, off_t offset, size_t length)
 {
-	return false;
+	// Sanity check
+	{
+		if (buffer_invalid(b) || fd < 0)
+		{
+			return -1;
+		}
+	}
+
+	ssize_t size = buffer_size(b);
+	ssize_t readsize = offset + length;
+
+	if (offset > size)
+	{
+		// Can't send any data! Offset is larger then entire buffer
+		return 0;
+	}
+
+	if (readsize > size)
+	{
+		// Can't read that much, adjust the length
+		length -= readsize - size;
+	}
+
+	ssize_t wrote = 0;
+
+	mutex_lock(&buffers[b]->access_lock);
+	{
+		while (offset >= BUFFERSIZE)
+		{
+			b = buffers[b]->next;
+			offset -= BUFFERSIZE;
+		}
+
+		size_t pages = length / PAGESIZE + 1;
+		size_t pagenum = offset / PAGESIZE;
+		off_t pageoff = offset % PAGESIZE;
+
+		struct iovec v[pages];
+		memset(v, 0, sizeof(struct iovec) * pages);
+
+		size_t index = 0;
+		while (length > 0)
+		{
+			if (pagenum == BUFFER_MAX_PAGES)
+			{
+				b = buffers[b]->next;
+				pagenum = 0;
+			}
+
+			size_t sendlen = min(length, PAGESIZE - pageoff);
+			v[index].iov_base = buffers[b]->pages[pagenum] + pageoff;
+			v[index].iov_len = sendlen;
+
+			length -= sendlen;
+			pagenum += 1;
+			pageoff = 0;
+			index += 1;
+		}
+
+		wrote = writev(fd, v, pages);
+	}
+	mutex_unlock(&buffers[b]->access_lock);
+
+	return wrote;
 }
-*/
 
 size_t buffer_size(const buffer_t b)
 {
@@ -385,7 +443,7 @@ void buffer_free(buffer_t b)
 				}
 
 				// Got a valid page, add it to the empty_pages list
-				list_add(&empty_pages, list);
+				stack_push(&empty_pages, list);
 			}
 		}
 		mutex_unlock(&pages_lock);
@@ -395,7 +453,7 @@ void buffer_free(buffer_t b)
 	mutex_lock(&buffers_lock);
 	{
 		// Add the free'd buffer to the empty list
-		list_add(&empty_buffers, &buffers[b]->empty_list);
+		stack_push(&empty_buffers, &buffers[b]->empty_list);
 		buffers[b] = NULL;
 	}
 	mutex_unlock(&buffers_lock);

@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
+#include <linux/tcp.h>
 #include <netinet/in.h>
 
 #include <aul/string.h>
@@ -15,6 +16,11 @@ double tcp_timeout = DEFAULT_NET_TIMEOUT;
 
 module_config(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
 module_config(tcp_port, 'd', "TCP timeout (in seconds) with no heartbeat before client is disconnect");
+
+typedef struct
+{
+	int fd;
+} tcpstream_t;
 
 typedef struct
 {
@@ -35,21 +41,58 @@ static inline string_t addr2string(uint32_t ip)
 	return string_new("%d.%d.%d.%d", a1, a2, a3, a4);
 }
 
-
-static void tcp_send(client_t * client, buffer_t data)
+static void tcp_streamdestroy(stream_t * stream)
 {
-
+	tcpstream_t * tcpstream = stream_data(stream);
+	close(tcpstream->fd);
 }
 
-static bool tcp_check(client_t * client)
+static bool tcp_clientsend(client_t * client, int64_t microtimestamp, buffer_t * data)
 {
+	tcpclient_t * tcpclient = client_data(client);
 
+	// Write the header
+	{
+		int64_t ts = microtimestamp;
+		uint32_t s = buffer_size(*data);
+
+		#define a(x)	((uint8_t *)&x)
+		const uint8_t header[] = {
+			SC_DATA,																			// Control byte
+			a(ts)[0], a(ts)[1], a(ts)[2], a(ts)[3], a(ts)[4], a(ts)[5], a(ts)[6], a(ts)[7],		// 64 bit microsecond timestamp
+			a(s)[0], a(s)[1], a(s)[2], a(s)[3]													// Size of data payload to follow
+		};
+
+		ssize_t wrote = write(tcpclient->fd, header, sizeof(header));
+		if (wrote != sizeof(header))
+		{
+			// Unable to complete write, return false to indicate error
+			return false;
+		}
+	}
+
+	// Write the payload
+	{
+		ssize_t	wrote = buffer_send(*data, tcpclient->fd, 0, buffer_size(*data));
+		if (wrote != buffer_size(*data))
+		{
+			// Could not send all data
+			return false;
+		}
+	}
 	return true;
 }
 
-static void tcp_destroy(client_t * client)
+static bool tcp_clientcheck(client_t * client)
 {
+	// Return false if client hasn't heartbeat'd since more than DEFAULT_NET_TIMEOUT ago
+	return (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
+}
 
+static void tcp_clientdestroy(client_t * client)
+{
+	tcpclient_t * tcpclient = client_data(client);
+	close(tcpclient->fd);
 }
 
 static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
@@ -64,14 +107,14 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 		{
 			// Abnormal disconnect
 			LOG(LOG_INFO, "Abnormal tcp service client disconnect %s", tcpclient->ip.string);
-			stream_freeclient(client);
+			client_destroy(client);
 			return false;
 		}
 		else if (bytesread == 0)
 		{
 			// Normal disconnect
 			LOG(LOG_DEBUG, "Normal tcp service client disconnect %s", tcpclient->ip.string);
-			stream_freeclient(client);
+			client_destroy(client);
 			return false;
 		}
 
@@ -84,13 +127,13 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 		do
 		{
-			size = client_control(client, tcpclient->buffer, tcpclient->size);
+			size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
 
 			if (size < 0)
 			{
 				// -1 means free the client
-				stream_freeclient(client);
-				break;
+				client_destroy(client);
+				return false;
 			}
 
 			if (size > 0)
@@ -121,12 +164,22 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 		return true;
 	}
 
+	// Set the TCP_NODELAY flag on the socket
+	{
+		int flag = 1;
+		if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) < 0)
+		{
+			// Do nothing but warn
+			LOG(LOG_WARN, "Could not set tcp_nodelay on service client tcp socket: %s", strerror(errno));
+		}
+	}
+
 	client_t * client = NULL;
 
 	// Get new client object
 	{
 		exception_t * e = NULL;
-		client = stream_newclient(stream, &e);
+		client = client_new(stream, &e);
 		if (client == NULL || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Service client register error: %s", exception_message(e));
@@ -169,20 +222,23 @@ bool tcp_init(exception_t ** err)
 		return true;
 	}
 
-	stream_t * stream = service_newstream("tcp", sizeof(tcpclient_t), tcp_send, tcp_check, tcp_destroy, err);
+	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientcheck, tcp_clientdestroy, err);
 	if (stream == NULL || exception_check(err))
 	{
 		return false;
 	}
 
-	int tcpfd = tcp_server(tcp_port, err);
-	if (tcpfd < 0 || exception_check(err))
+	tcpstream_t * tcpstream = stream_data(stream);
+	tcpstream->fd = tcp_server(tcp_port, err);
+	if (tcpstream->fd < 0 || exception_check(err))
 	{
+		stream_destroy(stream);
 		return false;
 	}
 
-	if (!mainloop_addfdwatch(stream_mainloop(stream), tcpfd, FD_READ, tcp_newclient, stream, err))
+	if (!mainloop_addfdwatch(stream_mainloop(stream), tcpstream->fd, FD_READ, tcp_newclient, stream, err))
 	{
+		stream_destroy(stream);
 		return false;
 	}
 

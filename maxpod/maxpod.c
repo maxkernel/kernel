@@ -221,7 +221,7 @@ bool maxpod_init() {
 	// Create a heartbeat timerfd
 	{
 		exception_t * e = NULL;
-		if (mainloop_newfdtimer(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e) < 0)
+		if (mainloop_addnewfdtimer(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not add maxpod heartbeat timerfd to mainloop: %s", exception_message(e));
 			exception_free(e);

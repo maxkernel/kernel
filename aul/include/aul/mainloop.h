@@ -2,6 +2,7 @@
 #define __AUL_MAINLOOP_H
 
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 
 #include <aul/common.h>
 #include <aul/exception.h>
@@ -44,7 +45,7 @@ typedef struct
 
 typedef bool (*watch_f)(mainloop_t * loop, int fd, fdcond_t condition, void * userdata);
 typedef bool (*timerfd_f)(mainloop_t * loop, uint64_t nanoseconds, void * userdata);
-typedef bool (*eventfd_f)(mainloop_t * loop, uint64_t counter, void * userdata);
+typedef bool (*eventfd_f)(mainloop_t * loop, eventfd_t counter, void * userdata);
 
 bool mainloop_init(exception_t ** err);
 mainloop_t * mainloop_new(const char * name, exception_t ** err);
@@ -54,8 +55,8 @@ bool mainloop_stop(mainloop_t * loop, exception_t ** err);
 bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err);
 bool mainloop_removefdwatch(mainloop_t * loop, int fd, fdcond_t cond, exception_t ** err);
 
-int mainloop_newfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
-int mainloop_newfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
+int mainloop_addnewfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
+int mainloop_addnewfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
 
 #ifdef __cplusplus
 }

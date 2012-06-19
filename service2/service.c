@@ -1,6 +1,7 @@
 #include <errno.h>
 
 #include <aul/list.h>
+#include <aul/stack.h>
 #include <aul/mutex.h>
 #include <aul/mainloop.h>
 
@@ -27,9 +28,15 @@ static subsystem_t subsystems[] = {
 };
 
 
-static mainloop_t * serviceloop = NULL;
+mainloop_t * serviceloop = NULL;
+int serviceeventfd = -1;
+
 static list_t services;
 static mutex_t services_lock;
+
+static stack_t packets;
+static stack_t packets_free;
+static mutex_t packets_lock;
 
 static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
@@ -40,20 +47,20 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 		{
 			service_t * service = list_entry(pos, service_t, service_list);
 
-			mutex_lock(&service->service_lock);
+			mutex_lock(&service->lock);
 			{
 				list_t * pos = NULL, * n = NULL;
 				list_foreach_safe(pos, n, &service->clients)
 				{
 					client_t * client = list_entry(pos, client_t, service_list);
 
-					if (!stream_checkclient(client_stream(client), client))
+					if (!client_check(client))
 					{
-						stream_freeclient(client);
+						client_destroy(client);
 					}
 				}
 			}
-			mutex_unlock(&service->service_lock);
+			mutex_unlock(&service->lock);
 		}
 	}
 	mutex_unlock(&services_lock);
@@ -61,26 +68,203 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 	return true;
 }
 
-static ssize_t service_descservice(const kobject_t * object, char * buffer, size_t length)
+static bool service_dispatch(mainloop_t * loop, eventfd_t counter, void * userdata)
+{
+	list_t * entry = NULL;
+
+	do
+	{
+		// Pop a packet from the list
+		mutex_lock(&packets_lock);
+		{
+			entry = stack_pop(&packets);
+		}
+		mutex_unlock(&packets_lock);
+
+		if (entry != NULL)
+		{
+			packet_t * packet = list_entry(entry, packet_t, packet_list);
+			service_t * service = packet->service;
+
+			// Send the packet to all client handlers for transmission
+			mutex_lock(&service->lock);
+			{
+				list_t * pos = NULL, * n = NULL;
+				list_foreach_safe(pos, n, &service->clients)
+				{
+					client_t * client = list_entry(pos, client_t, service_list);
+					client_send(client, packet->timestamp, &packet->buffer);
+				}
+			}
+			mutex_unlock(&service->lock);
+
+			// Add the packet back to the free list
+			mutex_lock(&packets_lock);
+			{
+				stack_push(&packets_free, &packet->packet_list);
+			}
+			mutex_unlock(&packets_lock);
+		}
+
+	} while (entry != NULL);
+
+	return true;
+}
+
+service_t * service_lookup(const char * name)
+{
+	// Sanity check
+	{
+		if unlikely(name == NULL)
+		{
+			return NULL;
+		}
+	}
+
+	service_t * service = NULL;
+
+	mutex_lock(&services_lock);
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &services)
+		{
+			service_t * testservice = list_entry(pos, service_t, service_list);
+			if (strcmp(service_name(testservice), name) == 0)
+			{
+				service = testservice;
+				break;
+			}
+		}
+	}
+	mutex_unlock(&services_lock);
+
+	return service;
+}
+
+void service_send(service_t * service, const buffer_t * buffer)
+{
+	// Sanity check
+	{
+		if unlikely(service == NULL || buffer == NULL)
+		{
+			return;
+		}
+	}
+
+	// Get a free packet
+	list_t * entry = NULL;
+	mutex_lock(&packets_lock);
+	{
+		entry = stack_pop(&packets_free);
+	}
+	mutex_unlock(&packets_lock);
+
+	if (entry == NULL)
+	{
+		LOG(LOG_WARN, "Out of free service packets!");
+		return;
+	}
+
+	// Populate the packet
+	packet_t * packet = list_entry(entry, packet_t, packet_list);
+	memset(packet, 0, sizeof(packet_t));
+	packet->service = service;
+	packet->timestamp = kernel_timestamp();
+	packet->buffer = buffer_dup(*buffer);
+
+	// Add the packet to the consumer-list
+	mutex_lock(&packets_lock);
+	{
+		stack_enqueue(&packets, &packet->packet_list);
+	}
+	mutex_unlock(&packets_lock);
+
+	// Notify the consumer eventfd
+	if (eventfd_write(serviceeventfd, 1) < 0)
+	{
+		LOG(LOG_WARN, "Could not notify service sender eventfd of new data");
+	}
+}
+
+bool service_subscribe(service_t * service, client_t * client, exception_t ** err)
+{
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
+		if unlikely(service == NULL || client == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
+
+		if (!client_inuse(client))
+		{
+			exception_set(err, EINVAL, "Attempting to subscribe to service with invalid client");
+			return false;
+		}
+
+		if (client_service(client) != NULL)
+		{
+			exception_set(err, EINVAL, "Attempting to subscribe to service with client that already holds subscription");
+			return false;
+		}
+	}
+
+	mutex_lock(&service->lock);
+	{
+		list_add(&service->clients, &client->service_list);
+	}
+	mutex_unlock(&service->lock);
+
+	return true;
+}
+
+void service_unsubscribe(client_t * client)
+{
+	// Sanity check
+	{
+		if unlikely(client == NULL)
+		{
+			return;
+		}
+	}
+
+	service_t * service = client_service(client);
+	if (service != NULL)
+	{
+		mutex_lock(&service->lock);
+		{
+			list_remove(&client->service_list);
+		}
+		mutex_unlock(&service->lock);
+	}
+}
+
+static ssize_t service_kobjdesc(const kobject_t * object, char * buffer, size_t length)
 {
 	// TODO - finish me
 	return 0;
 }
 
-static void service_destroyservice(kobject_t * object)
+static void service_kobjdestroy(kobject_t * object)
 {
 	service_t * service = (service_t *)object;
 
-	mutex_lock(&service->service_lock);
+	// Destroy all registered clients (prevent them from entering unknown state)
+	mutex_lock(&service->lock);
 	{
 		list_t * pos = NULL, * n = NULL;
 		list_foreach_safe(pos, n, &service->clients)
 		{
 			client_t * client = list_entry(pos, client_t, service_list);
-			stream_freeclient(client);
+			client_destroy(client);
 		}
 	}
-	mutex_unlock(&service->service_lock);
+	mutex_unlock(&service->lock);
 
 	free(service->name);
 	free(service->format);
@@ -96,7 +280,7 @@ static void service_destroyservice(kobject_t * object)
 	mutex_unlock(&services_lock);
 }
 
-service_t * service_newservice(const char * name, char * format, const char * desc, exception_t ** err)
+service_t * service_new(const char * name, const char * format, const char * desc, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -112,8 +296,8 @@ service_t * service_newservice(const char * name, char * format, const char * de
 		}
 	}
 
-	service_t * service = kobj_new("Service", name, service_descservice, service_destroyservice, sizeof(service_t));
-	mutex_init(&service->service_lock, M_RECURSIVE);
+	service_t * service = kobj_new("Service", name, service_kobjdesc, service_kobjdestroy, sizeof(service_t));
+	mutex_init(&service->lock, M_RECURSIVE);
 	service->name = strdup(name);
 	service->format = strdup(format);
 	service->desc = (desc == NULL)? NULL : strdup(desc);
@@ -124,64 +308,22 @@ service_t * service_newservice(const char * name, char * format, const char * de
 	return service;
 }
 
-
-static ssize_t service_descstream(const kobject_t * object, char * buffer, size_t length)
-{
-	// TODO - finish me
-	return 0;
-}
-
-static void service_destroystream(kobject_t * object)
-{
-	stream_t * stream = (stream_t *)object;
-
-}
-
-stream_t * service_newstream(const char * name, size_t objectsize, streamsend_f sender, streamcheck_f checker, clientdestroy_f destroyer, exception_t ** err)
+void service_destroy(service_t * service)
 {
 	// Sanity check
 	{
-		if unlikely(exception_check(err))
+		if unlikely(service == NULL)
 		{
-			return NULL;
-		}
-
-		if unlikely(name == NULL || sender == NULL || checker == NULL)
-		{
-			exception_set(err, EINVAL, "Bad arguments!");
-			return NULL;
-		}
-
-		if unlikely(serviceloop == NULL)
-		{
-			exception_set(err, EFAULT, "Service mainloop not initialized");
-			return NULL;
+			return;
 		}
 	}
 
-	size_t clientsize = sizeof(client_t) + objectsize;
-
-	stream_t * stream = kobj_new("Service Stream", name, service_descstream, service_destroystream, sizeof(stream_t));
-	stream->loop = serviceloop;
-	mutex_init(&stream->stream_lock, M_RECURSIVE);
-	stream->sender = sender;
-	stream->checker = checker;
-	list_init(&stream->clients);
-
-	void * clients = malloc(clientsize * SERVICE_CLIENTS_PER_STREAM);
-	memset(clients, 0, clientsize * SERVICE_CLIENTS_PER_STREAM);
-	for (size_t i = 0; i < SERVICE_CLIENTS_PER_STREAM; i++)
-	{
-		client_t * client = clients + (i * clientsize);
-		client->destroyer = destroyer;
-		list_add(&stream->clients, &client->stream_list);
-	}
-
-	return stream;
+	kobj_destroy(kobj_cast(service));
 }
 
 void service_listxml(buffer_t * buffer)
 {
+	// TODO - finish me
 	size_t index = 0;
 }
 
@@ -219,14 +361,16 @@ static void service_preactivate()
 	list_init(&services);
 	mutex_init(&services_lock, M_RECURSIVE);
 
-	/*
-	memset(clients, 0, sizeof(client_t) * SERVICE_CLIENTS_MAX);
+	stack_init(&packets);
+	stack_init(&packets_free);
+	mutex_init(&packets_lock, M_RECURSIVE);
 
-	mutex_init(&service_lock, M_RECURSIVE);
-	service_table = g_hash_table_new(g_str_hash, g_str_equal);
-	client_table = g_hash_table_new(g_str_hash, g_str_equal);
-	stream_table = g_hash_table_new(g_str_hash, g_str_equal);
-	*/
+	for (size_t i = 0; i < SERVICE_NUM_PACKETS; i++)
+	{
+		packet_t * packet = malloc(sizeof(packet_t));
+		memset(packet, 0, sizeof(packet_t));
+		stack_push(&packets_free, &packet->packet_list);
+	}
 }
 
 static bool service_init()
@@ -245,9 +389,16 @@ static bool service_init()
 			return false;
 		}
 
-		if (mainloop_newfdtimer(serviceloop, "Service monitor", SERVICE_TIMEOUT_NS, service_checktimeout, serviceloop, &e) < 0)
+		if (mainloop_addnewfdtimer(serviceloop, "Service monitor", SERVICE_TIMEOUT_NS, service_checktimeout, serviceloop, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not create service monitor timer: %s", exception_message(e));
+			exception_free(e);
+			return false;
+		}
+
+		if ((serviceeventfd = mainloop_addnewfdevent(serviceloop, "Service dispatch", 0, service_dispatch, NULL, &e)) < 0)
+		{
+			LOG(LOG_ERR, "Could not create service dispatch event: %s", exception_message(e));
 			exception_free(e);
 			return false;
 		}
