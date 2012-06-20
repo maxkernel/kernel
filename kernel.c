@@ -595,7 +595,7 @@ int64_t kernel_timestamp()
 	static struct timeval now;
 	gettimeofday(&now, NULL);
 
-	uint64_t ts = (uint64_t)now.tv_sec * 1000000LL;
+	uint64_t ts = (uint64_t)now.tv_sec * MICROS_PER_SECOND;
 	ts += now.tv_usec;
 
 	return ts;

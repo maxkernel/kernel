@@ -107,39 +107,42 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
 	int client = accept(fd, NULL, NULL);
-	if (client == -1)
+	if (client < 0)
 	{
-		LOG(LOG_WARN, "Could not accept new console client socket: %s", strerror(errno));
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			LOG(LOG_WARN, "Could not accept new console client socket: %s", strerror(errno));
+		}
+
+		return true;
 	}
-	else
+
+	LOG(LOG_DEBUG, "New console client.");
+
+	// Get a free buffer
+	list_t * entry = stack_pop(&free_buffers);
+	if (entry == NULL)
 	{
-		LOG(LOG_DEBUG, "New console client.");
+		LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
+		close(client);
+		return true;
+	}
 
-		// Get a free buffer
-		list_t * entry = stack_pop(&free_buffers);
-		if (entry == NULL)
-		{
-			LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
-			close(client);
-			return true;
-		}
+	msgbuffer_t * buffer = list_entry(entry, msgbuffer_t, free_list);
 
-		msgbuffer_t * buffer = list_entry(entry, msgbuffer_t, free_list);
+	// Clear the message
+	message_clear(buffer);
 
-		// Clear the message
-		message_clear(buffer);
+	// Add socket to mainloop watch
+	exception_t * e = NULL;
+	if (!mainloop_addfdwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
+	{
+		LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
 
-		// Add socket to mainloop watch
-		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
-		{
-			LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
+		// Add buffer back to free list
+		stack_push(&free_buffers, &buffer->free_list);
 
-			// Add buffer back to free list
-			stack_push(&free_buffers, &buffer->free_list);
-
-			return true;
-		}
+		return true;
 	}
 
 	return true;

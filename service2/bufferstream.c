@@ -31,7 +31,7 @@ static void bufferservice_update(void * object)
 	const buffer_t * buffer = input(buffer);
 	if (buffer != NULL)
 	{
-		service_send(service, buffer);
+		service_send(service, kernel_timestamp(), buffer);
 	}
 
 	// Output the number of connected clients

@@ -127,7 +127,11 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 		do
 		{
-			size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
+			mutex_lock(client_lock(client));
+			{
+				size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
+			}
+			mutex_unlock(client_lock(client));
 
 			if (size < 0)
 			{
@@ -160,7 +164,11 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 	int sock = accept(fd, (struct sockaddr *)&addr, &socklen);
 	if (sock < 0)
 	{
-		LOG(LOG_WARN, "Could not accept new tcp service client socket: %s", strerror(errno));
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			LOG(LOG_WARN, "Could not accept new tcp service client socket: %s", strerror(errno));
+		}
+
 		return true;
 	}
 

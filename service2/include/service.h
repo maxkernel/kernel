@@ -56,11 +56,12 @@ void service_writeclientdata(service_h service, stream_h stream, uint64_t timest
 #define SC_GOODBYE			0x00
 #define SC_AUTH				0x01			// TODO - add (optional) authentication
 #define SC_HEARTBEAT		0x02
-#define SC_DATA				0x03
-#define SC_SUBSCRIBE		0x04
-#define SC_UNSUBSCRIBE		0x05
+#define SC_SUBSCRIBE		0x03
+#define SC_UNSUBSCRIBE		0x04
+#define SC_BEGIN			0x05
+#define SC_DATA				0x06
 
-#define SC_LISTXML			0xA1
+#define SC_LISTXML			0x11
 
 
 #define DEFAULT_NET_TIMEOUT		(3 * MICROS_PER_SECOND)
@@ -81,7 +82,7 @@ typedef void (*clientdestroy_f)(client_t * client);
 struct __service_t
 {
 	kobject_t kobject;
-	list_t service_list;
+	list_t service_list;		// TODO - rename services_list (note the extra 's')
 
 	mutex_t lock;
 
@@ -118,6 +119,7 @@ struct __client_t
 	clientdestroy_f destroyer;
 
 	bool inuse;
+	bool locked;
 	int64_t lastheartbeat;
 	uint8_t data[0];
 };
@@ -125,7 +127,7 @@ struct __client_t
 service_t * service_new(const char * name, const char * format, const char * desc, exception_t ** err);
 void service_destroy(service_t * service);
 service_t * service_lookup(const char * name);
-void service_send(service_t * service, const buffer_t * buffer);
+void service_send(service_t * service, int64_t microtimestamp, const buffer_t * buffer);
 bool service_subscribe(service_t * service, client_t * client, exception_t ** err);
 void service_unsubscribe(client_t * client);
 void service_listxml(buffer_t * buffer);
@@ -146,6 +148,7 @@ static inline bool client_send(client_t * client, int64_t microtimestamp, buffer
 #define client_service(c)		((c)->service)
 #define client_lock(c)			((c)->lock)
 #define client_inuse(c)			((c)->inuse)
+#define client_locked(c)		((c)->locked)
 #define client_lastheartbeat(c)	((c)->lastheartbeat)
 #define client_data(c)			((void *)(c)->data)
 

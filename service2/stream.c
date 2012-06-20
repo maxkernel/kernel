@@ -3,6 +3,7 @@
 #include <aul/common.h>
 #include <aul/exception.h>
 #include <aul/mutex.h>
+#include <aul/stack.h>
 
 #include <kernel.h>
 
@@ -13,16 +14,41 @@ extern mainloop_t * serviceloop;
 
 static ssize_t stream_kobjdesc(const kobject_t * object, char * buffer, size_t length)
 {
-	// TODO - finish me
+	// TODO - add some description, maybe.
 	return 0;
 }
 
 static void stream_kobjdestroy(kobject_t * object)
 {
-	// TODO - finish me!
 	stream_t * stream = (stream_t *)object;
 
-	// TODO - make sure you call the destroy callback in the stream_t structure
+	mutex_lock(&stream->lock);
+	{
+		list_t * pos = NULL, * n = NULL;
+		list_foreach_safe(pos, n, &stream->clients)
+		{
+			client_t * client = list_entry(pos, client_t, stream_list);
+			if (client_inuse(client))
+			{
+				client_destroy(client);
+			}
+		}
+	}
+	mutex_unlock(&stream->lock);
+
+	// Call destroy function
+	if (stream->destroyer != NULL)
+	{
+		stream->destroyer(stream);
+	}
+
+	// Now free the memory in the clients list
+	list_t * entry = NULL;
+	while ((entry = stack_pop(&stream->clients)) != NULL)
+	{
+		client_t * client = list_entry(entry, client_t, stream_list);
+		free(client);
+	}
 }
 
 stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err)

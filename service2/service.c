@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <errno.h>
 
 #include <aul/list.h>
@@ -53,7 +54,6 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 				list_foreach_safe(pos, n, &service->clients)
 				{
 					client_t * client = list_entry(pos, client_t, service_list);
-
 					if (!client_check(client))
 					{
 						client_destroy(client);
@@ -141,7 +141,7 @@ service_t * service_lookup(const char * name)
 	return service;
 }
 
-void service_send(service_t * service, const buffer_t * buffer)
+void service_send(service_t * service, int64_t microtimestamp, const buffer_t * buffer)
 {
 	// Sanity check
 	{
@@ -169,7 +169,7 @@ void service_send(service_t * service, const buffer_t * buffer)
 	packet_t * packet = list_entry(entry, packet_t, packet_list);
 	memset(packet, 0, sizeof(packet_t));
 	packet->service = service;
-	packet->timestamp = kernel_timestamp();
+	packet->timestamp = microtimestamp;
 	packet->buffer = buffer_dup(*buffer);
 
 	// Add the packet to the consumer-list
@@ -201,15 +201,9 @@ bool service_subscribe(service_t * service, client_t * client, exception_t ** er
 			return false;
 		}
 
-		if (!client_inuse(client))
+		if (!client_inuse(client) || !client_locked(client))
 		{
 			exception_set(err, EINVAL, "Attempting to subscribe to service with invalid client");
-			return false;
-		}
-
-		if (client_service(client) != NULL)
-		{
-			exception_set(err, EINVAL, "Attempting to subscribe to service with client that already holds subscription");
 			return false;
 		}
 	}
@@ -246,8 +240,8 @@ void service_unsubscribe(client_t * client)
 
 static ssize_t service_kobjdesc(const kobject_t * object, char * buffer, size_t length)
 {
-	// TODO - finish me
-	return 0;
+	service_t * service = (service_t *)object;
+	return snprintf(buffer, length, "{ 'name': '%s', 'format': '%s', 'description': '%s' }", service->name, service->format, service->desc);
 }
 
 static void service_kobjdestroy(kobject_t * object)
@@ -296,6 +290,16 @@ service_t * service_new(const char * name, const char * format, const char * des
 		}
 	}
 
+	// Test for existing service
+	{
+		service_t * existing = service_lookup(name);
+		if (existing != NULL)
+		{
+			exception_set(err, EEXIST, "Service by the name of '%s' already exists", name);
+			return NULL;
+		}
+	}
+
 	service_t * service = kobj_new("Service", name, service_kobjdesc, service_kobjdestroy, sizeof(service_t));
 	mutex_init(&service->lock, M_RECURSIVE);
 	service->name = strdup(name);
@@ -323,8 +327,46 @@ void service_destroy(service_t * service)
 
 void service_listxml(buffer_t * buffer)
 {
-	// TODO - finish me
-	size_t index = 0;
+	// Sanity check
+	{
+		if unlikely(buffer == NULL)
+		{
+			return;
+		}
+	}
+
+	size_t bufferlen = 0;
+
+	void append(const char * fmt, ...)
+	{
+		string_t str = string_blank();
+
+		va_list args;
+		va_start(args, fmt);
+		string_vset(&str, fmt, args);
+		va_end(args);
+
+		buffer_write(*buffer, str.string, bufferlen, str.length);
+		bufferlen += str.length;
+	}
+
+	append("<servicelist>");
+	mutex_lock(&services_lock);
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &services)
+		{
+			service_t * service = list_entry(pos, service_t, service_list);
+			append("<service name=\"%s\" format=\"%s\"", service_name(service), service_format(service));
+			if (service_desc(service) != NULL)
+			{
+				append(" description=\"%s\"", service_desc(service));
+			}
+			append(" />");
+		}
+	}
+	mutex_unlock(&services_lock);
+	append("</servicelist>");
 }
 
 static bool service_runloop(void * userdata)
@@ -403,7 +445,7 @@ static bool service_init()
 			return false;
 		}
 
-		if (!kthread_newthread("Service handler", KTH_PRIO_LOW, service_runloop, service_stoploop, NULL, &e))
+		if (!kthread_newthread("Service handler", KTH_PRIO_LOW, service_runloop, service_stoploop, serviceloop, &e))
 		{
 			LOG(LOG_ERR, "Could not start service server thread!");
 			exception_free(e);

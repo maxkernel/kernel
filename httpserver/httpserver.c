@@ -240,50 +240,52 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	struct sockaddr_in addr;
 	socklen_t socklen = sizeof(addr);
 	int sock = accept(fd, (struct sockaddr *)&addr, &socklen);
-	if (sock == -1)
+	if (sock < 0)
 	{
-		LOG(LOG_WARN, "Could not accept new http client socket: %s", strerror(errno));
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			LOG(LOG_WARN, "Could not accept new http client socket: %s", strerror(errno));
+		}
+
+		return true;
+	}
+
+	httpbuffer_t * buffer = NULL;
+	int i;
+
+	for (i=0; i<NUM_BUFFERS; i++)
+	{
+		if (!ctx->buffers[i].inuse)
+		{
+			buffer = &ctx->buffers[i];
+			break;
+		}
+	}
+
+	if (buffer == NULL)
+	{
+		LOG(LOG_WARN, "Could not accept new HTTP client: Out of HTTP buffers!");
+		close(sock);
 	}
 	else
 	{
-		httpbuffer_t * buffer = NULL;
-		int i;
+		// Set up the buffer
+		buffer->inuse = true;
+		buffer->buffer[0] = '\0';
+		buffer->length = 0;
+		buffer->ctx = ctx;
 
-		for (i=0; i<NUM_BUFFERS; i++)
+		// Now set up the watch on the accept'd file descriptor
+		exception_t * e = NULL;
+		if (!mainloop_addfdwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
 		{
-			if (!ctx->buffers[i].inuse)
-			{
-				buffer = &ctx->buffers[i];
-				break;
-			}
-		}
+			LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
+			exception_free(e);
 
-		if (buffer == NULL)
-		{
-			LOG(LOG_WARN, "Could not accept new HTTP client: Out of HTTP buffers!");
-			close(sock);
-		}
-		else
-		{
-			// Set up the buffer
-			buffer->inuse = true;
-			buffer->buffer[0] = '\0';
-			buffer->length = 0;
-			buffer->ctx = ctx;
-
-			// Now set up the watch on the accept'd file descriptor
-			exception_t * e = NULL;
-			if (!mainloop_addfdwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
-			{
-				LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
-				exception_free(e);
-
-				// Remove the in-use flag to make it available again
-				buffer->inuse = false;
-			}
+			// Remove the in-use flag to make it available again
+			buffer->inuse = false;
 		}
 	}
-
 
 	return true;
 }

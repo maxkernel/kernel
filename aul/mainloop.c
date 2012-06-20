@@ -56,7 +56,12 @@ static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 	ssize_t r = read(fd, &timeouts, sizeof(timeouts));
 	if (r != sizeof(uint64_t))
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from timerfd %s. Read %zd/%zu bytes.", timerfdwatcher->name, r, sizeof(uint64_t));
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from timerfd %s. Read %zd/%zu bytes: %s", timerfdwatcher->name, r, sizeof(uint64_t), strerror(errno));
+		}
+
+		return true;
 	}
 	else if (timeouts > 1)
 	{
@@ -88,7 +93,12 @@ static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 	eventfd_t counter = 0;
 	if (eventfd_read(fd, &counter) < 0)
 	{
-		log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s.", eventfdwatcher->name);
+		if (errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not read all data from eventfd %s: %s", eventfdwatcher->name, strerror(errno));
+		}
+
+		return true;
 	}
 
 	bool ret = eventfdwatcher->function(loop, counter, eventfdwatcher->userdata);
@@ -237,12 +247,7 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 							watcher_t * watcher = events[i].data.ptr;
 							if (!watcher->function(loop, watcher->fd, events[i].events, watcher->userdata))
 							{
-								exception_t * e = NULL;
-								if (!mainloop_removefdwatch(loop, watcher->fd, events[i].events, &e))
-								{
-									log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "Could not remove fd watcher from mainloop %s: %s", loop->name, exception_message(e));
-									exception_free(e);
-								}
+								mainloop_removefdwatch(loop, watcher->fd, events[i].events, NULL);
 							}
 						}
 					}
@@ -314,7 +319,6 @@ bool mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f liste
 			loop = root;
 		}
 	}
-
 
 	watcher_t * watcher = NULL;
 
@@ -513,7 +517,7 @@ int mainloop_addnewfdtimer(mainloop_t * loop, const char * name, uint64_t nanose
 	}
 
 	// Create the file descriptor
-	int fd = timerfd_create(CLOCK_MONOTONIC, 0 /* TFD_NONBLOCK */);		// TODO - should we use NONBLOCK?
+	int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
 	if (fd == -1)
 	{
 		exception_set(err, EFAULT, "Could not create timerfd %s: %s", name, strerror(errno));
@@ -526,7 +530,7 @@ int mainloop_addnewfdtimer(mainloop_t * loop, const char * name, uint64_t nanose
 		return false;
 	}
 
-	if (!mainloop_addfdwatch(loop, fd, FD_READ, mainloop_timerfddispatch, timerfdwatcher, err))
+	if (!mainloop_addfdwatch(loop, fd, EPOLLET | FD_READ, mainloop_timerfddispatch, timerfdwatcher, err))
 	{
 		// Release watcher back to empty list
 		mutex_lock(&mainloop_lock);
@@ -589,14 +593,14 @@ int mainloop_addnewfdevent(mainloop_t * loop, const char * name, unsigned int in
 	eventfdwatcher->userdata = userdata;
 
 	// Create the file descriptor
-	int fd = eventfd(initialvalue, 0 /* EFD_NONBLOCK */);			// TODO - should we use NONBLOCK?
+	int fd = eventfd(initialvalue, EFD_NONBLOCK);
 	if (fd == -1)
 	{
 		exception_set(err, EFAULT, "Could not create eventfd %s: %s", name, strerror(errno));
 		return -1;
 	}
 
-	if (!mainloop_addfdwatch(loop, fd, FD_READ, mainloop_eventfddispatch, eventfdwatcher, err))
+	if (!mainloop_addfdwatch(loop, fd, EPOLLET | FD_READ, mainloop_eventfddispatch, eventfdwatcher, err))
 	{
 		// Release watcher back to empty list
 		mutex_lock(&mainloop_lock);

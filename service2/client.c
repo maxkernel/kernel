@@ -30,10 +30,14 @@ client_t * client_new(stream_t * stream, exception_t ** err)
 		list_foreach(pos, &stream->clients)
 		{
 			client_t * testclient = list_entry(pos, client_t, stream_list);
-			if (testclient->service == NULL)
+			if (!client_inuse(testclient))
 			{
 				client = testclient;
-				client->inuse = true;
+				client_service(client) = NULL;
+				client_lastheartbeat(client) = 0;
+				client_inuse(client) = true;
+				client_locked(client) = false;
+
 				break;
 			}
 		}
@@ -46,7 +50,6 @@ client_t * client_new(stream_t * stream, exception_t ** err)
 		return NULL;
 	}
 
-	client->lastheartbeat = kernel_elapsed();
 	return client;
 }
 
@@ -64,12 +67,12 @@ void client_destroy(client_t * client)
 	{
 		if (client_inuse(client))
 		{
-			// Unsubscribe for service (if registered)
-			service_t * service = client_service(client);
-			if (service != NULL)
+			// Unsubscribe to the service (if registered)
+			if (client_locked(client))
 			{
 				service_unsubscribe(client);
 			}
+			client_service(client) = NULL;
 
 			// Call the destroyer
 			clientdestroy_f destroyer = client->destroyer;
@@ -118,6 +121,7 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 	{
 		case SC_GOODBYE:
 		{
+			// Indicate that the caller should disconnect
 			return -1;
 		}
 
@@ -133,14 +137,14 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 			return sizeof(uint8_t);
 		}
 
-		case SC_DATA:
-		{
-			LOG(LOG_WARN, "Invalid control code received from stream client (SC_DATA)");
-			return -1;
-		}
-
 		case SC_SUBSCRIBE:
 		{
+			if (client_locked(client))
+			{
+				// Can't subscribe when the client is locked
+				return -1;
+			}
+
 			buffer += sizeof(uint8_t);
 			length -= sizeof(uint8_t);
 
@@ -155,30 +159,73 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 			service_t * service = service_lookup(name);
 			if (service == NULL)
 			{
-				LOG(LOG_WARN, "Attempting to subscribe client to invalid service %s", name);
+				LOG(LOG_WARN, "Attempting to subscribe client to invalid service '%s'", name);
 				return -1;
 			}
 
-			exception_t * e = NULL;
-			if (!service_subscribe(service, client, &e))
-			{
-				LOG(LOG_WARN, "Could not subscribe client to service %s: %s", name, exception_message(e));
-				exception_free(e);
-
-				return -1;
-			}
-
+			client_service(client) = service;
 			return sizeof(uint8_t) + (strlen + 1);
 		}
 
 		case SC_UNSUBSCRIBE:
 		{
-			service_unsubscribe(client);
+			if (client_locked(client))
+			{
+				// Can't unsubscribe when the client is locked
+				return -1;
+			}
+
+			client_service(client) = NULL;
 			return sizeof(uint8_t);
+		}
+
+		case SC_BEGIN:
+		{
+			if (client_locked(client))
+			{
+				// Can't begin on an already locked stream
+				return -1;
+			}
+
+			service_t * service = client_service(client);
+			if (service == NULL)
+			{
+				// No subscribed to any service
+				return -1;
+			}
+
+			// Subscribe to the service
+			{
+				exception_t * e = NULL;
+				if (!service_subscribe(service, client, &e))
+				{
+					LOG(LOG_WARN, "Could not subscribe client to service %s: %s", service_name(service), exception_message(e));
+					exception_free(e);
+
+					return -1;
+				}
+			}
+
+			// Lock the client
+			client_lastheartbeat(client) = kernel_timestamp();
+			client_locked(client) = true;
+			return sizeof(uint8_t);
+		}
+
+		case SC_DATA:
+		{
+			LOG(LOG_WARN, "Invalid control code received from stream client (SC_DATA)");
+			return -1;
 		}
 
 		case SC_LISTXML:
 		{
+			if (client_locked(client))
+			{
+				// Can't query services when locked
+				return -1;
+			}
+
 			bool success = false;
 			buffer_t buffer = buffer_new();
 			{
@@ -186,6 +233,7 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 				success = client_send(client, kernel_timestamp(), &buffer);
 			}
 			buffer_free(buffer);
+
 			return (success)? sizeof(uint8_t) : -1;
 		}
 
