@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/uio.h>
 
 #include <aul/mutex.h>
 #include <aul/atomic.h>
@@ -297,6 +298,12 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 				// Only update the buffer size after successful write
 				buffer->size = BYTES_PER_BUFFER;
 			}
+			else
+			{
+				// If error, put the buffer back into the free queue
+				putfree(buffer->next);
+				buffer->next = NULL;
+			}
 
 			return totalwrote;
 		}
@@ -404,9 +411,15 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 	}
 	else if (buffer->type == TYPE_BUFFER)
 	{
-		if (offset >= BYTES_PER_BUFFER)
+		while (offset >= BYTES_PER_BUFFER)
 		{
-			return buffer_read(buffer->next, data, offset - BYTES_PER_BUFFER, length);
+			buffer = buffer->next;
+			offset -= BYTES_PER_BUFFER;
+
+			if (buffer == NULL)
+			{
+				return 0;
+			}
 		}
 
 		if (offset >= buffer->size)
@@ -424,7 +437,16 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 			if (pagenum == PAGES_PER_BUFFER)
 			{
 				// Overflow this buffer, start reading from the next one
-				return totalread + buffer_read(buffer->next, data, 0, length);
+				buffer = buffer->next;
+				if (buffer->next == NULL)
+				{
+					break;
+				}
+
+				left = buffer->size;
+				pagenum = pageoff = 0;
+
+				continue;
 			}
 
 			const page_t * page = buffer->pages[pagenum];
@@ -437,6 +459,10 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 
 			// Determine how many bytes to read
 			size_t readlen = min(length, left, BYTES_PER_PAGE - pageoff);
+			if (readlen == 0)
+			{
+				break;
+			}
 
 			// Read the bytes
 			memcpy(data, &page->data[pageoff], readlen);
@@ -481,7 +507,79 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 	}
 	else if (buffer->type == TYPE_BUFFER)
 	{
+		size_t numpages = length / BYTES_PER_PAGE + 2;
 
+		// Find starting buffer
+		while (offset >= BYTES_PER_BUFFER)
+		{
+			buffer = buffer->next;
+			offset -= BYTES_PER_BUFFER;
+
+			if (buffer == NULL)
+			{
+				return 0;
+			}
+		}
+
+		size_t index = 0;
+		struct iovec vector[numpages];
+		memset(vector, 0, sizeof(struct iovec) * numpages);
+
+
+		size_t pagenum = offset / BYTES_PER_PAGE;
+		off_t pageoff = offset % BYTES_PER_PAGE;
+		size_t left = buffer->size - offset;
+
+		while (length > 0)
+		{
+			if (pagenum == PAGES_PER_BUFFER)
+			{
+				// Overflow this buffer, start reading from the next one
+				buffer = buffer->next;
+				if (buffer->next == NULL)
+				{
+					break;
+				}
+
+				left = buffer->size;
+				pagenum = pageoff = 0;
+
+				continue;
+			}
+
+			const page_t * page = buffer->pages[pagenum];
+
+			// Check for null page
+			if (page == NULL)
+			{
+				page = zero;
+			}
+
+			// Determine how many bytes to read
+			size_t readlen = min(length, left, BYTES_PER_PAGE - pageoff);
+			if (readlen == 0)
+			{
+				break;
+			}
+
+			// Read the bytes
+			vector[index].iov_base = (void *)&page->data[pageoff];		// Remove the const. Really iovec? That's just poor spec design!
+			vector[index].iov_len = readlen;
+			index += 1;
+
+			// Update the loop tracking variables
+			length -= readlen;
+			left -= readlen;
+			pagenum += 1;
+			pageoff = 0;
+		}
+
+		if (index == 0)
+		{
+			return 0;
+		}
+
+		return writev(fd, vector, index);
 	}
 
 	errno = EINVAL;

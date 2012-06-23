@@ -28,10 +28,10 @@ static void bufferservice_update(void * object)
 	}
 
 	// Grab input buffer and dispatch it to service subsystem
-	const buffer_t * buffer = input(buffer);
+	buffer_t * const * buffer = input(buffer);
 	if (buffer != NULL)
 	{
-		service_send(service, kernel_timestamp(), buffer);
+		service_send(service, kernel_timestamp(), *buffer);
 	}
 
 	// Output the number of connected clients

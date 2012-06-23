@@ -223,8 +223,6 @@ public class TCPStream implements Stream {
 						return null;
 					}
 					
-					System.out.println("DATA!");
-					
 					ServicePacket packet = new ServicePacket(service, null, data.timestamp(), data.payload());
 					code.clear();
 					data.clear();

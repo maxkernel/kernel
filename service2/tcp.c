@@ -56,8 +56,6 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 		int64_t ts = microtimestamp;
 		uint32_t s = buffer_size(data);
 
-		LOG(LOG_INFO, "SIZE: %zu", s);
-
 		#define a(x)	((uint8_t *)&x)
 		const uint8_t header[] = {
 			SC_DATA,																			// Control byte

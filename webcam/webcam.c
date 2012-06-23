@@ -244,7 +244,7 @@ static bool webcam_readframe(webcam_t * webcam, buffer_t * frame)
 	buf.memory = V4L2_MEMORY_MMAP;
 
 	if (ioctl(webcam->fd, VIDIOC_DQBUF, &buf) == -1) {
-		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_DQBUF (dequeue buffer) on %s: %s", webcam->path, strerror(errno));
+		LOG1(LOG_ERR, "Webcam: Could not call VIDIOC_DQBUF (dequeue buffer) on %s: %s", webcam->path, strerror(errno));
 		return false;
 	}
 
@@ -264,7 +264,7 @@ static bool webcam_readframe(webcam_t * webcam, buffer_t * frame)
 
 	if (ioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
-		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF (enqueue buffer) on %s: %s", webcam->path, strerror(errno));
+		LOG1(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF (enqueue buffer) on %s: %s", webcam->path, strerror(errno));
 	}
 
 	return success;

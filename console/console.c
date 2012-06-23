@@ -123,7 +123,7 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 	list_t * entry = stack_pop(&free_buffers);
 	if (entry == NULL)
 	{
-		LOG(LOG_INFO, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
+		LOG(LOG_WARN, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
 		close(client);
 		return true;
 	}

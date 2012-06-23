@@ -8,6 +8,11 @@ typedef list_t stack_t;
 
 #define stack_init(ptr)		({ list_init(ptr); })
 
+static inline size_t stack_size(stack_t * head)
+{
+	return list_size(head);
+}
+
 static inline bool stack_isempty(stack_t * head)
 {
 	return list_isempty(head);

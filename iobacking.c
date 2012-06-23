@@ -112,7 +112,7 @@ void iobacking_copy(iobacking_t * backing, const void * data)
 		case T_ARRAY_DOUBLE:
 		case T_BUFFER:
 		{
-			if (iobacking_isnull(backing))
+			if (!iobacking_isnull(backing))
 			{
 				buffer_free(*(buffer_t **)iobacking_data(backing));
 			}

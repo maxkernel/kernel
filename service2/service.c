@@ -102,6 +102,9 @@ static bool service_dispatch(mainloop_t * loop, eventfd_t counter, void * userda
 			packet_t * packet = list_entry(entry, packet_t, packet_list);
 			service_t * service = packet->service;
 
+			// TODO - remove this debug print
+			//LOG(LOG_INFO, "Send packet length %zu", buffer_size(packet->buffer));
+
 			// Send the packet to all client handlers for transmission
 			mutex_lock(&service->lock);
 			{
