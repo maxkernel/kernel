@@ -264,7 +264,7 @@ service_h service_register(const char * id, const char * name, const char * form
 	return s->handle;
 }
 
-void service_writedata(service_h service_handle, uint64_t timestamp_us, const buffer_t buffer)
+void service_writedata(service_h service_handle, uint64_t timestamp_us, const buffer_t * buffer)
 {
 	service_t * service = NULL;
 

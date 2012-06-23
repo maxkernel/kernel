@@ -18,7 +18,7 @@ typedef struct
 	size_t length;
 } string_t;
 
-
+// TODO IMPORTANT - move some of these functions to this .h file and make them static inline!
 #define string_blank()			{{0}, 0}
 string_t string_new(const char * fmt, ...) check_printf(1, 2);
 void string_set(string_t * str, const char * fmt, ...) check_printf(2, 3);

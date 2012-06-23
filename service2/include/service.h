@@ -16,40 +16,18 @@
 extern "C" {
 #endif
 
-//#define SERVICE_SENDER_THREADS		1
 
-#define SERVICE_TIMEOUT_NS			(5 * NANOS_PER_SECOND)		// 5 seconds
+#define SERVICE_MONITOR_TIMEOUT			(1 * NANOS_PER_SECOND)		// 1 second
+
 /*
-#define SERVICE_FRAGSIZE			10000
-
-#define SERVICE_CLIENTS_MAX			4
-#define SERVICE_PACKETS_MAX			1000
-
-#define SERVICE_PORT_MIN			1
-#define SERVICE_PORT_MAX			65000
-*/
-
 // Common formats
 #define TXT							"TXT"		// Human readable text
 //#define XML							"XML"		// XML formatted data
 #define CSV							"CSV"		// comma-seperated values
 #define JPEG						"JPEG"		// jpeg image (full image per packet)
 //#define RAW							"RAW"		// raw (unspecified) format
-
-/*
-typedef const char * sid_t;
-typedef sid_t service_h;
-typedef sid_t client_h;
-typedef sid_t stream_h;
-
-typedef void (*connect_f)(service_h service, stream_h stream);
-typedef void (*disconnect_f)(service_h service, stream_h stream);
-typedef void (*clientdata_f)(service_h service, stream_h stream, uint64_t timestamp_us, const void * data, size_t len);
-
-service_h service_register(const char * id, const char * name, const char * format, const char * params, const char * desc, connect_f newconnect, disconnect_f disconnected, clientdata_f clientdata);
-void service_writedata(service_h service, uint64_t timestamp_us, const buffer_t buffer);
-void service_writeclientdata(service_h service, stream_h stream, uint64_t timestamp_us, const buffer_t buffer);
 */
+
 
 #define SC_BUFFERSIZE		128
 
@@ -74,7 +52,8 @@ typedef struct __stream_t stream_t;
 typedef struct __client_t client_t;
 
 typedef void (*streamdestroy_f)(stream_t * stream);
-typedef bool (*clientsend_f)(client_t * client, int64_t microtimestamp, buffer_t * data);
+typedef bool (*clientsend_f)(client_t * client, int64_t microtimestamp, const buffer_t * data);
+typedef void (*clientheartbeat_f)(client_t * client);
 typedef bool (*clientcheck_f)(client_t * client);
 typedef void (*clientdestroy_f)(client_t * client);
 
@@ -115,6 +94,7 @@ struct __client_t
 	mutex_t * lock;
 
 	clientsend_f sender;
+	clientheartbeat_f heartbeater;
 	clientcheck_f checker;
 	clientdestroy_f destroyer;
 
@@ -137,14 +117,14 @@ void service_listxml(buffer_t * buffer);
 #define service_hasclients(s)	(!list_isempty(&(s)->clients))
 #define service_numclients(s)	(list_size(&(s)->clients))
 
-stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err);
+stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err);
 void stream_destroy(stream_t * stream);
 #define stream_mainloop(s)		((s)->loop)
 #define stream_data(s)			((void *)(s)->data)
 
 client_t * client_new(stream_t * stream, exception_t ** err);
 void client_destroy(client_t * client);
-static inline bool client_send(client_t * client, int64_t microtimestamp, buffer_t * buffer) { return client->sender(client, microtimestamp, buffer); }
+static inline bool client_send(client_t * client, int64_t microtimestamp, const buffer_t * buffer) { return client->sender(client, microtimestamp, buffer); }
 #define client_service(c)		((c)->service)
 #define client_lock(c)			((c)->lock)
 #define client_inuse(c)			((c)->inuse)

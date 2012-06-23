@@ -27,6 +27,7 @@ extern "C" {
 #endif
 
 
+#define BUFFER_POOL_SIZE		(20 * 1024 * 1024)		// 20 MB
 #define CAL_SIZE_CACHE			AUL_STRING_MAXLEN
 #define CONFIG_SIZE_CACHE		MODEL_SIZE_VALUE
 

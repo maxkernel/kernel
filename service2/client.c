@@ -63,6 +63,8 @@ void client_destroy(client_t * client)
 		}
 	}
 
+	LOG(LOG_INFO, "DESTROY CLIENT!!!!");
+
 	mutex_lock(client_lock(client));
 	{
 		if (client_inuse(client))
@@ -88,18 +90,6 @@ void client_destroy(client_t * client)
 	mutex_unlock(client_lock(client));
 }
 
-bool client_check(client_t * client)
-{
-	bool check = true;
-	mutex_lock(client_lock(client));
-	{
-		check = client->checker(client);
-	}
-	mutex_unlock(client_lock(client));
-
-	return check;
-}
-
 ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 {
 	// Sanity check
@@ -122,6 +112,7 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 		case SC_GOODBYE:
 		{
 			// Indicate that the caller should disconnect
+			LOG(LOG_INFO, "GOODBYE");
 			return -1;
 		}
 
@@ -133,7 +124,8 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 
 		case SC_HEARTBEAT:
 		{
-			client_lastheartbeat(client) = kernel_elapsed();
+			LOG(LOG_INFO, "HEARTBEAT");
+			client_lastheartbeat(client) = kernel_timestamp();
 			return sizeof(uint8_t);
 		}
 
@@ -187,12 +179,17 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 				return -1;
 			}
 
+			LOG(LOG_INFO, "BEGIN!");
+
 			service_t * service = client_service(client);
 			if (service == NULL)
 			{
 				// No subscribed to any service
 				return -1;
 			}
+
+			// Lock the client
+			client_lastheartbeat(client) = kernel_timestamp();
 
 			// Subscribe to the service
 			{
@@ -206,8 +203,6 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 				}
 			}
 
-			// Lock the client
-			client_lastheartbeat(client) = kernel_timestamp();
 			client_locked(client) = true;
 			return sizeof(uint8_t);
 		}
@@ -227,10 +222,10 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 			}
 
 			bool success = false;
-			buffer_t buffer = buffer_new();
+			buffer_t * buffer = buffer_new();
 			{
-				service_listxml(&buffer);
-				success = client_send(client, kernel_timestamp(), &buffer);
+				service_listxml(buffer);
+				success = client_send(client, kernel_timestamp(), buffer);
 			}
 			buffer_free(buffer);
 

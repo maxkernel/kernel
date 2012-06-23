@@ -47,14 +47,16 @@ static void tcp_streamdestroy(stream_t * stream)
 	close(tcpstream->fd);
 }
 
-static bool tcp_clientsend(client_t * client, int64_t microtimestamp, buffer_t * data)
+static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buffer_t * data)
 {
 	tcpclient_t * tcpclient = client_data(client);
 
 	// Write the header
 	{
 		int64_t ts = microtimestamp;
-		uint32_t s = buffer_size(*data);
+		uint32_t s = buffer_size(data);
+
+		LOG(LOG_INFO, "SIZE: %zu", s);
 
 		#define a(x)	((uint8_t *)&x)
 		const uint8_t header[] = {
@@ -73,14 +75,25 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, buffer_t *
 
 	// Write the payload
 	{
-		ssize_t	wrote = buffer_send(*data, tcpclient->fd, 0, buffer_size(*data));
-		if (wrote != buffer_size(*data))
+		size_t size = buffer_size(data);
+		if (buffer_send(data, tcpclient->fd, 0, size) != size)
 		{
 			// Could not send all data
 			return false;
 		}
 	}
 	return true;
+}
+
+static void tcp_clientheartbeat(client_t * client)
+{
+	tcpclient_t * tcpclient = client_data(client);
+
+	// Write the one-byte heartbeat code
+	{
+		static const uint8_t data = SC_HEARTBEAT;
+		write(tcpclient->fd, &data, sizeof(uint8_t));
+	}
 }
 
 static bool tcp_clientcheck(client_t * client)
@@ -102,18 +115,11 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 	// Update buffer
 	{
-		ssize_t bytesread = recv(fd, tcpclient->buffer, SC_BUFFERSIZE - tcpclient->size, 0);
-		if (bytesread < 0)
-		{
-			// Abnormal disconnect
-			LOG(LOG_INFO, "Abnormal tcp service client disconnect %s", tcpclient->ip.string);
-			client_destroy(client);
-			return false;
-		}
-		else if (bytesread == 0)
+		ssize_t bytesread = recv(fd, &tcpclient->buffer[tcpclient->size], SC_BUFFERSIZE - tcpclient->size, 0);
+		if (bytesread <= 0)
 		{
 			// Normal disconnect
-			LOG(LOG_DEBUG, "Normal tcp service client disconnect %s", tcpclient->ip.string);
+			LOG(LOG_DEBUG, "Abnormal tcp service client disconnect %s", tcpclient->ip.string);
 			client_destroy(client);
 			return false;
 		}
@@ -136,6 +142,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 			if (size < 0)
 			{
 				// -1 means free the client
+				LOG(LOG_INFO, "Destroy because of control");
 				client_destroy(client);
 				return false;
 			}
@@ -147,7 +154,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 				tcpclient->size -= size;
 			}
 
-		} while (size > 0);
+		} while (size > 0 && tcpclient->size > 0);
 	}
 
 	return true;
@@ -230,7 +237,7 @@ bool tcp_init(exception_t ** err)
 		return true;
 	}
 
-	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientcheck, tcp_clientdestroy, err);
+	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientheartbeat, tcp_clientcheck, tcp_clientdestroy, err);
 	if (stream == NULL || exception_check(err))
 	{
 		return false;

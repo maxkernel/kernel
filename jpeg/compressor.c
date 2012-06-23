@@ -15,10 +15,10 @@
 #define BUFFER_SIZE			(20 * 1024)		// 20 KB
 
 // -------------------- JPEG STRUCT & MANAGE FUNCS -------------
-static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
+static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, const buffer_t * from, JSAMPLE * to);
 static bool js_yuv422(JDIMENSION width, JDIMENSION height, size_t buffersize);
 
-typedef void (*convert_f)(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to);
+typedef void (*convert_f)(size_t row, JDIMENSION width, JDIMENSION height, const buffer_t * from, JSAMPLE * to);
 typedef bool (*sizecheck_f)(JDIMENSION width, JDIMENSION height, size_t buffersize);
 
 typedef struct
@@ -39,7 +39,7 @@ typedef struct
 	convert_f converter;
 	sizecheck_f sizechecker;
 
-	buffer_t out;
+	buffer_t * out;
 	size_t out_size;
 } jpeg_t;
 
@@ -52,7 +52,7 @@ static bool jpeg_getfmtinfo(char * fmt, convert_f * converter, sizecheck_f * siz
 
 	if (strcmp(fmt, "yuyv") == 0 || strcmp(fmt, "yuv422") == 0)
 	{
-		*converter =jc_yuv422;
+		*converter = jc_yuv422;
 		*sizechecker = js_yuv422;
 		return true;
 	}
@@ -69,10 +69,10 @@ static void jpeg_freecompress(jpeg_t * jpeg)
 		jpeg->isvalid = false;
 	}
 
-	if (jpeg->out != -1)
+	if (jpeg->out != NULL)
 	{
 		buffer_free(jpeg->out);
-		jpeg->out = -1;
+		jpeg->out = NULL;
 	}
 }
 
@@ -122,7 +122,8 @@ boolean jpeg_destempty(j_compress_ptr cinfo)
 }
 
 // -------------------------- THE BEEF OF THE MODULE ------------------------
-static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, buffer_t from, JSAMPLE * to)
+// TODO - add restrict keywords to these functions!
+static void jc_yuv422(size_t row, JDIMENSION width, JDIMENSION height, const buffer_t * from, JSAMPLE * to)
 {
 	// Algorithm developed to use same memory buffer for converting y1,u,y2,v -> y1,u,v,y2,u,v
 	// It does, however, corrupt the first y2 value, so we must save and restore
@@ -164,7 +165,7 @@ static void compressor_update(void * object)
 
 	const int * width = input(width);
 	const int * height = input(height);
-	const buffer_t * frame = input(frame);
+	buffer_t * const * frame = input(frame);
 
 	if (object == NULL || width == NULL || height == NULL || frame == NULL)
 	{
@@ -256,7 +257,7 @@ static void compressor_update(void * object)
 
 		output(frame, &jpeg->out);
 		buffer_free(jpeg->out);
-		jpeg->out = -1;
+		jpeg->out = NULL;
 	}
 }
 
@@ -278,7 +279,7 @@ void * compressor_new(char * format, int quality)
 	jpeg->quality = quality;
 	jpeg->converter = converter;
 	jpeg->sizechecker = sizechecker;
-	jpeg->out = -1;
+	jpeg->out = NULL;
 
 	return jpeg;
 }

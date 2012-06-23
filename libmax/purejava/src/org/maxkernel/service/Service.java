@@ -9,6 +9,10 @@ public class Service {
 		this.desc = desc;
 	}
 	
+	public Service(String name) {
+		this(name, "Unknown", null);
+	}
+	
 	public String getName() { return name; }
 	public String getFormat() { return format; }
 	public String getDescription() { return desc; }

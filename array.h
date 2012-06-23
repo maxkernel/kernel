@@ -13,7 +13,8 @@ extern "C" {
 
 typedef buffer_t array_t;
 
-static inline size_t array_typesize(const char sig)
+// TODO - maybe make this a macro or something??
+static inline size_t array_typesize(char sig)
 {
 	switch (sig)
 	{
@@ -24,46 +25,104 @@ static inline size_t array_typesize(const char sig)
 	}
 }
 
-static inline array_t array_new(const char type, size_t nelems)
+static inline array_t * array_new(char type, size_t nelems)
 {
-	array_t a = buffer_new();
-	buffer_write(a, NULL, array_typesize(type) * nelems, 0);
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0)
+		{
+			return NULL;
+		}
+	}
+
+	array_t * a = buffer_new();
+	if (a == NULL)
+	{
+		return NULL;
+	}
+
+	if (nelems > 0)
+	{
+		uint8_t zero = 0;
+		buffer_write(a, &zero, array_typesize(type) * nelems - sizeof(uint8_t), sizeof(uint8_t));
+	}
+
 	return a;
 }
 
-static inline array_t array_dup(const array_t array)
+static inline array_t * array_dup(const array_t * array)
 {
 	return buffer_dup(array);
 }
 
-static inline size_t array_size(const array_t array, const char type)
+static inline size_t array_size(const array_t * array, char type)
 {
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0)
+		{
+			return 0;
+		}
+	}
+
 	return buffer_size(array) / array_typesize(type);
 }
 
-static inline void array_free(array_t array)
+static inline void array_free(array_t * array)
 {
 	buffer_free(array);
 }
 
-static inline size_t array_read(array_t array, const char type, off_t index, void * elems, size_t nelems)
+static inline size_t array_read(const array_t * array, char type, off_t index, void * elems, size_t nelems)
 {
-	return buffer_read(array, elems, index * array_typesize(type), nelems * array_typesize(type));
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0 || index < 0)
+		{
+			return 0;
+		}
+	}
+
+	return buffer_read(array, elems, index * array_typesize(type), nelems * array_typesize(type)) / array_typesize(type);
 }
 
-static inline void array_write(array_t array, const char type, off_t index, void * elems, size_t nelems)
+static inline size_t array_write(array_t * array, char type, off_t index, void * elems, size_t nelems)
 {
-	buffer_write(array, elems, index * array_typesize(type), nelems * array_typesize(type));
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0 || index < 0)
+		{
+			return 0;
+		}
+	}
+
+	return buffer_write(array, elems, index * array_typesize(type), nelems * array_typesize(type)) / array_typesize(type);
 }
 
-static inline bool array_readindex(array_t array, const char type, off_t index, void * elem)
+static inline bool array_readindex(const array_t * array, char type, off_t index, void * elem)
 {
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0 || index < 0)
+		{
+			return false;
+		}
+	}
+
 	return array_read(array, type, index, elem, 1) == array_typesize(type);
 }
 
-static inline void array_writeindex(array_t array, const char type, off_t index, void * elem)
+static inline bool array_writeindex(array_t * array, char type, off_t index, void * elem)
 {
-	array_write(array, type, index, elem, 1);
+	// Sanity check
+	{
+		if unlikely(array_typesize(type) == 0 || index < 0)
+		{
+			return false;
+		}
+	}
+
+	return array_write(array, type, index, elem, 1) == array_typesize(type);
 }
 
 #ifdef __cplusplus

@@ -13,6 +13,11 @@ static inline bool stack_isempty(stack_t * head)
 	return list_isempty(head);
 }
 
+static inline void stack_empty(stack_t * head)
+{
+	list_empty(head);
+}
+
 static inline void stack_push(stack_t * head, list_t * new)
 {
 	list_push(head, new);

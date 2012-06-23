@@ -829,7 +829,14 @@ int main(int argc, char * argv[])
 	}
 
 	// Set up buffers
-	buffer_init();
+	{
+		exception_t * e = NULL;
+		if (!buffer_init(BUFFER_POOL_SIZE, &e) || exception_check(&e))
+		{
+			LOGK(LOG_FATAL, "Buffer subsystem initialization failure: %s", exception_message(e));
+			// Will exit
+		}
+	}
 
 	// Initialize global variables
 	model = model_new();

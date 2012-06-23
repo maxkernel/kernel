@@ -13,14 +13,14 @@
 #define ffi_type(s) 		((sizeof(s) == 1)? FFI_TYPE_UINT8 : (sizeof(s) == 2)? FFI_TYPE_UINT16 : (sizeof(s) == 4)? FFI_TYPE_UINT32 : (sizeof(s) == 8)? FFI_TYPE_UINT64 : 0)
 #define ffi_define(s, t)	{(s), (s), (t), NULL}
 
-static ffi_type type_bool			= ffi_define(sizeof(bool),		ffi_type(bool));
-static ffi_type type_int			= ffi_define(sizeof(int),		ffi_type(int));
-static ffi_type type_double			= ffi_define(sizeof(double),	FFI_TYPE_DOUBLE);
-static ffi_type type_char			= ffi_define(sizeof(char),		ffi_type(char));
-static ffi_type type_string			= ffi_define(sizeof(void *),	FFI_TYPE_POINTER);
-static ffi_type type_buffer			= ffi_define(sizeof(buffer_t),	ffi_type(buffer_t));
-static ffi_type type_void 			= ffi_define(sizeof(void),		FFI_TYPE_VOID);
-static ffi_type type_pointer		= ffi_define(sizeof(void *),	FFI_TYPE_POINTER);
+static ffi_type type_bool			= ffi_define(sizeof(bool),			ffi_type(bool));
+static ffi_type type_int			= ffi_define(sizeof(int),			ffi_type(int));
+static ffi_type type_double			= ffi_define(sizeof(double),		FFI_TYPE_DOUBLE);
+static ffi_type type_char			= ffi_define(sizeof(char),			ffi_type(char));
+static ffi_type type_string			= ffi_define(sizeof(void *),		FFI_TYPE_POINTER);
+static ffi_type type_buffer			= ffi_define(sizeof(buffer_t *),	FFI_TYPE_POINTER);
+static ffi_type type_void 			= ffi_define(sizeof(void),			FFI_TYPE_VOID);
+static ffi_type type_pointer		= ffi_define(sizeof(void *),		FFI_TYPE_POINTER);
 
 static bool ffi_prep(const char * sig, ffi_type ** ret, ffi_type *** args, exception_t ** err)
 {

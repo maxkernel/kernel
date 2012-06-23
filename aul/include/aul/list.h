@@ -77,7 +77,7 @@ static inline void list_remove(list_t * entry)
 {
 	entry->next->prev = entry->prev;
 	entry->prev->next = entry->next;
-	entry->next = NULL;
+	entry->next = NULL;			// TODO IMPORTANT - are these NULL sets necessary?
 	entry->prev = NULL;
 }
 
@@ -168,12 +168,17 @@ static inline void list_move_tail(list_t *list, list_t *head)
 
 
 /**
- * list_empty - tests whether a list is empty
+ * list_isempty - tests whether a list is empty
  * @head: the list to test.
  */
 static inline bool list_isempty(list_t * head)
 {
 	return head->next == head;
+}
+
+static inline void list_empty(list_t * head)
+{
+	list_init(head);
 }
 
 static inline size_t list_size(list_t * head)

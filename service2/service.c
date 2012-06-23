@@ -39,7 +39,7 @@ static stack_t packets;
 static stack_t packets_free;
 static mutex_t packets_lock;
 
-static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
+static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
 	mutex_lock(&services_lock);
 	{
@@ -54,9 +54,25 @@ static bool service_checktimeout(mainloop_t * loop, uint64_t nanoseconds, void *
 				list_foreach_safe(pos, n, &service->clients)
 				{
 					client_t * client = list_entry(pos, client_t, service_list);
-					if (!client_check(client))
+
+					// Run the heartbeat function
 					{
-						client_destroy(client);
+						LOG(LOG_INFO, "SEND CHECK");
+
+						clientheartbeat_f heartbeater = client->heartbeater;
+						if (heartbeater != NULL)
+						{
+							heartbeater(client);
+						}
+					}
+
+					// Run the check function
+					{
+						if (!client->checker(client))
+						{
+							LOG(LOG_INFO, "Destroy because of checker");
+							client_destroy(client);
+						}
 					}
 				}
 			}
@@ -93,10 +109,13 @@ static bool service_dispatch(mainloop_t * loop, eventfd_t counter, void * userda
 				list_foreach_safe(pos, n, &service->clients)
 				{
 					client_t * client = list_entry(pos, client_t, service_list);
-					client_send(client, packet->timestamp, &packet->buffer);
+					client_send(client, packet->timestamp, packet->buffer);
 				}
 			}
 			mutex_unlock(&service->lock);
+
+			// Free the buffer
+			buffer_free(packet->buffer);
 
 			// Add the packet back to the free list
 			mutex_lock(&packets_lock);
@@ -170,7 +189,7 @@ void service_send(service_t * service, int64_t microtimestamp, const buffer_t * 
 	memset(packet, 0, sizeof(packet_t));
 	packet->service = service;
 	packet->timestamp = microtimestamp;
-	packet->buffer = buffer_dup(*buffer);
+	packet->buffer = buffer_dup(buffer);
 
 	// Add the packet to the consumer-list
 	mutex_lock(&packets_lock);
@@ -201,7 +220,7 @@ bool service_subscribe(service_t * service, client_t * client, exception_t ** er
 			return false;
 		}
 
-		if (!client_inuse(client) || !client_locked(client))
+		if (!client_inuse(client) || client_locked(client))
 		{
 			exception_set(err, EINVAL, "Attempting to subscribe to service with invalid client");
 			return false;
@@ -346,7 +365,7 @@ void service_listxml(buffer_t * buffer)
 		string_vset(&str, fmt, args);
 		va_end(args);
 
-		buffer_write(*buffer, str.string, bufferlen, str.length);
+		buffer_write(buffer, str.string, bufferlen, str.length);
 		bufferlen += str.length;
 	}
 
@@ -431,7 +450,7 @@ static bool service_init()
 			return false;
 		}
 
-		if (mainloop_addnewfdtimer(serviceloop, "Service monitor", SERVICE_TIMEOUT_NS, service_checktimeout, serviceloop, &e) < 0)
+		if (mainloop_addnewfdtimer(serviceloop, "Service monitor", SERVICE_MONITOR_TIMEOUT, service_monitor, NULL, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not create service monitor timer: %s", exception_message(e));
 			exception_free(e);

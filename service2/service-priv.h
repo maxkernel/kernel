@@ -3,6 +3,7 @@
 #include <aul/mainloop.h>
 
 #include <kernel.h>
+#include <buffer.h>
 
 #include <service.h>
 
@@ -16,11 +17,8 @@ typedef struct
 
 	service_t * service;
 	int64_t timestamp;
-	buffer_t buffer;
+	buffer_t * buffer;
 } packet_t;
-
-
-bool client_check(client_t * client);
 
 // Private subsystems
 bool tcp_init(exception_t ** err);

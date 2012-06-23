@@ -72,7 +72,7 @@ int signature_headerlen(const char * sig)
 }
 
 #if defined(KERNEL)
-ssize_t serialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, ...)
+ssize_t serialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, ...)
 {
 	va_list args;
 	va_start(args, sig);
@@ -82,7 +82,7 @@ ssize_t serialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig,
 	return ret;
 }
 
-ssize_t vserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, va_list args)
+ssize_t vserialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, va_list args)
 {
 	ssize_t wrote = 0;
 
@@ -148,7 +148,7 @@ ssize_t vserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig
 	return wrote;
 }
 
-ssize_t aserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, void ** args)
+ssize_t aserialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, void ** args)
 {
 	size_t index = 0;
 	ssize_t wrote = 0;
@@ -878,8 +878,8 @@ err_nomem:
 
 
 #if defined(KERNEL)
-
-ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t ** err, const char * sig, buffer_t buffer)		// TODO - This function sucks! Make it better
+// TODO - This function sucks! Make it better
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t ** err, const char * sig, const buffer_t * buffer)
 {
 	labels(err_nomem, err_bufsize);
 

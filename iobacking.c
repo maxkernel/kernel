@@ -20,8 +20,8 @@ static size_t iobacking_size(char sig)
 		case T_STRING:			return sizeof(char *) + sizeof(char) * AUL_STRING_MAXLEN;
 		case T_ARRAY_BOOLEAN:
 		case T_ARRAY_INTEGER:
-		case T_ARRAY_DOUBLE:	return sizeof(array_t);
-		case T_BUFFER:			return sizeof(buffer_t);
+		case T_ARRAY_DOUBLE:	return sizeof(array_t *);
+		case T_BUFFER:			return sizeof(buffer_t *);
 		default:				return -1;
 	}
 }
@@ -93,59 +93,35 @@ void iobacking_copy(iobacking_t * backing, const void * data)
 		}
 	}
 
-
-	// Handle null data
-	if (data == NULL)
-	{
-		iobacking_isnull(backing) = true;
-		return;
-	}
-
-	// Copy non-null data into backing
-	iobacking_isnull(backing) = false;
+	// Copy data into backing
 	switch (iobacking_sig(backing))
 	{
-		case T_BOOLEAN:
-		{
-			*(bool *)iobacking_data(backing) = *(const bool *)data;
-			break;
-		}
-
-		case T_INTEGER:
-		{
-			*(int *)iobacking_data(backing) = *(const int *)data;
-			break;
-		}
-
-		case T_DOUBLE:
-		{
-			*(double *)iobacking_data(backing) = *(const double *)data;
-			break;
-		}
-
-		case T_CHAR:
-		{
-			*(char *)iobacking_data(backing) = *(const char *)data;
-			break;
-		}
-
+		case T_BOOLEAN:		*(bool *)iobacking_data(backing) = (data == NULL)? false : *(const bool *)data;			break;
+		case T_INTEGER:		*(int *)iobacking_data(backing) = (data == NULL)? 0 : *(const int *)data;				break;
+		case T_DOUBLE:		*(double *)iobacking_data(backing) = (data == NULL)? 0.0 : *(const double *)data;		break;
+		case T_CHAR:		*(char *)iobacking_data(backing) = (data == NULL)? '\0' : *(const char *)data;			break;
 		case T_STRING:
 		{
-			strncpy(*(char **)iobacking_data(backing), *(const char **)data, AUL_STRING_MAXLEN - 1);
+			const char * str = (data == NULL)? "" : ((*(const char **)data == NULL)? "" : *(const char **)data);
+			strncpy(*(char **)iobacking_data(backing), str, AUL_STRING_MAXLEN - 1);
 			break;
 		}
 
 		case T_ARRAY_BOOLEAN:
 		case T_ARRAY_INTEGER:
 		case T_ARRAY_DOUBLE:
-		{
-			*(array_t *)iobacking_data(backing) = array_dup(*(const array_t *)data);
-			break;
-		}
-
 		case T_BUFFER:
 		{
-			*(buffer_t *)iobacking_data(backing) = buffer_dup(*(const buffer_t *)data);
+			if (iobacking_isnull(backing))
+			{
+				buffer_free(*(buffer_t **)iobacking_data(backing));
+			}
+
+			if (data != NULL)
+			{
+				*(buffer_t **)iobacking_data(backing) = buffer_dup(*(const buffer_t **)data);
+			}
+
 			break;
 		}
 
@@ -157,4 +133,6 @@ void iobacking_copy(iobacking_t * backing, const void * data)
 		}
 		*/
 	}
+
+	iobacking_isnull(backing) = (data == NULL);
 }

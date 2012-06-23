@@ -236,7 +236,7 @@ static bool webcam_stop(webcam_t * webcam)
 	return true;
 }
 
-static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
+static bool webcam_readframe(webcam_t * webcam, buffer_t * frame)
 {
 	struct v4l2_buffer buf;
 	memset(&buf, 0, sizeof(struct v4l2_buffer));
@@ -245,24 +245,29 @@ static buffer_t webcam_readframe(webcam_t * webcam, buffer_t frame)
 
 	if (ioctl(webcam->fd, VIDIOC_DQBUF, &buf) == -1) {
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_DQBUF (dequeue buffer) on %s: %s", webcam->path, strerror(errno));
-		return -1;
+		return false;
 	}
 
 	if (buf.index >= webcam->n_buffers)
 	{
 		LOG(LOG_ERR, "Webcam: Buffer overrun detected on capture buffers");
-		return -1;
+		return false;
 	}
 
+	bool success = true;
 	size_t size = webcam->buffers[buf.index].length;
-	buffer_write(frame, webcam->buffers[buf.index].start, 0, size);
+	if (buffer_write(frame, webcam->buffers[buf.index].start, 0, size) != size)
+	{
+		LOG1(LOG_WARN, "Could not write all webcam frame data to buffer");
+		success = false;
+	}
 
 	if (ioctl(webcam->fd, VIDIOC_QBUF, &buf) == -1)
 	{
 		LOG(LOG_ERR, "Webcam: Could not call VIDIOC_QBUF (enqueue buffer) on %s: %s", webcam->path, strerror(errno));
 	}
 
-	return frame;
+	return success;
 }
 
 void * webcam_new(char * path, char * format, int width, int height)
@@ -367,14 +372,12 @@ void webcam_update(void * object)
 	FD_ZERO(&fds);
 	FD_SET(webcam->fd, &fds);
 
-	// TODO - WTF, don't select here!
+	// TODO IMPORTANT - WTF, don't select here!
 	if ((r = select(webcam->fd+1, &fds, NULL, NULL, &tv)) > 0)
 	{
-		buffer_t frame = buffer_new();
-		webcam_readframe(webcam, frame);
-		if (frame != -1)
+		buffer_t * frame = buffer_new();
+		if (webcam_readframe(webcam, frame))
 		{
-
 			output(width, &webcam->width);
 			output(height, &webcam->height);
 			output(frame, &frame);

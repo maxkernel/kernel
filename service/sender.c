@@ -43,7 +43,7 @@ void send_init()
 	}
 }
 
-void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp_us, buffer_t buffer)
+void send_data(service_h service_handle, client_h client_handle, stream_t * stream, uint64_t timestamp_us, buffer_t * buffer)
 {
 	size_t length = buffer_size(buffer);
 	size_t numpackets = length / SERVICE_FRAGSIZE;

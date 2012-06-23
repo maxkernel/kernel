@@ -23,6 +23,7 @@ static inline void mutex_init(mutex_t * mutex, int type)
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, type);
 	pthread_mutex_init(mutex, &attr);
+	pthread_mutexattr_destroy(&attr);
 }
 
 static inline mutex_t * mutex_new(int type)
@@ -33,6 +34,10 @@ static inline mutex_t * mutex_new(int type)
 	return mutex;
 }
 
+static inline bool mutex_destroy(mutex_t * mutex)
+{
+	return pthread_mutex_destroy(mutex) == 0;
+}
 
 typedef pthread_cond_t		cond_t;
 #define cond_signal(c)		pthread_cond_signal(c)

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+
 #if defined(KERNEL)
 	#include <buffer.h>
 #endif
@@ -21,9 +22,9 @@ extern "C" {
 int signature_headerlen(const char * sig);
 
 #if defined(KERNEL)
-ssize_t serialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, ...);
-ssize_t vserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, va_list args);
-ssize_t aserialize_2buffer(buffer_t buffer, exception_t ** err, const char * sig, void ** args);
+ssize_t serialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, ...);
+ssize_t vserialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, va_list args);
+ssize_t aserialize_2buffer(buffer_t * buffer, exception_t ** err, const char * sig, void ** args);
 #endif
 
 ssize_t serialize_2array(void * array, size_t arraylen, exception_t ** err, const char * sig, ...);
@@ -42,7 +43,7 @@ ssize_t deserialize_2args(void * array, size_t arraylen, exception_t ** err, con
 ssize_t deserialize_2header(void ** header, size_t headerlen, exception_t ** err, const char * sig, void * array, size_t arraylen);
 
 #if defined(KERNEL)
-ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t ** err, const char * sig, buffer_t buffer);
+ssize_t deserialize_2header_wbody(void ** header, size_t headerlen, exception_t ** err, const char * sig, const buffer_t * buffer);
 #endif
 
 #ifdef __cplusplus

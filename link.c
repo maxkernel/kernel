@@ -430,8 +430,8 @@ static void copy_x2x(const void * linkdata, const void * from, bool from_isnull,
 {
 	unused(linkdata);
 
-	if (!to_isnull)		buffer_free(*(buffer_t *)to);
-	if (!from_isnull)	*(buffer_t *)to = buffer_dup(*(const buffer_t *)from);
+	if (!to_isnull)		buffer_free(*(buffer_t **)to);
+	if (!from_isnull)	*(buffer_t **)to = buffer_dup(*(const buffer_t **)from);
 }
 
 

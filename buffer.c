@@ -1,461 +1,634 @@
-#include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/uio.h>
 
-#include <aul/common.h>
-#include <aul/atomic.h>
-#include <aul/list.h>
-#include <aul/stack.h>
 #include <aul/mutex.h>
-#include <kernel-priv.h>
+#include <aul/atomic.h>
+#include <aul/stack.h>
+
 #include <buffer.h>
 
 
-#define BUFFER_POOL_SIZE		(20 * 1024 * 1024)		// 20 MB
-#define BUFFER_MAX_PAGES		32						// Maximum number of pages we track per buffermem_t
-#define BUFFER_MAX_BUFFERS		256						// Maximum number if buffers to track
+#define TYPE_BUFFER 		0xB1
+#define TYPE_PAGE			0xB2
+
+#define PAGES_PER_BUFFER	((BUFFER_PAGESIZE - sizeof(buffer_t)) / sizeof(buffer_t *))
+#define BYTES_PER_PAGE		(BUFFER_PAGESIZE - sizeof(page_t))
+#define BYTES_PER_BUFFER	(BYTES_PER_PAGE * PAGES_PER_BUFFER)
+#define PAGE_SIZE_OFFSET	(BYTES_PER_PAGE - sizeof(uint16_t))
+
+#define page_size(p)		((uint16_t *)&(p)->data[PAGE_SIZE_OFFSET])
+
 
 typedef struct
 {
-	list_t empty_list;
-	mutex_t access_lock;
+	uint8_t type;
+	uint16_t refs;
+	uint8_t data[0];
+} page_t;
 
-	unsigned int references;
-	
-	void * pages[BUFFER_MAX_PAGES];
-	size_t length;
-
-	int next;
-} buffermem_t;
-
-
-static buffermem_t * buffers[BUFFER_MAX_BUFFERS];
-static size_t PAGESIZE;
-static ssize_t BUFFERSIZE;
-
-static mutex_t buffers_lock;
-static mutex_t pages_lock;
-
-static stack_t empty_buffers;
-static stack_t empty_pages;
-
-static inline bool buffer_invalid(const buffer_t b)
+struct __buffer_t
 {
-	return b < 0 || b >= BUFFER_MAX_BUFFERS || buffers[b] == NULL;
+	uint8_t type;
+	size_t size;
+	buffer_t * next;
+	page_t * pages[0];
+};
+
+
+static void * memory = NULL;
+static stack_t freepages;
+static mutex_t freelock;
+
+static const page_t * zero = NULL;
+
+static inline void initpage(page_t * page)
+{
+	page->type = TYPE_PAGE;
+	page->refs = 1;
+	memset(page->data, 0, BYTES_PER_PAGE);
 }
 
-static void * page_getnew()
+static inline void branchpage(const page_t * page, page_t * new)
+{
+	new->type = TYPE_PAGE;
+	new->refs = 1;
+	memcpy(new->data, page->data, BYTES_PER_PAGE);
+}
+
+static inline void initbuffer(buffer_t * buffer)
+{
+	buffer->type = TYPE_BUFFER;
+	buffer->size = 0;
+	buffer->next = NULL;
+	memset(buffer->pages, 0, sizeof(page_t *) * PAGES_PER_BUFFER);
+}
+
+static inline void * getfree()
 {
 	void * page = NULL;
-	mutex_lock(&pages_lock);
+	mutex_lock(&freelock);
 	{
-		page = stack_pop(&empty_pages);
+		page = stack_pop(&freepages);
 	}
-	mutex_unlock(&pages_lock);
+	mutex_unlock(&freelock);
 
 	return page;
 }
 
-static int buffer_getnew()
+static inline void putfree(void * page)
 {
-	int index = -1;
-
-	mutex_lock(&buffers_lock);
+	mutex_lock(&freelock);
 	{
-		list_t * entry = stack_pop(&empty_buffers);
-		if (entry != NULL)
-		{
-			buffermem_t * buf = list_entry(entry, buffermem_t, empty_list);
-
-			memset(buf->pages, 0, sizeof(buf->pages));
-			buf->length = 0;
-			buf->references = 1;
-			buf->next = -1;
-
-			int i=0;
-			// We know that there is at lease one open buffers[], so don't need to check overflow
-			while (buffers[i] != NULL)
-			{
-				i += 1;
-			}
-
-			buffers[i] = buf;
-			index = i;
-		}
+		stack_push(&freepages, page);
 	}
-	mutex_unlock(&buffers_lock);
-
-	return index;
+	mutex_unlock(&freelock);
 }
 
-static size_t buffer_extend(buffermem_t * m, size_t size)
+static inline buffer_t * promote(page_t * page)
 {
-	labels(done);
+	page_t * new = NULL;
+	uint16_t size = *page_size(page);
 
-	size_t newsize = 0;
-	mutex_lock(&m->access_lock);
+	if (size > 0)
 	{
-		for (size_t i=0; i<BUFFER_MAX_PAGES && size>0; i++)
+		new = getfree();
+		if unlikely(new == NULL)
 		{
-			if (m->pages[i] == NULL)
-			{
-				void * p = m->pages[i] = page_getnew();
-				if (p == NULL)
-				{
-					goto done;
-				}
-			}
-
-			size_t s = min(size, PAGESIZE);
-			size -= s;
-			m->length = newsize += s;
+			return NULL;
 		}
 
-		if (size > 0)
-		{
-			if (m->next == -1)
-			{
-				int newbuf = m->next = buffer_getnew();
-				if (newbuf == -1)
-				{
-					goto done;
-				}
-			}
-
-			newsize += buffer_extend(buffers[m->next], size);
-		}
+		branchpage(page, new);
+		*page_size(new) = 0;		// Clear out the size info of the new page
 	}
 
-done:
-	mutex_unlock(&m->access_lock);
+	buffer_t * buffer = (buffer_t *)page;
+	initbuffer(buffer);
+	buffer->size = size;
+	buffer->pages[0] = new;
 
-	return newsize;
+	return buffer;
 }
 
-void buffer_init()
+bool buffer_init(size_t poolsize, exception_t ** err)
 {
-	PAGESIZE = getpagesize();
-	BUFFERSIZE = PAGESIZE * BUFFER_MAX_PAGES;
-	stack_init(&empty_buffers);
-	stack_init(&empty_pages);
-	mutex_init(&buffers_lock, M_RECURSIVE);
-	mutex_init(&pages_lock, M_RECURSIVE);
-	
-	// Zero out the buffers pointer array
-	memset(buffers, 0, sizeof(buffers));
-	
-	// Allocate the buffers
-	buffermem_t * buffers_mem = calloc(BUFFER_MAX_BUFFERS, sizeof(buffermem_t));	// TODO - align to page boundry
-
-	// Add the buffers to the empty_buffers list
-	for (size_t i=0; i<BUFFER_MAX_BUFFERS; i++)
+	// Sanity check
 	{
-		buffermem_t * buf = &buffers_mem[i];
-		mutex_init(&buf->access_lock, M_RECURSIVE);
-		stack_push(&empty_buffers, &buf->empty_list);
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
 	}
 
-	// Allocate the *huge* page pool
-	size_t pages = BUFFER_POOL_SIZE / PAGESIZE;
-	char * pages_mem = NULL;
-	int e = posix_memalign((void **)&pages_mem, PAGESIZE, PAGESIZE * pages);		// Allocate aligned memory
-	if (e != 0 || pages_mem == NULL)
+	stack_init(&freepages);
+	mutex_init(&freelock, M_RECURSIVE);
+
+	size_t pages = poolsize / BUFFER_PAGESIZE;
+	int e = posix_memalign(&memory, BUFFER_PAGESIZE, BUFFER_PAGESIZE * pages);		// Allocate aligned memory
+	if (e != 0 || memory == NULL)
 	{
-		LOGK(LOG_FATAL, "Could not allocte buffer space, currently set to %d bytes: %s", BUFFER_POOL_SIZE, strerror(errno));
+		exception_set(err, ENOMEM, "Could not allocte buffer space, currently set to %zu bytes: %s", poolsize, strerror(errno));
+		memory = NULL;
+		return false;
 	}
 
 	// Add pages to free list
 	for (size_t i = 0; i < pages; i++)
 	{
-		list_t * list = (list_t *)&pages_mem[PAGESIZE * i];
-		stack_push(&empty_pages, list);
+		list_t * list = (list_t *)(memory + (BUFFER_PAGESIZE * i));
+		stack_push(&freepages, list);
 	}
+
+	// Create zero page
+	{
+		page_t * zeropage = getfree();
+		if unlikely(zeropage == NULL)
+		{
+			exception_set(err, EFAULT, "Could not allocate zero page!");
+			return false;
+		}
+
+		initpage(zeropage);
+		zero = zeropage;
+	}
+
+	return true;
 }
 
 void buffer_destroy()
 {
-	// TODO - destroy the buffers, warn is there are any open ones still
+	stack_empty(&freepages);
+	if (memory != NULL)
+	{
+		free(memory);
+	}
+
+	mutex_destroy(&freelock);
 }
 
-buffer_t buffer_new()
+buffer_t * buffer_new()
 {
-	return buffer_getnew();
+	page_t * page = getfree();
+	if unlikely(page == NULL)
+	{
+		return NULL;
+	}
+
+	initpage(page);
+	return (buffer_t *)page;
 }
 
-buffer_t buffer_dup(const buffer_t b)
+buffer_t * buffer_dup(const buffer_t * src)
 {
 	// Sanity check
 	{
-		if (buffer_invalid(b))
+		if unlikely(src == NULL)
 		{
-			return (buffer_t)-1;
+			return NULL;
 		}
 	}
 
-	atomic_inc(buffers[b]->references);		// Atomic increment
-	return (buffer_t)b;
-}
-
-static void buffer_dowrite(buffer_t b, char * data, off_t offset, size_t length)
-{
-	labels(done);
-
-	mutex_lock(&buffers[b]->access_lock);
+	if (src->type == TYPE_PAGE)
 	{
-		if (offset >= BUFFERSIZE)
+		// Src really points to a page, branch the page
+
+		page_t * page = getfree();
+		if unlikely(page == NULL)
 		{
-			buffer_dowrite(buffers[b]->next, data, offset - BUFFERSIZE, length);
-			goto done;
+			return NULL;
 		}
 
-		size_t pagenum = offset / PAGESIZE;
-		off_t pageoff = offset % PAGESIZE;
+		branchpage((const page_t *)src, page);
+		return (buffer_t *)page;
+	}
+	else if (src->type == TYPE_BUFFER)
+	{
+		// Src points to a buffer, do a shallow copy
 
-		while (length > 0)
+		buffer_t * buffer = getfree();
+		if unlikely(buffer == NULL)
 		{
-			if (pagenum == BUFFER_MAX_PAGES)
+			return NULL;
+		}
+
+		initbuffer(buffer);
+		buffer->size = src->size;
+
+		for (size_t index = 0; index < PAGES_PER_BUFFER; index++)
+		{
+			page_t * page = src->pages[index];
+			if (page != NULL)
 			{
-				// Overwrote the buffer, start writing to the next one
-				buffer_dowrite(buffers[b]->next, data, 0, length);
-				goto done;
+				atomic_inc(page->refs);
+				buffer->pages[index] = page;
 			}
-
-			size_t writelen = min(length, PAGESIZE - pageoff);
-			memcpy(buffers[b]->pages[pagenum] + pageoff, data, writelen);
-
-			length -= writelen;
-			data += writelen;
-			pagenum += 1;
-			pageoff = 0;
-		}
-	}
-
-done:
-	mutex_unlock(&buffers[b]->access_lock);
-}
-
-void buffer_write(buffer_t b, const void * data, off_t offset, size_t length)
-{
-	// Sanity check
-	{
-		if (buffer_invalid(b) || data == NULL)
-		{
-			return;
-		}
-	}
-
-	size_t size = buffer_size(b);
-	size_t newsize = offset + length;
-
-	if (newsize > size)
-	{
-		buffer_extend(buffers[b], newsize);
-	}
-
-	buffer_dowrite(b, (char *)data, offset, length);
-}
-
-static void buffer_doread(const buffer_t b, char * data, off_t offset, size_t length)
-{
-	labels(done);
-
-	mutex_lock(&buffers[b]->access_lock);
-	{
-		if (offset >= BUFFERSIZE)
-		{
-			buffer_doread(buffers[b]->next, data, offset - BUFFERSIZE, length);
-			goto done;
 		}
 
-		size_t pagenum = offset / PAGESIZE;
-		off_t pageoff = offset % PAGESIZE;
-
-		while (length > 0)
+		if (src->next != NULL)
 		{
-			if (pagenum == BUFFER_MAX_PAGES)
+			if ((buffer->next = buffer_dup(src->next)) == NULL)
 			{
-				buffer_doread(buffers[b]->next, data, 0, length);
-				goto done;
+				// Out of buffer memory!
+				buffer_free(buffer);
+				return NULL;
 			}
-
-			size_t readlen = min(length, PAGESIZE - pageoff);
-			memcpy(data, buffers[b]->pages[pagenum] + pageoff, readlen);
-
-			length -= readlen;
-			data += readlen;
-			pagenum += 1;
-			pageoff = 0;
 		}
+		return buffer;
 	}
 
-done:
-	mutex_unlock(&buffers[b]->access_lock);
+	return NULL;
 }
 
-size_t buffer_read(const buffer_t b, void * data, off_t offset, size_t length)
+size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t length)
 {
 	// Sanity check
 	{
-		if (buffer_invalid(b) || data == NULL)
+		if unlikely(buffer == NULL || data == NULL)
 		{
 			return 0;
 		}
 	}
 
-	ssize_t size = buffer_size(b);
-	ssize_t readsize = offset + length;
-
-	if (offset > size)
+	if (buffer->type == TYPE_PAGE)
 	{
-		// Can't read any data! Offset is larger then entire buffer
-		return 0;
+		// We are writing to a single page
+		size_t ensuresize = offset + length;
+		page_t * page = (page_t *)buffer;
+
+		if (ensuresize > (BYTES_PER_PAGE - sizeof(uint16_t)))
+		{
+			// We need more room than this page, promote this page to a full buffer
+			// Let the next root if-statement catch it and do the writing
+			if ((buffer = promote(page)) == NULL)
+			{
+				// Could not promote buffer (probably due to not enough free buffers)
+				return 0;
+			}
+		}
+		else
+		{
+			// We have enough room in this page to write the data
+			uint16_t * size = page_size(page);
+			if (offset > *size)
+			{
+				// Make sure that the memory between page->size and offset are filled with zeros
+				memset(&page->data[*size], 0, offset - *size);
+			}
+
+			memcpy(&page->data[offset], data, length);
+			*size = ensuresize;
+		}
 	}
 
-	if (readsize > size)
+	if (buffer->type == TYPE_BUFFER)
 	{
-		// Can't read that much, adjust the length
-		length -= readsize - size;
+		// Pass onto the next
+		if (offset >= BYTES_PER_BUFFER)
+		{
+			// Make sure that buffer has a next
+			if (buffer->next == NULL)
+			{
+				buffer->next = buffer_new();
+			}
+
+			size_t totalwrote = buffer_write(buffer->next, data, offset - BYTES_PER_BUFFER, length);
+			if (totalwrote > 0)
+			{
+				// Only update the buffer size after successful write
+				buffer->size = BYTES_PER_BUFFER;
+			}
+
+			return totalwrote;
+		}
+
+		size_t totalwrote = 0;
+		size_t pagenum = offset / BYTES_PER_PAGE;
+		off_t pageoff = offset % BYTES_PER_PAGE;
+		size_t given = offset;
+
+		while (length > 0)
+		{
+			// Check for overflow
+			if (pagenum == PAGES_PER_BUFFER)
+			{
+				// Overflowed this buffer, start writing to the next one
+				if (buffer->next == NULL)
+				{
+					buffer->next = buffer_new();
+				}
+
+				return totalwrote + buffer_write(buffer->next, data, 0, length);
+			}
+
+			page_t * page = buffer->pages[pagenum];
+
+			// Check for null page
+			if (page == NULL)
+			{
+				page_t * new = getfree();
+				if unlikely(new == NULL)
+				{
+					// Could not allocate free page!
+					return totalwrote;
+				}
+
+				initpage(new);
+				page = buffer->pages[pagenum] = new;
+			}
+
+			// Check for readonly
+			if (page->refs > 1)
+			{
+				page_t * new = getfree();
+				if unlikely(new == NULL)
+				{
+					// Could not allocate free page
+					return totalwrote;
+				}
+
+				branchpage(page, new);
+				if (atomic_dec(page->refs) == 0)
+				{
+					putfree(page);
+				}
+
+				page = buffer->pages[pagenum] = new;
+			}
+
+			// Determine how many bytes to write
+			size_t writelen = min(length, BYTES_PER_PAGE - pageoff);
+
+			// Memcpy the bytes
+			memcpy(&page->data[pageoff], data, writelen);
+
+			// Update the buffer size parameter
+			given += writelen;
+			buffer->size = max(buffer->size, given);
+
+			// Update the loop tracking variables
+			length -= writelen;
+			data += writelen;
+			totalwrote += writelen;
+			pagenum += 1;
+			pageoff = 0;
+		}
+
+		return totalwrote;
 	}
 
-	buffer_doread(b, (char *)data, offset, length);
-	return length;
+	return 0;
 }
 
-ssize_t buffer_send(buffer_t b, int fd, off_t offset, size_t length)
+size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t length)
 {
 	// Sanity check
 	{
-		if (buffer_invalid(b) || fd < 0)
+		if unlikely(buffer == NULL || data == NULL)
+		{
+			return 0;
+		}
+	}
+
+	if (buffer->type == TYPE_PAGE)
+	{
+		const page_t * page = (const page_t *)buffer;
+		size_t size = *page_size(page);
+		if (offset >= size)
+		{
+			return 0;
+		}
+
+		size_t bytes = min(length, size - offset);
+		memcpy(data, &page->data[offset], bytes);
+		return bytes;
+	}
+	else if (buffer->type == TYPE_BUFFER)
+	{
+		if (offset >= BYTES_PER_BUFFER)
+		{
+			return buffer_read(buffer->next, data, offset - BYTES_PER_BUFFER, length);
+		}
+
+		if (offset >= buffer->size)
+		{
+			return 0;
+		}
+
+		size_t totalread = 0;
+		size_t pagenum = offset / BYTES_PER_PAGE;
+		off_t pageoff = offset % BYTES_PER_PAGE;
+		size_t left = buffer->size - offset;
+
+		while (length > 0)
+		{
+			if (pagenum == PAGES_PER_BUFFER)
+			{
+				// Overflow this buffer, start reading from the next one
+				return totalread + buffer_read(buffer->next, data, 0, length);
+			}
+
+			const page_t * page = buffer->pages[pagenum];
+
+			// Check for null page
+			if (page == NULL)
+			{
+				page = zero;
+			}
+
+			// Determine how many bytes to read
+			size_t readlen = min(length, left, BYTES_PER_PAGE - pageoff);
+
+			// Read the bytes
+			memcpy(data, &page->data[pageoff], readlen);
+
+			// Update the loop tracking variables
+			length -= readlen;
+			left -= readlen;
+			data += readlen;
+			totalread += readlen;
+			pagenum += 1;
+			pageoff = 0;
+		}
+
+		return totalread;
+	}
+
+	return 0;
+}
+
+ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length)
+{
+	// Sanity check
+	{
+		if unlikely(buffer == NULL)
+		{
+			errno = EINVAL;
+			return -1;
+		}
+	}
+
+	if (buffer->type == TYPE_PAGE)
+	{
+		const page_t * page = (const page_t *)buffer;
+		size_t size = *page_size(page);
+		if (offset >= size)
+		{
+			return 0;
+		}
+
+		size_t bytes = min(length, size - offset);
+		return write(fd, &page->data[offset], bytes);
+	}
+	else if (buffer->type == TYPE_BUFFER)
+	{
+
+	}
+
+	errno = EINVAL;
+	return -1;
+}
+
+size_t buffer_size(const buffer_t * buffer)
+{
+	// Sanity check
+	{
+		if unlikely(buffer == NULL)
+		{
+			return 0;
+		}
+	}
+
+	if (buffer->type == TYPE_PAGE)
+	{
+		const page_t * page = (const page_t *)buffer;
+		return *page_size(page);
+	}
+	else if (buffer->type == TYPE_BUFFER)
+	{
+		const buffer_t * next = buffer->next;
+		if (next != NULL)
+		{
+			return buffer->size + buffer_size(next);
+		}
+
+		return buffer->size;
+	}
+
+	return 0;
+}
+
+void buffer_free(buffer_t * buffer)
+{
+	// Sanity check
+	{
+		if unlikely(buffer == NULL)
+		{
+			return;
+		}
+	}
+
+	if (buffer->type == TYPE_PAGE)
+	{
+		putfree(buffer);
+	}
+	else if (buffer->type == TYPE_BUFFER)
+	{
+		for (size_t index = 0; index < PAGES_PER_BUFFER; index++)
+		{
+			page_t * page = buffer->pages[index];
+			if (page != NULL)
+			{
+				if (atomic_dec(page->refs) == 0)
+				{
+					putfree(page);
+				}
+			}
+		}
+
+		if (buffer->next != NULL)
+		{
+			buffer_free(buffer->next);
+		}
+
+		putfree(buffer);
+	}
+}
+
+bufferpos_t bufferpos_new(buffer_t * buffer)
+{
+	bufferpos_t pos = {
+		.buffer = buffer,
+		.offset = 0,
+	};
+
+	return pos;
+}
+
+bool bufferpos_write(bufferpos_t * pos, const void * data, size_t length)
+{
+	// Sanity check
+	{
+		if unlikely(pos == NULL)
+		{
+			return false;
+		}
+	}
+
+	size_t wrote = buffer_write(pos->buffer, data, pos->offset, length);
+	pos->offset += wrote;
+
+	return wrote == length;
+}
+
+size_t bufferpos_read(bufferpos_t * pos, void * data, size_t length)
+{
+	// Sanity check
+	{
+		if unlikely(pos == NULL)
+		{
+			return 0;
+		}
+	}
+
+	size_t read = buffer_read(pos->buffer, data, pos->offset, length);
+	pos->offset += read;
+
+	return read;
+}
+
+ssize_t bufferpos_send(bufferpos_t * pos, int fd, size_t length)
+{
+	// Sanity check
+	{
+		if unlikely(pos == NULL)
+		{
+			return 0;
+		}
+	}
+
+	ssize_t sent = buffer_send(pos->buffer, fd, pos->offset, length);
+	pos += (sent < 0)? 0 : sent;
+
+	return sent;
+}
+
+off_t bufferpos_seek(bufferpos_t * pos, off_t offset, int whence)
+{
+	// Sanity check
+	{
+		if unlikely(pos == NULL || pos->buffer == NULL)
 		{
 			return -1;
 		}
 	}
 
-	ssize_t size = buffer_size(b);
-	ssize_t readsize = offset + length;
-
-	if (offset > size)
+	switch (whence)
 	{
-		// Can't send any data! Offset is larger then entire buffer
-		return 0;
+		case SEEK_SET:	pos->offset = offset;								break;
+		case SEEK_CUR:	pos->offset += offset;								break;
+		case SEEK_END:	pos->offset = buffer_size(pos->buffer) + offset;	break;
+		default:		return -1;
 	}
 
-	if (readsize > size)
-	{
-		// Can't read that much, adjust the length
-		length -= readsize - size;
-	}
-
-	ssize_t wrote = 0;
-
-	mutex_lock(&buffers[b]->access_lock);
-	{
-		while (offset >= BUFFERSIZE)
-		{
-			b = buffers[b]->next;
-			offset -= BUFFERSIZE;
-		}
-
-		size_t pages = length / PAGESIZE + 1;
-		size_t pagenum = offset / PAGESIZE;
-		off_t pageoff = offset % PAGESIZE;
-
-		struct iovec v[pages];
-		memset(v, 0, sizeof(struct iovec) * pages);
-
-		size_t index = 0;
-		while (length > 0)
-		{
-			if (pagenum == BUFFER_MAX_PAGES)
-			{
-				b = buffers[b]->next;
-				pagenum = 0;
-			}
-
-			size_t sendlen = min(length, PAGESIZE - pageoff);
-			v[index].iov_base = buffers[b]->pages[pagenum] + pageoff;
-			v[index].iov_len = sendlen;
-
-			length -= sendlen;
-			pagenum += 1;
-			pageoff = 0;
-			index += 1;
-		}
-
-		wrote = writev(fd, v, pages);
-	}
-	mutex_unlock(&buffers[b]->access_lock);
-
-	return wrote;
+	return pos->offset;
 }
-
-size_t buffer_size(const buffer_t b)
-{
-	// Sanity check
-	{
-		if (buffer_invalid(b))
-		{
-			return 0;
-		}
-	}
-
-	size_t s = 0;
-	mutex_lock(&buffers[b]->access_lock);
-	{
-		s = buffers[b]->length + buffer_size(buffers[b]->next);
-	}
-	mutex_unlock(&buffers[b]->access_lock);
-	return s;
-}
-
-void buffer_free(buffer_t b)
-{
-	// Sanity check
-	{
-		if (buffer_invalid(b))
-		{
-			return;
-		}
-	}
-
-	int refs = atomic_dec(buffers[b]->references);		// Atomic decrement
-	if (refs > 0)
-	{
-		// Still references
-		return;
-	}
-
-	mutex_lock(&buffers[b]->access_lock);
-	{
-		// No more references to this buffer, free it
-		buffer_free(buffers[b]->next);
-
-		// Loop through the pages and free each one
-		mutex_lock(&pages_lock);
-		{
-			for (size_t i=0; i<BUFFER_MAX_PAGES; i++)
-			{
-				list_t * list = (list_t *)buffers[b]->pages[i];
-				if (list == NULL)
-				{
-					break;
-				}
-
-				// Got a valid page, add it to the empty_pages list
-				stack_push(&empty_pages, list);
-			}
-		}
-		mutex_unlock(&pages_lock);
-	}
-	mutex_unlock(&buffers[b]->access_lock);
-
-	mutex_lock(&buffers_lock);
-	{
-		// Add the free'd buffer to the empty list
-		stack_push(&empty_buffers, &buffers[b]->empty_list);
-		buffers[b] = NULL;
-	}
-	mutex_unlock(&buffers_lock);
-}
-

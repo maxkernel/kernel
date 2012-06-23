@@ -51,7 +51,7 @@ static void stream_kobjdestroy(kobject_t * object)
 	}
 }
 
-stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err)
+stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -85,6 +85,7 @@ stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdes
 		memset(client, 0, sizeof(client_t) + clientsize);
 		client->lock = &stream->lock;
 		client->sender = csender;
+		client->heartbeater = cheartbeater;
 		client->checker = cchecker;
 		client->destroyer = cdestroyer;
 		list_add(&stream->clients, &client->stream_list);
