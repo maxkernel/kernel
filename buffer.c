@@ -158,7 +158,13 @@ bool buffer_init(size_t poolsize, exception_t ** err)
 
 void buffer_destroy()
 {
-	stack_empty(&freepages);
+	mutex_lock(&freelock);
+	{
+		// Empty the freepages stack
+		while (stack_pop(&freepages) != NULL) {}
+	}
+	mutex_unlock(&freelock);
+
 	if (memory != NULL)
 	{
 		free(memory);
@@ -244,7 +250,7 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 {
 	// Sanity check
 	{
-		if unlikely(buffer == NULL || data == NULL)
+		if unlikely(buffer == NULL || data == NULL || offset < 0)
 		{
 			return 0;
 		}
@@ -297,12 +303,6 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 			{
 				// Only update the buffer size after successful write
 				buffer->size = BYTES_PER_BUFFER;
-			}
-			else
-			{
-				// If error, put the buffer back into the free queue
-				putfree(buffer->next);
-				buffer->next = NULL;
 			}
 
 			return totalwrote;
@@ -390,7 +390,7 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 {
 	// Sanity check
 	{
-		if unlikely(buffer == NULL || data == NULL)
+		if unlikely(buffer == NULL || data == NULL || offset < 0)
 		{
 			return 0;
 		}
@@ -486,7 +486,7 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 {
 	// Sanity check
 	{
-		if unlikely(buffer == NULL)
+		if unlikely(buffer == NULL || offset < 0)
 		{
 			errno = EINVAL;
 			return -1;

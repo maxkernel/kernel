@@ -1033,7 +1033,7 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 				return NULL;
 			}
 
-			if (!meta_lookupblockio(backing, block, outname, meta_output, NULL))
+			if (!meta_lookupblockio(backing, block, outsym.name, meta_output, NULL))
 			{
 				exception_set(err, EINVAL, "Block instance has no output named '%s'", outname);
 				return NULL;
@@ -1115,7 +1115,7 @@ model_link_t * model_newlink(model_t * model, model_script_t * script, model_lin
 				return NULL;
 			}
 
-			if (!meta_lookupblockio(backing, block, inname, meta_input, NULL))
+			if (!meta_lookupblockio(backing, block, insym.name, meta_input, NULL))
 			{
 				exception_set(err, EINVAL, "Block instance has no input named '%s'", inname);
 				return NULL;

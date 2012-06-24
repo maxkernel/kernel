@@ -176,11 +176,6 @@ static inline bool list_isempty(list_t * head)
 	return head->next == head;
 }
 
-static inline void list_empty(list_t * head)
-{
-	list_init(head);
-}
-
 static inline size_t list_size(list_t * head)
 {
 	size_t i = 0;

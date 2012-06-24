@@ -140,7 +140,7 @@ typedef struct
 
 	struct
 	{
-		unsigned indexed	:1;
+		bool indexed;	//	:1; // TODO - <- Is this ':1' really a good idea?
 		//unsigned typed		:1;		// TODO - add type coercion
 	} attrs;
 	size_t index;

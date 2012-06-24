@@ -56,6 +56,7 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 			switch (insig)
 			{
 				case T_BOOLEAN:			sig = T_BOOLEAN;		break;
+				case T_ARRAY_BOOLEAN:	sig = T_BOOLEAN;		break;
 				default:										break;
 			}
 		}
@@ -66,6 +67,8 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 			{
 				case T_INTEGER:			sig = T_INTEGER;		break;
 				case T_DOUBLE:			sig = T_DOUBLE;			break;
+				case T_ARRAY_INTEGER:	sig = T_INTEGER;		break;
+				case T_ARRAY_DOUBLE:	sig = T_DOUBLE;			break;
 				default:										break;
 			}
 		}
@@ -76,6 +79,7 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 			{
 				case T_DOUBLE:			sig = T_DOUBLE;			break;
 				case T_INTEGER:			sig = T_INTEGER;		break;
+				case T_ARRAY_DOUBLE:	sig = T_DOUBLE;			break;
 				default:										break;
 			}
 		}
@@ -100,37 +104,34 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 
 		case T_ARRAY_BOOLEAN:
 		{
-			/*
 			switch (insig)
 			{
-				case T_ARRAY_BOOLEAN:	return T_ARRAY_BOOLEAN;
-				default:				return '\0';
+				case T_ARRAY_BOOLEAN:	sig = T_ARRAY_BOOLEAN;	break;
+				case T_BOOLEAN:			sig = T_BOOLEAN;		break;
+				default:										break;
 			}
-			*/
 			break;
 		}
 
 		case T_ARRAY_INTEGER:
 		{
-			/*
 			switch (insig)
 			{
-				case T_ARRAY_INTEGER:	return T_ARRAY_INTEGER;
-				default:				return '\0';
+				case T_ARRAY_INTEGER:	sig = T_ARRAY_INTEGER;	break;
+				case T_INTEGER:			sig = T_INTEGER;		break;
+				default:										break;
 			}
-			*/
 			break;
 		}
 
 		case T_ARRAY_DOUBLE:
 		{
-			/*
 			switch (insig)
 			{
-				case T_ARRAY_DOUBLE:	return T_ARRAY_DOUBLE;
-				default:				return '\0';
+				case T_ARRAY_DOUBLE:	sig = T_ARRAY_DOUBLE;	break;
+				case T_DOUBLE:			sig = T_DOUBLE;			break;
+				default:										break;
 			}
-			*/
 			break;
 		}
 
@@ -147,7 +148,7 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 	}
 	if (sig == '\0')
 	{
-		exception_set(err, EINVAL, "Could not determine a proper link solution for %c -> %c", outsig, insig);
+		exception_set(err, EINVAL, "Could not find a proper link solution for %c -> %c", outsig, insig);
 		return false;
 	}
 
@@ -434,6 +435,13 @@ static void copy_x2x(const void * linkdata, const void * from, bool from_isnull,
 	if (!from_isnull)	*(buffer_t **)to = buffer_dup(*(const buffer_t **)from);
 }
 
+static void copy_d2D(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
+{
+	if (from_isnull)	return;
+	if (to_isnull)		*(array_t **)to = array_new();
+	array_writeindex(*(array_t **)to, T_ARRAY_DOUBLE, *(int *)linkdata, from);
+}
+
 
 link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, char to_sig, void ** linkdata)
 {
@@ -484,6 +492,16 @@ link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, ch
 			switch (to_sig)
 			{
 				case T_DOUBLE:		makedata_null();		return copy_d2d;
+				case T_ARRAY_DOUBLE:
+				{
+					if (!model_link->attrs.indexed)
+					{
+						return NULL;
+					}
+
+					makedata_int(model_link->index);
+					return copy_d2D;
+				}
 				default:									return NULL;
 			}
 		}

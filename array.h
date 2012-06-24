@@ -25,29 +25,9 @@ static inline size_t array_typesize(char sig)
 	}
 }
 
-static inline array_t * array_new(char type, size_t nelems)
+static inline array_t * array_new()
 {
-	// Sanity check
-	{
-		if unlikely(array_typesize(type) == 0)
-		{
-			return NULL;
-		}
-	}
-
-	array_t * a = buffer_new();
-	if (a == NULL)
-	{
-		return NULL;
-	}
-
-	if (nelems > 0)
-	{
-		uint8_t zero = 0;
-		buffer_write(a, &zero, array_typesize(type) * nelems - sizeof(uint8_t), sizeof(uint8_t));
-	}
-
-	return a;
+	return buffer_new();
 }
 
 static inline array_t * array_dup(const array_t * array)
@@ -86,7 +66,7 @@ static inline size_t array_read(const array_t * array, char type, off_t index, v
 	return buffer_read(array, elems, index * array_typesize(type), nelems * array_typesize(type)) / array_typesize(type);
 }
 
-static inline size_t array_write(array_t * array, char type, off_t index, void * elems, size_t nelems)
+static inline size_t array_write(array_t * array, char type, off_t index, const void * elems, size_t nelems)
 {
 	// Sanity check
 	{
@@ -112,7 +92,7 @@ static inline bool array_readindex(const array_t * array, char type, off_t index
 	return array_read(array, type, index, elem, 1) == array_typesize(type);
 }
 
-static inline bool array_writeindex(array_t * array, char type, off_t index, void * elem)
+static inline bool array_writeindex(array_t * array, char type, off_t index, const void * elem)
 {
 	// Sanity check
 	{

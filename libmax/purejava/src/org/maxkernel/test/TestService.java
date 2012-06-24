@@ -1,7 +1,10 @@
 package org.maxkernel.test;
 
 import java.io.ByteArrayInputStream;
+import java.io.ObjectInputStream;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
 
 import javax.imageio.ImageIO;
@@ -30,6 +33,7 @@ public class TestService {
 		//System.out.println("Services: "+services);
 		stream.subscribe(services.get(0));
 		
+		/*
 		JFrame f = new JFrame();
 		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		f.setSize(320, 240);
@@ -37,12 +41,14 @@ public class TestService {
 		JLabel label = new JLabel();
 		f.getContentPane().add(label);
 		f.setVisible(true);
+		*/
 		
-		//System.out.println("Start");
+		System.out.println("Start");
 		client.start(stream);
 		while (true) {
 			ServicePacket p = client.dequeue();
-			label.setIcon(new ImageIcon(ImageIO.read(new ByteArrayInputStream(p.data()))));
+			System.out.print("\r" + ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN).getDouble());
+			//label.setIcon(new ImageIcon(ImageIO.read(new ByteArrayInputStream(p.data()))));
 		}
 		
 	}

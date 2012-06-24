@@ -1,7 +1,7 @@
 #include <aul/exception.h>
 
 #include <service.h>
-
+#include <buffer.h>
 #include <kernel.h>
 
 
