@@ -283,7 +283,9 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 			}
 
 			memcpy(&page->data[offset], data, length);
-			*size = ensuresize;
+			*size = max(*size, ensuresize);
+
+			return length;
 		}
 	}
 

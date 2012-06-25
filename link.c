@@ -28,13 +28,13 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 	{
 		if unlikely(exception_check(err))
 		{
-			return false;
+			return NULL;
 		}
 
 		if unlikely(link == NULL || outlinks == NULL || inlinks == NULL)
 		{
 			exception_set(err, EINVAL, "Invalid arguments!");
-			return false;
+			return NULL;
 		}
 	}
 
@@ -44,108 +44,128 @@ iobacking_t * link_connect(const model_link_t * link, char outsig, linklist_t * 
 	if (outsym == NULL || insym == NULL)
 	{
 		exception_set(err, EINVAL, "Malformed link (null terminal)");
-		return false;
+		return NULL;
+	}
+
+	// Make sure that no one else has linked to same input
+	{
+		list_t * pos = NULL;
+		list_foreach(pos, &inlinks->inputs)
+		{
+			link_t * testlink = list_entry(pos, link_t, link_list);
+			const model_linksymbol_t * testsym = testlink->symbol;
+
+			if (strcmp(insym->name, testsym->name) == 0)
+			{
+				// Insym and testsym have same names, make sure that they point to different memory
+				if (!insym->attrs.indexed && !testsym->attrs.indexed)
+				{
+					exception_set(err, EINVAL, "Input %s already linked!", insym->name);
+					return NULL;
+				}
+				else if (insym->attrs.indexed && testsym->attrs.indexed && insym->index == testsym->index)
+				{
+					exception_set(err, EINVAL, "Input %s[%zu] already linked!", insym->name, insym->index);
+					return NULL;
+				}
+				else if (!insym->attrs.indexed && testsym->attrs.indexed)
+				{
+					exception_set(err, EINVAL, "Mixing array and array index links not supported. (Although it can be, so be vocal about it if you want it)");
+					return NULL;
+				}
+			}
+		}
 	}
 
 	// Determine the intermediary data type
 	char sig = '\0';
-	switch (outsig)
+
+	bool match(char intype, bool inindexed, char outtype, bool outindexed, char sigtype)
 	{
-		case T_BOOLEAN:
+		if (sig == '\0' &&
+			insig == intype && insym->attrs.indexed == inindexed &&
+			outsig == outtype && outsym->attrs.indexed == outindexed
+		)
 		{
-			switch (insig)
-			{
-				case T_BOOLEAN:			sig = T_BOOLEAN;		break;
-				case T_ARRAY_BOOLEAN:	sig = T_BOOLEAN;		break;
-				default:										break;
-			}
+			sig = sigtype;
+			return true;
 		}
 
-		case T_INTEGER:
-		{
-			switch (insig)
-			{
-				case T_INTEGER:			sig = T_INTEGER;		break;
-				case T_DOUBLE:			sig = T_DOUBLE;			break;
-				case T_ARRAY_INTEGER:	sig = T_INTEGER;		break;
-				case T_ARRAY_DOUBLE:	sig = T_DOUBLE;			break;
-				default:										break;
-			}
-		}
-
-		case T_DOUBLE:
-		{
-			switch (insig)
-			{
-				case T_DOUBLE:			sig = T_DOUBLE;			break;
-				case T_INTEGER:			sig = T_INTEGER;		break;
-				case T_ARRAY_DOUBLE:	sig = T_DOUBLE;			break;
-				default:										break;
-			}
-		}
-
-		case T_CHAR:
-		{
-			switch (insig)
-			{
-				case T_CHAR:			sig = T_CHAR;			break;
-				default:										break;
-			}
-		}
-
-		case T_STRING:
-		{
-			switch (insig)
-			{
-				case T_STRING:			sig = T_STRING;			break;
-				default:										break;
-			}
-		}
-
-		case T_ARRAY_BOOLEAN:
-		{
-			switch (insig)
-			{
-				case T_ARRAY_BOOLEAN:	sig = T_ARRAY_BOOLEAN;	break;
-				case T_BOOLEAN:			sig = T_BOOLEAN;		break;
-				default:										break;
-			}
-			break;
-		}
-
-		case T_ARRAY_INTEGER:
-		{
-			switch (insig)
-			{
-				case T_ARRAY_INTEGER:	sig = T_ARRAY_INTEGER;	break;
-				case T_INTEGER:			sig = T_INTEGER;		break;
-				default:										break;
-			}
-			break;
-		}
-
-		case T_ARRAY_DOUBLE:
-		{
-			switch (insig)
-			{
-				case T_ARRAY_DOUBLE:	sig = T_ARRAY_DOUBLE;	break;
-				case T_DOUBLE:			sig = T_DOUBLE;			break;
-				default:										break;
-			}
-			break;
-		}
-
-		case T_BUFFER:
-		{
-			switch (insig)
-			{
-				case T_BUFFER:			sig = T_BUFFER;			break;
-				default:										break;
-			}
-		}
-
-		default: break;
+		return false;
 	}
+
+	bool matchi(char intype, bool inindexed, char outtype, bool outindexed, char sigtype, const char * info)
+	{
+		if (match(intype, inindexed, outtype, outindexed, sigtype))
+		{
+			LOGK(LOG_INFO, "Linking %s(%c) -> %s(%c): %s", outsym->name, outsig, insym->name, insig, info);
+			return true;
+		}
+
+		return false;
+	}
+
+	// Match boolean -> ?
+	match(	T_BOOLEAN,			false,		T_BOOLEAN,			false,		T_BOOLEAN);
+	match(	T_BOOLEAN,			false,		T_INTEGER,			false,		T_INTEGER);
+	matchi(	T_BOOLEAN,			false,		T_DOUBLE,			false,		T_DOUBLE,		"Unusual link type");
+	match(	T_BOOLEAN,			false,		T_ARRAY_BOOLEAN,	true,		T_BOOLEAN);
+	match(	T_BOOLEAN,			false,		T_ARRAY_INTEGER,	true,		T_INTEGER);
+	matchi(	T_BOOLEAN,			false,		T_ARRAY_DOUBLE,		true,		T_DOUBLE,		"Unusual link type");
+
+	// Match integer -> ?
+	matchi(	T_INTEGER,			false,		T_BOOLEAN,			false,		T_BOOLEAN,		"Unusual link type");
+	match(	T_INTEGER,			false,		T_INTEGER,			false,		T_INTEGER);
+	match(	T_INTEGER,			false,		T_DOUBLE,			false,		T_DOUBLE);
+	match(	T_INTEGER,			false,		T_ARRAY_INTEGER,	true,		T_INTEGER);
+	match(	T_INTEGER,			false,		T_ARRAY_DOUBLE,		true,		T_DOUBLE);
+	matchi(	T_INTEGER,			false,		T_ARRAY_BOOLEAN,	true,		T_BOOLEAN,		"Unusual link type");
+
+	// Match double -> ?
+	matchi(	T_DOUBLE,			false,		T_BOOLEAN,			false,		T_BOOLEAN,		"Unusual link type");
+	match(	T_DOUBLE,			false,		T_DOUBLE,			false,		T_DOUBLE);
+	matchi(	T_DOUBLE,			false,		T_INTEGER,			false,		T_INTEGER,		"Possible loss of precision");
+	matchi(	T_DOUBLE,			false,		T_ARRAY_BOOLEAN,	true,		T_BOOLEAN,		"Unusual link type");
+	matchi(	T_DOUBLE,			false,		T_ARRAY_INTEGER,	true,		T_INTEGER,		"Possible loss of precision");
+	match(	T_DOUBLE,			false,		T_ARRAY_DOUBLE,		true,		T_DOUBLE);
+
+	// Match char -> ?
+	matchi(	T_CHAR,				false,		T_INTEGER,			false,		T_INTEGER,		"Unusual link type");
+	match(	T_CHAR,				false,		T_CHAR,				false,		T_CHAR);
+	match(	T_CHAR,				false,		T_STRING,			true,		T_CHAR);
+
+	// Match string -> ?
+	matchi(	T_STRING,			true,		T_INTEGER,			false,		T_INTEGER,		"Unusual link type");
+	matchi( T_STRING,			true,		T_CHAR,				false,		T_CHAR,			"Unusual link type");
+	match(	T_STRING,			false,		T_STRING,			false,		T_STRING);
+
+	// Match boolean array -> ?
+	match(	T_ARRAY_BOOLEAN,	true,		T_BOOLEAN,			false,		T_BOOLEAN);
+	match(	T_ARRAY_BOOLEAN,	true,		T_INTEGER,			false,		T_BOOLEAN);
+	matchi(	T_ARRAY_BOOLEAN,	true,		T_DOUBLE,			false,		T_BOOLEAN,		"Unusual link type");
+	match(	T_ARRAY_BOOLEAN,	false,		T_ARRAY_BOOLEAN,	false,		T_ARRAY_BOOLEAN);
+	match(	T_ARRAY_BOOLEAN,	true,		T_ARRAY_BOOLEAN,	true,		T_BOOLEAN);
+	match(	T_ARRAY_BOOLEAN,	true,		T_ARRAY_INTEGER,	true,		T_BOOLEAN);
+	matchi(	T_ARRAY_BOOLEAN,	true,		T_ARRAY_DOUBLE,		true,		T_BOOLEAN,		"Unusual link type");
+
+	// Match integer array -> ?
+	matchi(	T_ARRAY_INTEGER,	true,		T_BOOLEAN,			false,		T_INTEGER,		"Unusual link type and possible loss of precision");
+	match(	T_ARRAY_INTEGER,	true,		T_INTEGER,			false,		T_INTEGER);
+	match(	T_ARRAY_INTEGER,	true,		T_DOUBLE,			false,		T_INTEGER);
+	match(	T_ARRAY_INTEGER,	false,		T_ARRAY_INTEGER,	false,		T_ARRAY_INTEGER);
+	match(	T_ARRAY_INTEGER,	true,		T_ARRAY_INTEGER,	true,		T_INTEGER);
+
+	// Match double array -> ?
+	matchi(	T_ARRAY_DOUBLE,		true,		T_BOOLEAN,			false,		T_DOUBLE,		"Unusual link type and possible loss of precision");
+	matchi(	T_ARRAY_DOUBLE,		true,		T_INTEGER,			false,		T_DOUBLE,		"Possible loss of precision");
+	match(	T_ARRAY_DOUBLE,		true,		T_DOUBLE,			false,		T_DOUBLE);
+	match(	T_ARRAY_DOUBLE,		false,		T_ARRAY_DOUBLE,		false,		T_ARRAY_DOUBLE);
+	match(	T_ARRAY_DOUBLE,		true,		T_ARRAY_DOUBLE,		true,		T_DOUBLE);
+
+	// Match buffer -> ?
+	match(	T_BUFFER,			false,		T_BUFFER,			false,		T_BUFFER);
+
+
 	if (sig == '\0')
 	{
 		exception_set(err, EINVAL, "Could not find a proper link solution for %c -> %c", outsig, insig);
@@ -443,123 +463,53 @@ static void copy_d2D(const void * linkdata, const void * from, bool from_isnull,
 }
 
 
-link_f link_getfunction(const model_linksymbol_t * model_link, char from_sig, char to_sig, void ** linkdata)
+link_f link_getfunction(const model_linksymbol_t * linksym, char fromsig, char tosig, void ** linkdata)
 {
 	// Sanity check
 	{
-		if (model_link == NULL || linkdata == NULL)
+		if (linksym == NULL || linkdata == NULL)
 		{
 			return NULL;
 		}
 	}
 
+	#define func_match(fromtype, totype, data, func) \
+		({ if (fromsig == fromtype && tosig == totype) { data; return func; } })
 
-	void makedata_null()
-	{
-		*linkdata = NULL;
-	}
-
-	void makedata_int(int v)
-	{
-		*linkdata = malloc(sizeof(int));
-		**(int **)linkdata = v;
-	}
+	#define data_null()		({ *linkdata = NULL; })
+	#define data_index()	({ if (!linksym->attrs.indexed) { return NULL; } *linkdata = malloc(sizeof(size_t)); **(size_t **)linkdata = linksym->index; })
 
 
-	switch (from_sig)
-	{
-		case T_BOOLEAN:
-		{
-			switch (to_sig)
-			{
-				case T_BOOLEAN:		makedata_null();		return copy_b2b;
-				default:			return NULL;
-			}
-		}
+	// Match boolean -> ?
+	func_match(	T_BOOLEAN,			T_BOOLEAN,			data_null(),	copy_b2b	);
 
-		case T_INTEGER:
-		{
-			switch (to_sig)
-			{
-				case T_INTEGER:		makedata_null();		return copy_i2i;
-				case T_DOUBLE:		makedata_null();		return copy_i2d;
-				default:									return NULL;
-			}
-		}
+	// Match integer -> ?
+	func_match(	T_INTEGER,			T_INTEGER,			data_null(),	copy_i2i	);
+	func_match(	T_INTEGER,			T_DOUBLE,			data_null(),	copy_i2d	);
 
-		case T_DOUBLE:
-		{
-			switch (to_sig)
-			{
-				case T_DOUBLE:		makedata_null();		return copy_d2d;
-				case T_ARRAY_DOUBLE:
-				{
-					if (!model_link->attrs.indexed)
-					{
-						return NULL;
-					}
+	// Match double -> ?
+	func_match(	T_DOUBLE,			T_DOUBLE,			data_null(),	copy_d2d	);
+	func_match(	T_DOUBLE,			T_ARRAY_DOUBLE,		data_index(),	copy_d2D	);
 
-					makedata_int(model_link->index);
-					return copy_d2D;
-				}
-				default:									return NULL;
-			}
-		}
+	// Match char -> ?
+	func_match(	T_CHAR,				T_CHAR,				data_null(),	copy_c2c	);
 
-		case T_CHAR:
-		{
-			switch (to_sig)
-			{
-				case T_CHAR:		makedata_null();		return copy_c2c;
-				default:									return NULL;
-			}
-		}
+	// Match string -> ?
+	func_match(	T_STRING,			T_STRING,			data_null(),	copy_s2s	);
 
-		case T_STRING:
-		{
-			switch (to_sig)
-			{
-				case T_STRING:		makedata_null();		return copy_s2s;
-				default:									return NULL;
-			}
-		}
+	// Match boolean array -> ?
+	func_match(	T_ARRAY_BOOLEAN,	T_ARRAY_BOOLEAN,	data_null(),	copy_x2x	);
 
-		case T_ARRAY_BOOLEAN:
-		{
-			switch (to_sig)
-			{
-				default:									return NULL;
-			}
-		}
+	// Match integer array -> ?
+	func_match(	T_ARRAY_INTEGER,	T_ARRAY_INTEGER,	data_null(),	copy_x2x	);
 
-		case T_ARRAY_INTEGER:
-		{
-			switch (to_sig)
-			{
-				default:									return NULL;
-			}
-		}
+	// Match double array -> ?
+	func_match(	T_ARRAY_DOUBLE,		T_ARRAY_DOUBLE,		data_null(),	copy_x2x	);
 
-		case T_ARRAY_DOUBLE:
-		{
-			switch (to_sig)
-			{
-				default:									return NULL;
-			}
-		}
+	// Match buffer -> ?
+	func_match(	T_BUFFER,			T_BUFFER,			data_null(),	copy_x2x	);
 
-		case T_BUFFER:
-		{
-			switch (to_sig)
-			{
-				case T_BUFFER:		makedata_null();		return copy_x2x;
-				default:									return NULL;
-			}
-		}
 
-		default:
-		{
-			return NULL;
-		}
-	}
+	// No matches? Return NULL
+	return NULL;
 }

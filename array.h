@@ -89,7 +89,7 @@ static inline bool array_readindex(const array_t * array, char type, off_t index
 		}
 	}
 
-	return array_read(array, type, index, elem, 1) == array_typesize(type);
+	return array_read(array, type, index, elem, 1) == 1;
 }
 
 static inline bool array_writeindex(array_t * array, char type, off_t index, const void * elem)
@@ -102,7 +102,7 @@ static inline bool array_writeindex(array_t * array, char type, off_t index, con
 		}
 	}
 
-	return array_write(array, type, index, elem, 1) == array_typesize(type);
+	return array_write(array, type, index, elem, 1) == 1;
 }
 
 #ifdef __cplusplus

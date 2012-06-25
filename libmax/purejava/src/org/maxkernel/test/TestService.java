@@ -47,7 +47,9 @@ public class TestService {
 		client.start(stream);
 		while (true) {
 			ServicePacket p = client.dequeue();
-			System.out.print("\r" + ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN).getDouble());
+			
+			ByteBuffer b = ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN);
+			System.out.println(b.getDouble() + "\t" + b.getDouble()+ "\t" + b.getDouble());
 			//label.setIcon(new ImageIcon(ImageIO.read(new ByteArrayInputStream(p.data()))));
 		}
 		

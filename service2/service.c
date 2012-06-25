@@ -70,7 +70,7 @@ static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * user
 					{
 						if (!client->checker(client))
 						{
-							LOG(LOG_INFO, "Destroy because of checker");
+							LOG(LOG_DEBUG, "Service client destroyed because of failed check");
 							client_destroy(client);
 						}
 					}
