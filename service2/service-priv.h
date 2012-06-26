@@ -20,7 +20,11 @@ typedef struct
 	buffer_t * buffer;
 } packet_t;
 
+
 // Private subsystems
+void stream_preact();
+
+bool stream_init(exception_t ** err);
 bool tcp_init(exception_t ** err);
 bool udp_init(exception_t ** err);
 

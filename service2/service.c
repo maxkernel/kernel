@@ -19,18 +19,16 @@
 typedef struct
 {
 	const char * name;
+	void (*preact)();
 	bool (*init)(exception_t ** err);
 } subsystem_t;
 
 static subsystem_t subsystems[] = {
-	{"TCP", tcp_init},
-//	{"UDP", udp_init},
-	{NULL, NULL}		// Sentinel
+	{"Stream", stream_preact, stream_init},
+	{"TCP", NULL, tcp_init},
+	{"UDP", NULL, udp_init},
+	{NULL, NULL, NULL}		// Sentinel
 };
-
-
-mainloop_t * serviceloop = NULL;
-int serviceeventfd = -1;
 
 static list_t services;
 static mutex_t services_lock;
@@ -38,6 +36,10 @@ static mutex_t services_lock;
 static stack_t packets;
 static stack_t packets_free;
 static mutex_t packets_lock;
+static cond_t packets_barrier;
+
+static volatile bool stop = false;
+static int dispatch_threads = 1;
 
 static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
@@ -57,21 +59,12 @@ static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * user
 
 					// Run the heartbeat function
 					{
-						LOG(LOG_INFO, "SEND CHECK");
+						LOG(LOG_INFO, "SEND HEARTBEAT");
 
 						clientheartbeat_f heartbeater = client->heartbeater;
 						if (heartbeater != NULL)
 						{
 							heartbeater(client);
-						}
-					}
-
-					// Run the check function
-					{
-						if (!client->checker(client))
-						{
-							LOG(LOG_DEBUG, "Service client destroyed because of failed check");
-							client_destroy(client);
 						}
 					}
 				}
@@ -84,51 +77,56 @@ static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * user
 	return true;
 }
 
-static bool service_dispatch(mainloop_t * loop, eventfd_t counter, void * userdata)
+static bool service_rundispatch(void * userdata)
 {
-	list_t * entry = NULL;
-
-	do
+	while (!stop)
 	{
-		// Pop a packet from the list
+		list_t * packet_entry = NULL;
+
 		mutex_lock(&packets_lock);
 		{
-			entry = stack_pop(&packets);
+			cond_wait(&packets_barrier, &packets_lock, 0);
+			packet_entry = stack_pop(&packets);
 		}
 		mutex_unlock(&packets_lock);
 
-		if (entry != NULL)
+		while (!stop && packet_entry != NULL)
 		{
-			packet_t * packet = list_entry(entry, packet_t, packet_list);
+			packet_t * packet = list_entry(packet_entry, packet_t, packet_list);
 			service_t * service = packet->service;
 
-			// TODO - remove this debug print
-			//LOG(LOG_INFO, "Send packet length %zu", buffer_size(packet->buffer));
-
-			// Send the packet to all client handlers for transmission
-			mutex_lock(&service->lock);
+			list_t * pos = NULL, * n = NULL;
+			list_foreach_safe(pos, n, &service->clients)
 			{
-				list_t * pos = NULL, * n = NULL;
-				list_foreach_safe(pos, n, &service->clients)
-				{
-					client_t * client = list_entry(pos, client_t, service_list);
-					client_send(client, packet->timestamp, packet->buffer);
-				}
+				client_t * client = list_entry(pos, client_t, service_list);
+				client_send(client, packet->timestamp, packet->buffer);
 			}
-			mutex_unlock(&service->lock);
 
-			// Free the buffer
+			// Free the buffer in the packet
 			buffer_free(packet->buffer);
 
-			// Add the packet back to the free list
+			// Add the packet back to the free list, attempt to grab another packet
 			mutex_lock(&packets_lock);
 			{
 				stack_push(&packets_free, &packet->packet_list);
+				packet_entry = stack_pop(&packets);
 			}
 			mutex_unlock(&packets_lock);
 		}
+	}
 
-	} while (entry != NULL);
+	return false;
+}
+
+static bool service_stopdispatch(void * userdata)
+{
+	stop = true;
+
+	mutex_lock(&packets_lock);
+	{
+		cond_broadcast(&packets_barrier);
+	}
+	mutex_unlock(&packets_lock);
 
 	return true;
 }
@@ -194,18 +192,13 @@ void service_send(service_t * service, int64_t microtimestamp, const buffer_t * 
 	packet->timestamp = microtimestamp;
 	packet->buffer = buffer_dup(buffer);
 
-	// Add the packet to the consumer-list
+	// Add the packet to the consumer-list and notify the dispatch threads
 	mutex_lock(&packets_lock);
 	{
 		stack_enqueue(&packets, &packet->packet_list);
+		cond_signal(&packets_barrier);
 	}
 	mutex_unlock(&packets_lock);
-
-	// Notify the consumer eventfd
-	if (eventfd_write(serviceeventfd, 1) < 0)
-	{
-		LOG(LOG_WARN, "Could not notify service sender eventfd of new data");
-	}
 }
 
 bool service_subscribe(service_t * service, client_t * client, exception_t ** err)
@@ -391,35 +384,6 @@ void service_listxml(buffer_t * buffer)
 	append("</servicelist>");
 }
 
-static bool service_runloop(void * userdata)
-{
-	mainloop_t * serviceloop = userdata;
-
-	exception_t * e = NULL;
-	if (!mainloop_run(serviceloop, &e))
-	{
-		LOG(LOG_ERR, "Could not run service mainloop: %s", exception_message(e));
-		exception_free(e);
-	}
-
-	return false;
-}
-
-static bool service_stoploop(void * userdata)
-{
-	mainloop_t * serviceloop = userdata;
-
-	exception_t * e = NULL;
-	if (!mainloop_stop(serviceloop, &e))
-	{
-		LOG(LOG_ERR, "Could not stop service mainloop: %s", exception_message(e));
-		exception_free(e);
-		return false;
-	}
-
-	return true;
-}
-
 static void service_preactivate()
 {
 	list_init(&services);
@@ -428,6 +392,7 @@ static void service_preactivate()
 	stack_init(&packets);
 	stack_init(&packets_free);
 	mutex_init(&packets_lock, M_RECURSIVE);
+	cond_init(&packets_barrier);
 
 	for (size_t i = 0; i < SERVICE_NUM_PACKETS; i++)
 	{
@@ -435,43 +400,53 @@ static void service_preactivate()
 		memset(packet, 0, sizeof(packet_t));
 		stack_push(&packets_free, &packet->packet_list);
 	}
+
+	// Preact the subsystems
+	{
+		const subsystem_t * subsystem = NULL;
+		subsystem_foreach(subsystem, subsystems)
+		{
+			if (subsystem->preact != NULL)
+			{
+				subsystem->preact();
+			}
+		}
+	}
 }
 
 static bool service_init()
 {
 	LOG(LOG_DEBUG, "Initializing service subsystem");
 
-	// Initialize the mainloop
+	// Initialize the service monitor timer
 	{
 		exception_t * e = NULL;
-		serviceloop = mainloop_new("Service network loop", &e);
-		if (serviceloop == NULL || exception_check(&e))
-		{
-			LOG(LOG_ERR, "Could not create service mainloop: %s", exception_message(e));
-			exception_free(e);
-			serviceloop = NULL;
-			return false;
-		}
-
-		if (mainloop_addnewfdtimer(serviceloop, "Service monitor", SERVICE_MONITOR_TIMEOUT, service_monitor, NULL, &e) < 0)
+		if (mainloop_addnewfdtimer(NULL, "Service monitor", SERVICE_MONITOR_TIMEOUT, service_monitor, NULL, &e) < 0)
 		{
 			LOG(LOG_ERR, "Could not create service monitor timer: %s", exception_message(e));
 			exception_free(e);
 			return false;
 		}
+	}
 
-		if ((serviceeventfd = mainloop_addnewfdevent(serviceloop, "Service dispatch", 0, service_dispatch, NULL, &e)) < 0)
+	// Initialize the dispatch threads
+	{
+		if (dispatch_threads <= 0)
 		{
-			LOG(LOG_ERR, "Could not create service dispatch event: %s", exception_message(e));
-			exception_free(e);
+			LOG(LOG_ERR, "Invalid number of service dispatch threads: %d!", dispatch_threads);
 			return false;
 		}
 
-		if (!kthread_newthread("Service handler", KTH_PRIO_LOW, service_runloop, service_stoploop, serviceloop, &e))
+		for (size_t i = 0; i < dispatch_threads; i++)
 		{
-			LOG(LOG_ERR, "Could not start service server thread!");
-			exception_free(e);
-			return false;
+			exception_t * e = NULL;
+			string_t name = string_new("Service stream dispatch %zu", i+1);
+			if (!kthread_newthread(name.string, KTH_PRIO_LOW, service_rundispatch, service_stopdispatch, NULL, &e))
+			{
+				LOG(LOG_ERR, "Could not start service dispatch server thread %zu!", (i+1));
+				exception_free(e);
+				return false;
+			}
 		}
 	}
 
@@ -481,7 +456,7 @@ static bool service_init()
 		subsystem_foreach(subsystem, subsystems)
 		{
 			exception_t * e = NULL;
-			if (!subsystem->init(&e))
+			if (subsystem->init != NULL && !subsystem->init(&e))
 			{
 				LOG(LOG_ERR, "Could not initialize service %s subsystem: %s", subsystem->name, exception_message(e));
 				exception_free(e);
@@ -499,3 +474,5 @@ module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides a publish/subscribe read-only API to help modules stream sensors/status/other stuff to external clients");
 module_onpreactivate(service_preactivate);
 module_oninitialize(service_init);
+
+module_config(dispatch_threads, T_INTEGER, "Number of service packet dispatch threads. Usually just one is needed, but on a system with many services, increase for better throughput.");

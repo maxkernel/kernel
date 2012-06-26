@@ -147,10 +147,8 @@ static inline void list_move_tail(list_t *list, list_t *head)
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
-#define list_foreach_entry(pos, head, member)				\
-	for (pos = list_entry((head)->next, typeof(*pos), member);	\
-	     &pos->member != (head); 					\
-	     pos = list_entry(pos->member.next, typeof(*pos), member))
+#define list_foreach_entry(pos, head, member) \
+	for (pos = list_entry((head)->next, typeof(*pos), member); &pos->member != (head); pos = list_entry(pos->member.next, typeof(*pos), member))
 
 /**
  * list_foreach_entry_safe - iterate over list of given type safe against removal of list entry
@@ -159,13 +157,9 @@ static inline void list_move_tail(list_t *list, list_t *head)
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
-#define list_foreach_entry_safe(pos, n, head, member)			\
-	for (pos = list_entry((head)->next, typeof(*pos), member),	\
-		n = list_entry(pos->member.next, typeof(*pos), member);	\
-	     &pos->member != (head); 					\
-	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
+#define list_foreach_entry_safe(pos, n, head, member) \
+	for (pos = list_entry((head)->next, typeof(*pos), member), n = pos->member.next; &pos->member != (head); pos = list_entry(n, typeof(*pos), member), n = n->next)
 #endif
-
 
 /**
  * list_isempty - tests whether a list is empty

@@ -37,6 +37,7 @@ client_t * client_new(stream_t * stream, exception_t ** err)
 				client_lastheartbeat(client) = 0;
 				client_inuse(client) = true;
 				client_locked(client) = false;
+				client_lastheartbeat(client) = kernel_elapsed();
 
 				break;
 			}

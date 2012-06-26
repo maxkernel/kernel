@@ -18,6 +18,9 @@ extern "C" {
 
 
 #define SERVICE_MONITOR_TIMEOUT			(1 * NANOS_PER_SECOND)		// 1 second
+#define STREAM_MONITOR_TIMEOUT			(1 * NANOS_PER_SECOND)		// 1 second
+
+//#define STREAM_DISPATCH_THREADS			(1)
 
 /*
 // Common formats
@@ -75,6 +78,7 @@ struct __service_t
 struct __stream_t
 {
 	kobject_t kobject;
+	list_t stream_list;
 
 	mainloop_t * loop;
 	mutex_t lock;
@@ -91,6 +95,7 @@ struct __client_t
 	list_t stream_list;
 
 	service_t * service;
+	stream_t * stream;
 	mutex_t * lock;
 
 	clientsend_f sender;
@@ -126,6 +131,7 @@ client_t * client_new(stream_t * stream, exception_t ** err);
 void client_destroy(client_t * client);
 static inline bool client_send(client_t * client, int64_t microtimestamp, const buffer_t * buffer) { return client->sender(client, microtimestamp, buffer); }
 #define client_service(c)		((c)->service)
+#define client_stream(c)		((c)->stream)
 #define client_lock(c)			((c)->lock)
 #define client_inuse(c)			((c)->inuse)
 #define client_locked(c)		((c)->locked)

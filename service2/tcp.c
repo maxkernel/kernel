@@ -15,7 +15,7 @@ int tcp_port = DEFAULT_TCP_PORT;
 double tcp_timeout = DEFAULT_NET_TIMEOUT;
 
 module_config(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
-module_config(tcp_port, 'd', "TCP timeout (in seconds) with no heartbeat before client is disconnect");
+module_config(tcp_timeout, 'd', "TCP timeout (in seconds) with no heartbeat before client is disconnect");
 
 typedef struct
 {
@@ -25,7 +25,7 @@ typedef struct
 typedef struct
 {
 	int fd;
-	string_t ip;
+	uint32_t ip;
 
 	uint8_t buffer[SC_BUFFERSIZE];
 	size_t size;
@@ -88,16 +88,14 @@ static void tcp_clientheartbeat(client_t * client)
 	tcpclient_t * tcpclient = client_data(client);
 
 	// Write the one-byte heartbeat code
-	{
-		static const uint8_t data = SC_HEARTBEAT;
-		write(tcpclient->fd, &data, sizeof(uint8_t));
-	}
+	static const uint8_t data = SC_HEARTBEAT;
+	write(tcpclient->fd, &data, sizeof(uint8_t));
 }
 
 static bool tcp_clientcheck(client_t * client)
 {
 	// Return false if client hasn't heartbeat'd since more than DEFAULT_NET_TIMEOUT ago
-	return (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
+	return !client_locked(client) || (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
 }
 
 static void tcp_clientdestroy(client_t * client)
@@ -117,7 +115,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 		if (bytesread <= 0)
 		{
 			// Normal disconnect
-			LOG(LOG_DEBUG, "Abnormal tcp service client disconnect %s", tcpclient->ip.string);
+			LOG(LOG_DEBUG, "Abnormal tcp service client disconnect %s", addr2string(tcpclient->ip).string);
 			client_destroy(client);
 			return false;
 		}
@@ -131,12 +129,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 		do
 		{
-			mutex_lock(client_lock(client));
-			{
-				size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
-			}
-			mutex_unlock(client_lock(client));
-
+			size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
 			if (size < 0)
 			{
 				// -1 means free the client
@@ -195,7 +188,7 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 		client = client_new(stream, &e);
 		if (client == NULL || exception_check(&e))
 		{
-			LOG(LOG_WARN, "Service client register error: %s", exception_message(e));
+			LOG(LOG_WARN, "Service tcp client register error: %s", exception_message(e));
 			exception_free(e);
 
 			close(sock);
@@ -207,9 +200,9 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 	tcpclient_t * tcpclient = client_data(client);
 	memset(tcpclient, 0, sizeof(tcpclient_t));
 	tcpclient->fd = sock;
-	tcpclient->ip = addr2string(addr.sin_addr.s_addr);
+	tcpclient->ip = addr.sin_addr.s_addr;
 
-	LOG(LOG_DEBUG, "New tcp service client from %s", tcpclient->ip.string);
+	LOG(LOG_DEBUG, "New tcp service client from %s", addr2string(tcpclient->ip).string);
 
 	// Add it to the mainloop
 	{
