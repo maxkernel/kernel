@@ -21,7 +21,7 @@ static void tcp_free(stream_t * data)
 {
 	tcpstream_t * tcp = (tcpstream_t *)data;
 
-	mainloop_removefdwatch(serviceloop, tcp->sockfd, FD_READ, NULL);
+	mainloop_removefdwatch(serviceloop, tcp->sockfd, NULL);
 	close(tcp->sockfd);
 }
 

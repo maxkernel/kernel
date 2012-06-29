@@ -35,87 +35,85 @@
 #define QUEUE_SIZE					(PACKET_SIZE * 5)
 #define MAXPOD_HEARTBEAT			(NANOS_PER_SECOND / 2)
 
-static int pod_fd = -1;
-static queue_t queue;
-static char data[QUEUE_SIZE];
-char * serial_port				= "/dev/ttyS0";
 
-static inline void maxpod_write(uint8_t cmd, uint8_t param1, uint8_t param2)
+typedef struct
 {
-	if (pod_fd == -1)
-	{
-		LOG1(LOG_WARN, "Attempting to access MaxPOD when not connected!");
-		return;
-	}
+	fdwatcher_t watcher;
+	timerfdwatcher_t timer;
+	bool hasresponded;
+	queue_t queue;
+	char data[QUEUE_SIZE];
+} maxpod_t;
 
+
+static inline void maxpod_write(const maxpod_t * maxpod, uint8_t cmd, uint8_t param1, uint8_t param2)
+{
 	char data[6] = {STX, param1, param2, cmd, (param1+param2+cmd)%256, ETX};
-	write(pod_fd, data, sizeof(data));
+	write(watcher_fd(maxpod->watcher), data, sizeof(data));
 }
 
-static inline void maxpod_write_padding()
+static inline void maxpod_write_padding(const maxpod_t * maxpod)
 {
-	if (pod_fd == -1)
-		return;
-
 	char data[6];
 	memset(data, DLE, sizeof(data));
-	write(pod_fd, data, sizeof(data));
+	write(watcher_fd(maxpod->watcher), data, sizeof(data));
 }
 
-static inline void maxpod_write_int16(uint8_t cmd, uint16_t param)
+static inline void maxpod_write_int16(const maxpod_t * maxpod, uint8_t cmd, uint16_t param)
 {
-	maxpod_write(cmd, (param & 0xFF00)>>8, param & 0xFF);
+	maxpod_write(maxpod, cmd, (param & 0xFF00)>>8, param & 0xFF);
 }
 
 static bool maxpod_heartbeat(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
-	if (pod_fd == -1)
-		return false;
-
-	maxpod_write(PCMD_HEARTBEAT, 0, 0);
-
+	const maxpod_t * maxpod = userdata;
+	maxpod_write(maxpod, PCMD_HEARTBEAT, 0, 0);
 	return true;
 }
 
 
 static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
-	static bool pod_initial_response = false;
+	labels(end);
 
-	char d;
-	ssize_t numread;
+	maxpod_t * maxpod = userdata;
 
 	// Read one byte from serial
-	numread = read(fd, &d, sizeof(char));
-	if (numread != sizeof(char))
 	{
-		//end stream!
-		LOG(LOG_WARN, "End of stream reached in MaxPOD serial port %s", serial_port);
-		return false;
-	}
+		char data = 0;
+		ssize_t numread = read(fd, &data, sizeof(char));
+		if (numread != sizeof(char))
+		{
+			//end stream!
+			LOG(LOG_WARN, "End of stream reached in MaxPOD serial port");
+			return false;
+		}
 
-	// Queue it up
-	queue_enqueue(&queue, &d, sizeof(char));
+		// Queue it up
+		queue_enqueue(&maxpod->queue, &data, sizeof(char));
+	}
 
 	// Strip out the framing
 	while (true)
 	{
+		char data = 0;
+
 		if (queue_size(&queue) < PACKET_SIZE)
 		{
 			// We don't have a full packet
-			return true;
+			goto end;
 		}
 
 		//dump all DLE's not in a packet
-		queue_dequeue(&queue, &d, sizeof(char));
+		queue_dequeue(&queue, &data, sizeof(char));
 
-		if (d == STX)
+		if (data == STX)
 		{
 			break;
 		}
-		else if (d != DLE)
+		else if (data != DLE)
 		{
-			LOG(LOG_WARN, "Out of sync byte read from MaxPOD, expected DLE (%d), got %d", DLE, d);
+			LOG(LOG_WARN, "Out of sync byte read from MaxPOD, expected DLE (%d), got %d", DLE, data);
 		}
 	}
 
@@ -125,24 +123,26 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 
 		queue_dequeue(&queue, packet, sizeof(packet));
 
+		// Frame error
 		if (packet[4] != ETX)
 		{
-			if (!pod_initial_response)
-				return true;
-
-			//frame error
-			LOG(LOG_WARN, "Frame error in MaxPOD");
-			maxpod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
+			if (maxpod->hasresponded)
+			{
+				LOG(LOG_WARN, "Frame error in MaxPOD");
+				maxpod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
+			}
+			goto end;
 		}
 
 		if ( (packet[0]+packet[1]+packet[2]) % 256 != packet[3] )
 		{
-			//checksum bad
+			// Bad checksum
 			LOG(LOG_WARN, "Checksum error in MaxPOD");
 			maxpod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
+			goto end;
 		}
 
-		pod_initial_response = true;
+		maxpod->hasresponded = true;
 
 		switch (packet[2])
 		{
@@ -168,15 +168,16 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 				break;
 		}
 	}
+end:
 
 	return true;
 }
 
-void maxpod_update(void * obj)
+static void maxpod_update(void * object)
 {
-	if (pod_fd == -1)
+	maxpod_t * maxpod = object;
+	if (maxpod == NULL)
 	{
-		// File descriptor invalid
 		return;
 	}
 
@@ -189,61 +190,118 @@ void maxpod_update(void * obj)
 	const int * pwm5 = input(pwm5);
 
 	// Now write it to the servos
-	if (pwm0 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 0, *pwm0);
-	if (pwm1 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 1, *pwm1);
-	if (pwm2 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 2, *pwm2);
-	if (pwm3 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 3, *pwm3);
-	if (pwm4 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 4, *pwm4);
-	if (pwm5 != NULL)	maxpod_write_int16(PCMD_PWMBASE + 5, *pwm5);
+	if (pwm0 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 0, *pwm0);
+	if (pwm1 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 1, *pwm1);
+	if (pwm2 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 2, *pwm2);
+	if (pwm3 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 3, *pwm3);
+	if (pwm4 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 4, *pwm4);
+	if (pwm5 != NULL)	maxpod_write_int16(maxpod, PCMD_PWMBASE + 5, *pwm5);
 }
 
 
-bool maxpod_init() {
-	queue_init(&queue, data, sizeof(data));
+static void * maxpod_new(const char * serial_port)
+{
+	labels(after_timer);
 
-	pod_fd = serial_open(serial_port, B115200);
-	if (pod_fd == -1)
+	int fd = serial_open(serial_port, B115200);
+	if (fd == -1)
 	{
 		LOG(LOG_ERR, "Could not open serial port %s", serial_port);
-		return false;
+		return NULL;
 	}
 
-	// Add pod_fd to mainloop
+	maxpod_t * maxpod = malloc(sizeof(maxpod_t));
+	memset(maxpod, 0, sizeof(maxpod_t));
+	maxpod->hasresponded = false;
+	queue_init(&maxpod->queue, maxpod->data, QUEUE_SIZE);
+
+	// Add fd to mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(NULL, pod_fd, FD_READ, maxpod_newdata, NULL, &e))
+		maxpod->watcher = mainloop_newfdwatcher(fd, FD_READ, maxpod_newdata, maxpod);
+		if (!mainloop_addfdwatcher(kernel_mainloop(), &maxpod->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add maxpod fd to mainloop: %s", exception_message(e));
 			exception_free(e);
+
+			free(maxpod);
+			return NULL;
 		}
 	}
 
 	// Create a heartbeat timerfd
 	{
 		exception_t * e = NULL;
-		if (mainloop_addnewfdtimer(NULL, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, NULL, &e) < 0)
+		if (!mainloop_newfdtimer(&maxpod->timer, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, maxpod) || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not create heartbeat timerfd: %s", exception_message(e));
+			exception_free(e);
+
+			goto after_timer;
+		}
+
+		if (!mainloop_addfdtimer(kernel_mainloop(), watcher_cast(&maxpod->timer), &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add maxpod heartbeat timerfd to mainloop: %s", exception_message(e));
+			exception_free(e);
+
+			// Don't free maxpod here, we've already set up the serial watcher
+			// Just let the heartbeat timeout and shut off the motors
+			goto after_timer;
+		}
+	}
+after_timer:
+
+	return maxpod;
+}
+
+static void maxpod_destroy(void * object)
+{
+	// Sanity check
+	{
+		if unlikely(object == NULL)
+		{
+			return;
+		}
+	}
+
+	maxpod_t * maxpod = object;
+
+	// Destroy watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(maxpod->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove maxpod watch: %s", exception_message(e));
 			exception_free(e);
 		}
 	}
 
-	return true;
+	// Destroy timer watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(maxpod->timer, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove maxpod timer: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
+
+	free(maxpod);
 }
 
-// TODO IMPORTANT - remove static block, name it something!!
+
 module_name("MaxPOD PWM Microcontroller");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Driver for MaxPOD (Forth) IO Board.");
-module_oninitialize(maxpod_init);
 
-module_config(serial_port, 's', "The serial port to connect to (eg /dev/ttyS0)");
-
-block_input(	static, 	pwm0, 	'i', 	"Channel 0 PWM");
-block_input(	static, 	pwm1, 	'i', 	"Channel 1 PWM");
-block_input(	static, 	pwm2, 	'i', 	"Channel 2 PWM");
-block_input(	static, 	pwm3, 	'i', 	"Channel 3 PWM");
-block_input(	static, 	pwm4, 	'i', 	"Channel 4 PWM");
-block_input(	static, 	pwm5, 	'i', 	"Channel 5 PWM");
-block_onupdate(	static, 	maxpod_update);
+define_block(	pod,	"Connect to a maxpod IO board", maxpod_new, "s", "(1) The serial port to connect to [eg. /dev/ttyS0]");
+block_onupdate(	pod, 	maxpod_update);
+block_ondestroy(pod,	maxpod_destroy);
+block_input(	pod, 	pwm0, 	'i', 	"Channel 0 PWM");
+block_input(	pod, 	pwm1, 	'i', 	"Channel 1 PWM");
+block_input(	pod, 	pwm2, 	'i', 	"Channel 2 PWM");
+block_input(	pod, 	pwm3, 	'i', 	"Channel 3 PWM");
+block_input(	pod, 	pwm4, 	'i', 	"Channel 4 PWM");
+block_input(	pod, 	pwm5, 	'i', 	"Channel 5 PWM");

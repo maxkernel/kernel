@@ -1,7 +1,9 @@
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <linux/tcp.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 
 #include <aul/string.h>
 #include <aul/net.h>
@@ -19,16 +21,22 @@ module_config(tcp_timeout, 'd', "TCP timeout (in seconds) with no heartbeat befo
 
 typedef struct
 {
-	int fd;
+	fdwatcher_t watcher;
 } tcpstream_t;
 
 typedef struct
 {
-	int fd;
+	fdwatcher_t watcher;
 	uint32_t ip;
 
 	uint8_t buffer[SC_BUFFERSIZE];
 	size_t size;
+
+	mutex_t savedlock;
+	bool savederr;
+	fdwatcher_t savedwatcher;
+	buffer_t * saved;
+	bufferpos_t savedpos;
 } tcpclient_t;
 
 
@@ -44,12 +52,93 @@ static inline string_t addr2string(uint32_t ip)
 static void tcp_streamdestroy(stream_t * stream)
 {
 	tcpstream_t * tcpstream = stream_data(stream);
-	close(tcpstream->fd);
+
+	// Remove the watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&tcpstream->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove tcp stream watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 }
+
+#if 0
+static bool tcp_clientsend_remaining(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
+{
+	tcpclient_t * tcpclient = userdata;
+	size_t remaining = 0;
+	ssize_t wrote = 0;
+
+	LOG(LOG_INFO, "HERE REMAINING %d", tcpclient->savederr);
+	if (tcpclient->savederr)
+	{
+		return false;
+	}
+
+	mutex_lock(&tcpclient->savedlock);
+	{
+		remaining = bufferpos_remaining(&tcpclient->savedpos);
+		wrote = bufferpos_send(&tcpclient->savedpos, fd, remaining);
+
+		LOG(LOG_INFO, "REM %zu %zd: %d", remaining, wrote, (wrote > 0 && wrote < remaining));
+
+		if (wrote < 0)
+		{
+			tcpclient->savederr = true;
+			//close(tcpclient->savedfd);
+			//tcpclient->savedfd = -1;
+
+		}
+		else if (wrote == remaining)
+		{
+			//close(tcpclient->savedfd);
+			buffer_free(tcpclient->saved);
+			//tcpclient->savedfd = -1;
+			tcpclient->saved = NULL;
+
+		}
+	}
+	mutex_unlock(&tcpclient->savedlock);
+
+	return wrote > 0 && wrote < remaining;
+}
+#endif
 
 static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buffer_t * data)
 {
 	tcpclient_t * tcpclient = client_data(client);
+
+	// Check to make sure there isn't a saved buffer still
+	{
+		bool savedfail = false;
+
+		mutex_lock(&tcpclient->savedlock);
+		{
+			if (tcpclient->savederr || /*tcpclient->savedfd != -1 ||*/ tcpclient->saved != NULL)
+			{
+				// Error sending saved buffer or could not send out all buffer data from previous send operation
+				// This is bad, just return false to indicate error (and drop client)
+				/*exception_t * e = NULL;
+				if (!mainloop_removefdwatch(stream_mainloop(client_stream(client)), tcpclient->savedfd, EPOLLET | EPOLLOUT, &e) || exception_check(&e))
+				{
+					LOG(LOG_INFO, "ERRRRJFKFGLSFGJSF: %s", exception_message(e));
+					exception_free(e);
+				}
+				*/
+
+				LOG(LOG_INFO, "SAVED BUFFER ERROR %d %d %d %zu %zu", tcpclient->savederr, tcpclient->savedfd != -1, tcpclient->saved != NULL, buffer_size(tcpclient->saved), bufferpos_remaining(&tcpclient->savedpos));
+				savedfail = true;
+			}
+		}
+		mutex_unlock(&tcpclient->savedlock);
+
+		if (savedfail)
+		{
+			return true;
+		}
+	}
 
 	// Write the header
 	{
@@ -67,6 +156,7 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 		if (wrote != sizeof(header))
 		{
 			// Unable to complete write, return false to indicate error
+			LOG(LOG_INFO, "SEND HEADER ERROR");
 			return false;
 		}
 	}
@@ -74,10 +164,65 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 	// Write the payload
 	{
 		size_t size = buffer_size(data);
-		if (buffer_send(data, tcpclient->fd, 0, size) != size)
+		ssize_t wrote = buffer_send(data, tcpclient->fd, 0, size);
+		if (wrote < 0)
 		{
-			// Could not send all data
+			// Some error happened during send
+			LOG(LOG_INFO, "SEND BODY ERROR");
 			return false;
+		}
+		else if (wrote != size)
+		{
+			// Could not send all data, queue up the buffer and try to send more when available
+			bool success = false;
+
+#if 0
+			LOG(LOG_INFO, "DEFERING");
+
+			mutex_lock(&tcpclient->savedlock);
+			{
+				int sock = dup(tcpclient->fd);
+
+				/*
+				// Set non-blocking on socket
+				{
+					int cntl = fcntl(sock, F_GETFL, 0);
+					if (cntl < 0)
+					{
+						LOG(LOG_WARN, "Could not get status flags on service client tcp socket: %s", strerror(errno));
+
+						close(sock);
+						//return false;
+					}
+
+					if (fcntl(sock, F_SETFL, cntl | O_NONBLOCK) < 0)
+					{
+						LOG(LOG_WARN, "Could not set nonblock status flag on service client tcp socket: %s", strerror(errno));
+
+						close(sock);
+						//return false;
+					}
+				}
+				*/
+
+				tcpclient->savedfd = sock;
+				tcpclient->saved = buffer_dup(data);
+				tcpclient->savedpos = bufferpos_new(tcpclient->saved, wrote);
+
+				// TODO IMPORTANT - remove this exception!
+				exception_t * e = NULL;
+				success = mainloop_addfdwatch(stream_mainloop(client_stream(client)), tcpclient->savedfd, FD_WRITE, tcp_clientsend_remaining, tcpclient, &e);
+				if (!success || exception_check(&e))
+				{
+					LOG(LOG_INFO, "MAINLOOP ADD ERROR: %s", exception_message(e));
+					exception_free(e);
+				}
+			}
+			mutex_unlock(&tcpclient->savedlock);
+#endif
+
+
+			return success;
 		}
 	}
 	return true;
@@ -89,7 +234,7 @@ static void tcp_clientheartbeat(client_t * client)
 
 	// Write the one-byte heartbeat code
 	static const uint8_t data = SC_HEARTBEAT;
-	write(tcpclient->fd, &data, sizeof(uint8_t));
+	write(watcher_fd(&tcpclient->watcher), &data, sizeof(uint8_t));
 }
 
 static bool tcp_clientcheck(client_t * client)
@@ -101,7 +246,32 @@ static bool tcp_clientcheck(client_t * client)
 static void tcp_clientdestroy(client_t * client)
 {
 	tcpclient_t * tcpclient = client_data(client);
-	close(tcpclient->fd);
+
+	// Destroy the saved buffer (if present)
+	if (tcpclient->saved != NULL)
+	{
+		buffer_free(tcpclient->saved);
+
+		// Destroy the dup'd socket watcher
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&tcpclient->savedwatcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove tcp client dup'd watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
+
+	mutex_destroy(&tcpclient->savedlock);
+
+	// Destroy the client tcp watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&tcpclient->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove tcp client watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 }
 
 static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
@@ -111,7 +281,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 	// Update buffer
 	{
-		ssize_t bytesread = recv(fd, &tcpclient->buffer[tcpclient->size], SC_BUFFERSIZE - tcpclient->size, 0);
+		ssize_t bytesread = read(fd, &tcpclient->buffer[tcpclient->size], SC_BUFFERSIZE - tcpclient->size);
 		if (bytesread <= 0)
 		{
 			// Normal disconnect
@@ -129,7 +299,7 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 
 		do
 		{
-			size = clienthelper_control(client, tcpclient->buffer, tcpclient->size);
+			size = client_control(client, tcpclient->buffer, tcpclient->size);
 			if (size < 0)
 			{
 				// -1 means free the client
@@ -170,13 +340,49 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 		return true;
 	}
 
+	// Set socket type-of-service
+	{
+		int tos = IPTOS_THROUGHPUT;
+		if (setsockopt(sock, IPPROTO_TCP, IP_TOS, &tos, sizeof(int)) < 0)
+		{
+			// Do nothing but warn
+			LOG(LOG_WARN, "Could not set type-of-service of service client tcp socket: %s", strerror(errno));
+
+			close(sock);
+			return true;
+		}
+	}
+
 	// Set the TCP_NODELAY flag on the socket
 	{
-		int flag = 1;
-		if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int)) < 0)
+		int yes = 1;
+		if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int)) < 0)
 		{
 			// Do nothing but warn
 			LOG(LOG_WARN, "Could not set tcp_nodelay on service client tcp socket: %s", strerror(errno));
+
+			close(sock);
+			return true;
+		}
+	}
+
+	// Set non-blocking on socket
+	{
+		int cntl = fcntl(sock, F_GETFL, 0);
+		if (cntl < 0)
+		{
+			LOG(LOG_WARN, "Could not get status flags on service client tcp socket: %s", strerror(errno));
+
+			close(sock);
+			return true;
+		}
+
+		if (fcntl(sock, F_SETFL, cntl | O_NONBLOCK) < 0)
+		{
+			LOG(LOG_WARN, "Could not set nonblock status flag on service client tcp socket: %s", strerror(errno));
+
+			close(sock);
+			return true;
 		}
 	}
 
@@ -199,20 +405,24 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 	// Init the tcpstream
 	tcpclient_t * tcpclient = client_data(client);
 	memset(tcpclient, 0, sizeof(tcpclient_t));
-	tcpclient->fd = sock;
+	tcpclient->watcher = mainloop_newfdwatcher(sock, FD_READ, tcp_newdata, client);
 	tcpclient->ip = addr.sin_addr.s_addr;
+	mutex_init(&tcpclient->savedlock, M_NORMAL);
+	tcpclient->savederr = false;
+	watcher_clear(&tcpclient->savedwatcher);
+	tcpclient->saved = NULL;
 
 	LOG(LOG_DEBUG, "New tcp service client from %s", addr2string(tcpclient->ip).string);
 
 	// Add it to the mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(stream_mainloop(stream), sock, FD_READ, tcp_newdata, client, &e))
+		if (!mainloop_addfdwatch(stream_mainloop(stream), &tcpclient->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not add tcp client to mainloop: %s", exception_message(e));
 			exception_free(e);
 
-			close(sock);
+			client_destroy(client);
 			return true;
 		}
 	}
@@ -228,6 +438,12 @@ bool tcp_init(exception_t ** err)
 		return true;
 	}
 
+	int fd = tcp_server(tcp_port, err);
+	if (fd < 0 || exception_check(err))
+	{
+		return false;
+	}
+
 	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientheartbeat, tcp_clientcheck, tcp_clientdestroy, err);
 	if (stream == NULL || exception_check(err))
 	{
@@ -235,14 +451,8 @@ bool tcp_init(exception_t ** err)
 	}
 
 	tcpstream_t * tcpstream = stream_data(stream);
-	tcpstream->fd = tcp_server(tcp_port, err);
-	if (tcpstream->fd < 0 || exception_check(err))
-	{
-		stream_destroy(stream);
-		return false;
-	}
-
-	if (!mainloop_addfdwatch(stream_mainloop(stream), tcpstream->fd, FD_READ, tcp_newclient, stream, err))
+	tcpstream->watcher = mainloop_newfdwatcher(fd, FD_READ, tcp_newclient, stream);
+	if (!mainloop_addfdwatch(stream_mainloop(stream), &tcpstream->watcher, err) || exception_check(err))
 	{
 		stream_destroy(stream);
 		return false;

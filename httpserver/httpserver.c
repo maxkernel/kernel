@@ -38,6 +38,7 @@ typedef struct
 typedef struct
 {
 	bool inuse;
+	fdwatcher_t watcher;
 	char buffer[BUFFER_LEN];
 	size_t length;
 
@@ -46,8 +47,7 @@ typedef struct
 
 struct __httpcontext_t
 {
-	int socket;
-	mainloop_t * mainloop;
+	fdwatcher_t watcher;
 	list_t filters;
 
 	httpbuffer_t buffers[NUM_BUFFERS];
@@ -229,12 +229,13 @@ static bool http_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userda
 	}
 
 	buffer->inuse = false;
-	close(fd);
 	return false;
 }
 
 static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
+	labels(end);
+
 	httpcontext_t * ctx = userdata;
 
 	struct sockaddr_in addr;
@@ -246,14 +247,13 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 		{
 			LOG(LOG_WARN, "Could not accept new http client socket: %s", strerror(errno));
 		}
-
-		return true;
+		goto end;
 	}
 
-	httpbuffer_t * buffer = NULL;
-	int i;
+	// TODO IMPORTANT - make sock non-blocking
 
-	for (i=0; i<NUM_BUFFERS; i++)
+	httpbuffer_t * buffer = NULL;
+	for (size_t i = 0; i < NUM_BUFFERS; i++)
 	{
 		if (!ctx->buffers[i].inuse)
 		{
@@ -266,51 +266,62 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	{
 		LOG(LOG_WARN, "Could not accept new HTTP client: Out of HTTP buffers!");
 		close(sock);
+		goto end;
 	}
-	else
+	// Set up the buffer
+	buffer->inuse = true;
+	buffer->watcher = mainloop_newfdwatcher(sock, FD_READ, http_newdata, buffer);
+	buffer->buffer[0] = '\0';
+	buffer->length = 0;
+	buffer->ctx = ctx;
+
+	// Now set up the watch on the accept'd file descriptor
+	exception_t * e = NULL;
+	if (!mainloop_addwatcher(loop, &buffer->watcher, &e) == NULL || exception_check(&e))
 	{
-		// Set up the buffer
-		buffer->inuse = true;
-		buffer->buffer[0] = '\0';
-		buffer->length = 0;
-		buffer->ctx = ctx;
+		LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
+		exception_free(e);
 
-		// Now set up the watch on the accept'd file descriptor
-		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(ctx->mainloop, sock, FD_READ, http_newdata, buffer, &e))
-		{
-			LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
-			exception_free(e);
-
-			// Remove the in-use flag to make it available again
-			buffer->inuse = false;
-		}
+		// Remove the in-use flag to make it available again
+		close(watcher_fd(&buffer->watcher));
+		buffer->inuse = false;
+		goto end;
 	}
 
+end:
 	return true;
 }
 
 httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** err)
 {
-	if (exception_check(err))
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return NULL;
+		}
+
+		if (mainloop == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return NULL;
+		}
+	}
+
+	int sock = tcp_server(port, err);
+	if (sock == -1 || exception_check(err))
 	{
 		return NULL;
 	}
+
+	// TODO IMPORTANT - make socket non-blocking
 
 	httpcontext_t * ctx = malloc(sizeof(httpcontext_t));
 	memset(ctx, 0, sizeof(httpcontext_t));
-
-	ctx->mainloop = mainloop;
+	ctx->watcher = mainloop_newfdwatcher(sock, FD_READ, http_newclient, ctx);
 	list_init(&ctx->filters);
 
-	ctx->socket = tcp_server(port, err);
-	if (ctx->socket == -1 || exception_check(err))
-	{
-		free(ctx);
-		return NULL;
-	}
-
-	if (!mainloop_addfdwatch(mainloop, ctx->socket, FD_READ, http_newclient, ctx, err))
+	if (!mainloop_addwatcher(mainloop, &ctx->watcher, err) || exception_check(err))
 	{
 		http_destroy(ctx);
 		return NULL;
@@ -377,8 +388,15 @@ const char * http_getparam(httpcontext_t * ctx, const char * name)
 
 void http_destroy(httpcontext_t * ctx)
 {
-	//mainloop_removewatch(ctx->mainloop, ctx->socket, FD_READ);
-	close(ctx->socket);
+	// Remove http ctx watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&ctx->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove http ctx watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 
 	// Free all the filters
 	{
@@ -390,10 +408,12 @@ void http_destroy(httpcontext_t * ctx)
 			free(filt);
 		}
 	}
+
+	// Free the entire struct
 	free(ctx);
 }
 
-void module_preact()
+static void http_preact()
 {
 	if (
 			regcomp(&get_match, "^GET \\(.*\\) HTTP.*$", REG_NEWLINE) != 0 ||
@@ -410,4 +430,4 @@ module_name("HTTP Server");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides a simple (GET only) HTTP server. Intended to be used by other modules (not included directly)");
-module_onpreactivate(module_preact);
+module_onpreactivate(http_preact);

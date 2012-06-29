@@ -95,12 +95,21 @@ static bool service_rundispatch(void * userdata)
 			packet_t * packet = list_entry(packet_entry, packet_t, packet_list);
 			service_t * service = packet->service;
 
-			list_t * pos = NULL, * n = NULL;
-			list_foreach_safe(pos, n, &service->clients)
+			mutex_lock(&service->lock);
 			{
-				client_t * client = list_entry(pos, client_t, service_list);
-				client_send(client, packet->timestamp, packet->buffer);
+				list_t * pos = NULL, * n = NULL;
+				list_foreach_safe(pos, n, &service->clients)
+				{
+					client_t * client = list_entry(pos, client_t, service_list);
+					if (!client_sender(client)(client, packet->timestamp, packet->buffer))
+					{
+						// Failure to send data to client, drop client
+						LOG(LOG_DEBUG, "Failure to send data to client");
+						client_destroy(client);
+					}
+				}
 			}
+			mutex_unlock(&service->lock);
 
 			// Free the buffer in the packet
 			buffer_free(packet->buffer);

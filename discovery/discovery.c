@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+
 #include <aul/mainloop.h>
 #include <aul/net.h>
 
@@ -9,13 +10,19 @@
 #include <discovery.h>
 
 
-#define PACKET_LEN		25
+#define PACKET_LEN			25
 
-bool enable_discovery = false;
-char hostname[50];
+#define HOSTNAME_DEFAULT	"generic_killer_robot"
+#define HOSTNAME_LEN		50
 
-bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
+static bool enable_discovery = false;
+static char hostname[HOSTNAME_LEN];
+static fdwatcher_t udp_watcher = watcher_empty();
+
+static bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
+	unused(userdata);
+
 	char buf[PACKET_LEN];
 	memset(buf, 0, sizeof(buf));
 
@@ -29,14 +36,15 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 		bool doreply = (enable_discovery && strcmp(buf, "discover") == 0) || (strprefix(buf, "name=") && strcmp(buf+5, hostname) == 0);
 		if (doreply)
 		{
-			string_t reply = string_new("name=%s\nid=%s\nstarted=%" PRIu64 "\nnow=%" PRIu64 "\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s\n", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, max_model(), VERSION, PROVIDER, PROVIDER_URL);
+			string_t reply = string_new("name=%s\nid=%s\nstarted=%" PRIu64 "\nnow=%" PRIu64 "\nmodel=%s\nversion=%s\nprovider=%s\nprovider_url=%s", hostname, kernel_id(), (kernel_timestamp()-kernel_elapsed())/(int64_t)MICROS_PER_SECOND, kernel_timestamp()/(int64_t)MICROS_PER_SECOND, max_model(), VERSION, PROVIDER, PROVIDER_URL);
 
+			// TODO IMPORTANT - get this syscall working
 			if (syscall_exists("service_getstreamconfig", "s:v"))
 			{
 				const char * config = NULL;
 				if (SYSCALL("service_getstreamconfig", &config))
 				{
-					string_append(&reply, "%s", config);
+					string_append(&reply, "\n%s", config);
 				}
 			}
 
@@ -47,34 +55,66 @@ bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * data)
 	return true;
 }
 
-bool module_init()
+static bool discovery_init()
 {
-	gethostname(hostname, sizeof(hostname));
+	labels(after_udp);
 
-	exception_t * e = NULL;
-	int sock = udp_server(DISCOVERY_PORT, &e);
-
-	if (sock == -1 || exception_check(&e))
+	memset(hostname, 0, HOSTNAME_LEN);
+	if (gethostname(hostname, HOSTNAME_LEN - 1) < 0)
 	{
-		LOG(LOG_ERR, "Could not create udp discovery socket on port %d: %s", DISCOVERY_PORT, exception_message(e));
-		exception_free(e);
-		return true;
+		LOG(LOG_WARN, "Could not get computer hostname for discovery clients. Using default: %s", HOSTNAME_DEFAULT);
+		strncpy(hostname, HOSTNAME_DEFAULT, HOSTNAME_LEN - 1);
 	}
 
-	if (!mainloop_addfdwatch(NULL, sock, FD_READ, discovery_newclient, NULL, &e))
+	// Set up udp discovery server
 	{
-		LOG(LOG_ERR, "Could not add udp discovery socket to mainloop: %s", exception_message(e));
-		exception_free(e);
-		return true;
+		exception_t * e = NULL;
+		LOG(LOG_DEBUG, "Enabling auto-discovery over network");
+
+		int sock = udp_server(DISCOVERY_PORT, &e);
+		if (sock == -1 || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not create udp discovery socket on port %d: %s", DISCOVERY_PORT, exception_message(e));
+			exception_free(e);
+			goto after_udp;
+		}
+
+		udp_watcher = mainloop_newfdwatcher(sock, FD_READ, discovery_newclient, NULL);
+		if (!mainloop_addwatcher(kernel_mainloop(), &udp_watcher, &e) == NULL || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not add udp discovery socket to mainloop: %s", exception_message(e));
+			exception_free(e);
+
+			close(watcher_fd(&udp_watcher));
+			watcher_clear(&udp_watcher);
+			goto after_udp;
+		}
+
+		LOG(LOG_DEBUG, "Awaiting discovery clients on udp port %d", DISCOVERY_PORT);
 	}
+after_udp:
 
 	return true;
+}
+
+static void discovery_destroy()
+{
+	// Remove udp watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&udp_watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove udp watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 }
 
 module_name("Discovery");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides discovery/auto-discovery of rovers on the network.");
-module_oninitialize(module_init);
+module_oninitialize(discovery_init);
+module_ondestroy(discovery_destroy);
 
 module_config(enable_discovery, 'b', "Enables other computers to auto-discover this robot automatically (setting to false hides robot on network)");

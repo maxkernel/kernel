@@ -17,9 +17,9 @@
 #include <message.h>
 
 
-bool enable_network = false;
-
 static stack_t free_buffers;
+static bool enable_network = false;
+
 
 static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
@@ -119,11 +119,13 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 
 	LOG(LOG_DEBUG, "New console client.");
 
+	// TODO IMPORTANT - make non-block
+
 	// Get a free buffer
 	list_t * entry = stack_pop(&free_buffers);
 	if (entry == NULL)
 	{
-		LOG(LOG_WARN, "Console out of free buffers! Consider increasing CONSOLE_BUFFERS in console module (currently %d)", CONSOLE_BUFFERS);
+		LOG(LOG_WARN, "Console out of free buffers! (CONSOLE_BUFFERS = %d)", CONSOLE_BUFFERS);
 		close(client);
 		return true;
 	}
@@ -135,21 +137,23 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 
 	// Add socket to mainloop watch
 	exception_t * e = NULL;
-	if (!mainloop_addfdwatch(NULL, client, FD_READ, console_clientdata, buffer, &e))
+	if (mainloop_addfdwatcher(kernel_mainloop(), client, FD_READ, console_clientdata, buffer, &e) == NULL || exception_check(&e))
 	{
 		LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
+		exception_free(e);
 
 		// Add buffer back to free list
 		stack_push(&free_buffers, &buffer->free_list);
-
 		return true;
 	}
 
 	return true;
 }
 
-bool module_init()
+static bool console_init()
 {
+	labels(after_unix, after_network);
+
 	// Initialize buffers
 	stack_init(&free_buffers);
 	msgbuffer_t * buffers = malloc(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
@@ -163,57 +167,58 @@ bool module_init()
 	// Start unix socket
 	{
 		exception_t * e = NULL;
-		int unixsock = unix_server(CONSOLE_SOCKFILE, &e);
 
+		int unixsock = unix_server(CONSOLE_SOCKFILE, &e);
 		if (unixsock == -1 || exception_check(&e))
 		{
-			LOG(LOG_ERR, "Error creating unix server socket: %s", exception_message(e));
+			LOG(LOG_ERR, "Could not creat unix console socket: %s", exception_message(e));
 			exception_free(e);
+			goto after_unix;
 		}
-		else
-		{
-			// Change permissions on socket (user:rw,group:rw,other:rw)
-			chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
-			exception_t * e = NULL;
-			if (!mainloop_addfdwatch(NULL, unixsock, FD_READ, console_newclient, NULL, &e))
-			{
-				LOG(LOG_ERR, "Could not add console unix_socket fd to mainloop: %s", exception_message(e));
-				exception_free(e);
-			}
-			else
-			{
-				LOG(LOG_DEBUG, "Awaiting console clients on file %s", CONSOLE_SOCKFILE);
-			}
+		// Change permissions on socket (user:rw,group:rw,other:rw)
+		if (chmod(CONSOLE_SOCKFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH) < 0)
+		{
+			LOG(LOG_ERR, "Could not set permissions on unix console socket: %s", strerror(errno));
+			close(unixsock);
+			goto after_unix;
 		}
+
+		if (mainloop_newfdwatcher(kernel_mainloop(), unixsock, FD_READ, console_newclient, NULL, &e) == NULL || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not add console unix_socket fd to mainloop: %s", exception_message(e));
+			mainloop_freefdwatcher(watcher);
+			goto after_unixsock;
+		}
+
+		LOG(LOG_DEBUG, "Awaiting console clients on file %s", CONSOLE_SOCKFILE);
 	}
+after_unix:
 
 	// Start network socket (if config'd)
 	if (enable_network)
 	{
-		LOG(LOG_DEBUG, "Creating network server socket");
-
 		exception_t * e = NULL;
+		LOG(LOG_DEBUG, "Enabling console over network");
+
 		int tcpsock = tcp_server(CONSOLE_TCPPORT, &e);
 		if (tcpsock == -1 || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Error creating network server socket: %s", exception_message(e));
 			exception_free(e);
+			goto after_network;
 		}
-		else
+
+		if (mainloop_newfdwatcher(kernel_mainloop(), tcpsock, FD_READ, console_newclient, NULL, &e) == NULL || exception_check(&e))
 		{
-			exception_t * e = NULL;
-			if (!mainloop_addfdwatch(NULL, tcpsock, FD_READ, console_newclient, NULL, &e))
-			{
-				LOG(LOG_ERR, "Could not add console tcp fd to mainloop: %s", exception_message(e));
-				exception_free(e);
-			}
-			else
-			{
-				LOG(LOG_DEBUG, "Awaiting console clients on tcp port %d", CONSOLE_TCPPORT);
-			}
+			LOG(LOG_ERR, "Could not add console tcp fd to mainloop: %s", exception_message(e));
+			exception_free(e);
+			goto after_network;
 		}
+
+		LOG(LOG_DEBUG, "Awaiting console clients on tcp port %d", CONSOLE_TCPPORT);
 	}
+after_network:
 
 	return true;
 }
@@ -223,6 +228,6 @@ module_name("Console");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides syscall RPC from other processes via unix/tcp socket");
-module_oninitialize(module_init);
+module_oninitialize(console_init);
 
 module_config(enable_network, 'b', "Allow syscalls to be executed over the network (TCP)");

@@ -43,6 +43,7 @@ hashtable_t properties;
 hashtable_t syscalls;
 list_t kthreads;
 
+mainloop_t * mainloop = NULL;
 mutex_t io_lock;
 sqlite3 * database = NULL;
 calibration_t calibration;
@@ -54,6 +55,7 @@ static list_t kobjects = {0,0};
 static mutex_t kobj_mutex;
 
 static mutex_t kthreads_mutex;
+static timerfdwatcher_t kthreads_task;
 
 static char logbuf[LOGBUF_SIZE] = {0};
 static size_t loglen = 0;
@@ -625,6 +627,11 @@ const char * kernel_datatype(char type)
 	}
 }
 
+mainloop_t * kernel_mainloop()
+{
+	return mainloop;
+}
+
 static int modules_itr()
 {
 	const void * mods_next(const void * object, void ** itrobject)
@@ -916,9 +923,11 @@ int main(int argc, char * argv[])
 	// Init AUL components
 	{
 		exception_t * e = NULL;
-		if (!mainloop_init(&e))
+
+		mainloop = mainloop_new("Root", &e);
+		if (mainloop == NULL || exception_check(&e))
 		{
-			LOGK(LOG_FATAL, "Could not initialize mainloop: %s", exception_message(e));
+			LOGK(LOG_FATAL, "Could not initialize root mainloop: %s", exception_message(e));
 			// Will exit
 		}
 
@@ -1852,9 +1861,15 @@ int main(int argc, char * argv[])
 		// Check for new kernel thread tasks every second
 		{
 			exception_t * e = NULL;
-			if (mainloop_addnewfdtimer(NULL, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) < 0)
+			if (!mainloop_newfdtimer(&kthreads_task, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) || exception_check(&e))
 			{
-				LOGK(LOG_FATAL, "Could not create kthread task handler: %s", exception_message(e));
+				LOGK(LOG_FATAL, "Could not create kthread task handler timer: %s", exception_message(e));
+				// Will exit
+			}
+
+			if (!mainloop_addwatcher(kernel_mainloop(), watcher_cast(&kthreads_task), &e) || exception_check(&e))
+			{
+				LOGK(LOG_FATAL, "Could not add kthread task handler to mainloop: %s", exception_message(e));
 				// Will exit
 			}
 		}

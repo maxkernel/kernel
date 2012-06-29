@@ -26,7 +26,7 @@ test2: test2.o
 
 install:
 	cp -f $(TARGET) /usr/lib
-	cp -f include/*.h /usr/include
+	cp -rf include/maxmodel /usr/include
 	ldconfig
 
 clean:

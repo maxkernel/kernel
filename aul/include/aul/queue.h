@@ -21,6 +21,7 @@ typedef struct
 		(q)->head = NULL; (q)->tail = (q)->buffer;	\
 	})
 
+// TODO IMPORTANT - clean this file up!
 
 static inline void __queue_unwrap(queue_t * queue, void * head, void * target, size_t size)
 {

@@ -20,17 +20,6 @@ extern "C" {
 #define SERVICE_MONITOR_TIMEOUT			(1 * NANOS_PER_SECOND)		// 1 second
 #define STREAM_MONITOR_TIMEOUT			(1 * NANOS_PER_SECOND)		// 1 second
 
-//#define STREAM_DISPATCH_THREADS			(1)
-
-/*
-// Common formats
-#define TXT							"TXT"		// Human readable text
-//#define XML							"XML"		// XML formatted data
-#define CSV							"CSV"		// comma-seperated values
-#define JPEG						"JPEG"		// jpeg image (full image per packet)
-//#define RAW							"RAW"		// raw (unspecified) format
-*/
-
 
 #define SC_BUFFERSIZE		128
 
@@ -129,16 +118,16 @@ void stream_destroy(stream_t * stream);
 
 client_t * client_new(stream_t * stream, exception_t ** err);
 void client_destroy(client_t * client);
-static inline bool client_send(client_t * client, int64_t microtimestamp, const buffer_t * buffer) { return client->sender(client, microtimestamp, buffer); }
+ssize_t client_control(client_t * client, void * buffer, size_t length);
 #define client_service(c)		((c)->service)
 #define client_stream(c)		((c)->stream)
 #define client_lock(c)			((c)->lock)
+#define client_sender(c)		((c)->sender)
 #define client_inuse(c)			((c)->inuse)
 #define client_locked(c)		((c)->locked)
 #define client_lastheartbeat(c)	((c)->lastheartbeat)
 #define client_data(c)			((void *)(c)->data)
 
-ssize_t clienthelper_control(client_t * client, void * buffer, size_t length);
 
 #ifdef __cplusplus
 }

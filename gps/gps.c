@@ -17,15 +17,15 @@ typedef struct
 	char * serial_port;
 	speed_t serial_speed;
 
-	int fd;
+	fdwatcher_t watcher;
 	bool readsuccess;
 
 	char buffer[GPS_BUFFER_SIZE];
 	size_t size;
 
-	mutex_t update_mutex;
+	mutex_t lock;
 	int lastupdate;			// milliseconds when struct was last updated
-	bool lock;
+	bool haslock;
 	string_t date;
 	string_t time;
 	double lat;
@@ -111,7 +111,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 		
 		if (regexec(&gpgga_match, gps->buffer, 11, match, 0) == 0)
 		{
-			mutex_lock(&gps->update_mutex);
+			mutex_lock(&gps->lock);
 			{
 				int hh = mtoi(gps->buffer, &match[1]);
 				int mm = mtoi(gps->buffer, &match[2]);
@@ -125,14 +125,14 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 				gps->satellites = mtoi(gps->buffer, &match[8]);
 				gps->hdop = mtod(gps->buffer, &match[9]);
 
-				gps->lock = true;
+				gps->haslock = true;
 				gps->lastupdate = time(NULL);
 			}
-			mutex_unlock(&gps->update_mutex);
+			mutex_unlock(&gps->lock);
 		}
 		else if (regexec(&gprmc_match, gps->buffer, 6, match, 0) == 0)
 		{
-			mutex_lock(&gps->update_mutex);
+			mutex_lock(&gps->lock);
 			{
 				gps->speed = mtod(gps->buffer, &match[1]) * 0.514444444;
 				gps->heading = mtod(gps->buffer, &match[2]);
@@ -142,7 +142,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 				int yy = mtoi(gps->buffer, &match[5]);
 				string_set(&gps->date, "20%02d-%02d-%02dT", yy, mm, dd);
 			}
-			mutex_unlock(&gps->update_mutex);
+			mutex_unlock(&gps->lock);
 		}
 		
 		// shift the rest of the buffer data to beginning of buffer
@@ -158,6 +158,7 @@ static bool gps_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * us
 	return true;
 }
 
+/*
 static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
 	gps_t * gps = userdata;
@@ -168,7 +169,7 @@ static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * user
 		// Fixes bug where computer can't read serial data from GPS (FIXME)
 		LOG(LOG_WARN, "Haven't received any GPS data from serial port %s. Retrying connection", gps->serial_port);
 	
-		mainloop_removefdwatch(NULL, gps->fd, FD_READ, NULL);
+		mainloop_removefdwatch(NULL, gps->fd, NULL);
 		close(gps->fd);
 
 		gps->fd = serial_open(gps->serial_port, gps->serial_speed);
@@ -182,6 +183,7 @@ static bool gps_readtimeout(mainloop_t * loop, uint64_t nanoseconds, void * user
 		return false;
 	}
 }
+*/
 
 static void gps_update(void * object)
 {
@@ -195,10 +197,10 @@ static void gps_update(void * object)
 
 	gps_t * gps = object;
 
-	mutex_lock(&gps->update_mutex);
+	mutex_lock(&gps->lock);
 	{
 		output(lastupdate, &gps->lastupdate);
-		output(lock, &gps->lock);
+		output(lock, &gps->haslock);
 		output(latitude, &gps->lat);
 		output(longitude, &gps->lon);
 		output(heading, &gps->heading);
@@ -207,67 +209,7 @@ static void gps_update(void * object)
 		output(satellites, &gps->satellites);
 		output(hdop, &gps->hdop);
 	}
-	mutex_unlock(&gps->update_mutex);
-}
-
-void * gps_new(char * serial_port, int baud)
-{
-	// Check input
-	speed_t speed = serial_getspeed(baud);
-	if (speed == 0)
-	{
-		LOG(LOG_WARN, "Invalid speed setting on GPS device %s: %d", serial_port, baud);
-		return NULL;
-	}
-
-	gps_t * gps = malloc(sizeof(gps_t));
-	memset(gps, 0, sizeof(gps_t));
-
-	gps->serial_port = strdup(serial_port);
-	gps->serial_speed = serial_getspeed(baud);
-	gps->readsuccess = false;
-	mutex_init(&gps->update_mutex, M_RECURSIVE);
-	gps->lastupdate = 0;
-	gps->lock = false;
-	string_clear(&gps->date);
-	string_clear(&gps->time);
-	gps->lat = gps->lon = 0.0;
-	gps->heading = gps->speed = 0;
-	gps->elevation = 0.0;
-	gps->satellites = 0;
-	gps->hdop = 0.0;
-
-	// Set up serial port
-	gps->fd = serial_open(serial_port, gps->serial_speed);
-	if (gps->fd < 0)
-	{
-		LOG(LOG_WARN, "Could not open GPS serial device %s", serial_port);
-		return NULL;
-	}
-
-	// Add gps fd to mainloop
-	{
-		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(NULL, gps->fd, FD_READ, gps_newdata, gps, &e))
-		{
-			LOG(LOG_ERR, "Could not add GPS fd to mainloop: %s", exception_message(e));
-			exception_free(e);
-			return NULL;
-		}
-	}
-
-	// Create a timer to keep track of gps
-	{
-		// TODO IMPORTANT - we should NOT need this! Find out why we do or if it even helps!
-		exception_t * e = NULL;
-		if (mainloop_addnewfdtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e) < 0)
-		{
-			LOG(LOG_ERR, "Could not create GPS read monitor: %s", exception_message(e));
-			exception_free(e);
-		}
-	}
-
-	return gps;
+	mutex_unlock(&gps->lock);
 }
 
 static void gps_destroy(void * object)
@@ -281,9 +223,84 @@ static void gps_destroy(void * object)
 	}
 
 	gps_t * gps = object;
-	close(gps->fd);
+
+	// Remove gps watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&gps->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove gps watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
+
 	free(gps->serial_port);
+	mutex_destroy(&gps->lock);
 	free(gps);
+}
+
+static void * gps_new(char * serial_port, int baud)
+{
+	// Check input
+	speed_t speed = serial_getspeed(baud);
+	if (speed == 0)
+	{
+		LOG(LOG_WARN, "Invalid speed setting on GPS device %s: %d", serial_port, baud);
+		return NULL;
+	}
+
+	// Set up serial port
+	int fd = serial_open(serial_port, speed);
+	if (fd < 0)
+	{
+		LOG(LOG_WARN, "Could not open GPS serial device %s", serial_port);
+		return NULL;
+	}
+
+	gps_t * gps = malloc(sizeof(gps_t));
+	memset(gps, 0, sizeof(gps_t));
+	gps->serial_port = strdup(serial_port);
+	gps->serial_speed = speed;
+	gps->watcher = mainloop_newfdwatcher(fd, FD_READ, gps_newdata, gps);
+	gps->readsuccess = false;
+	mutex_init(&gps->lock, M_RECURSIVE);
+	gps->lastupdate = 0;
+	gps->haslock = false;
+	string_clear(&gps->date);
+	string_clear(&gps->time);
+	gps->lat = gps->lon = 0.0;
+	gps->heading = gps->speed = 0;
+	gps->elevation = 0.0;
+	gps->satellites = 0;
+	gps->hdop = 0.0;
+
+	// Add gps fd to mainloop
+	{
+		exception_t * e = NULL;
+		if (!mainloop_addwatcher(kernel_mainloop(), &gps->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not add GPS fd to mainloop: %s", exception_message(e));
+			exception_free(e);
+
+			gps_destroy(gps);
+			return NULL;
+		}
+	}
+
+	/*
+	// Create a timer to keep track of gps
+	{
+		// TODO IMPORTANT - we should NOT need this! Find out why we do or if it even helps!
+		exception_t * e = NULL;
+		if (mainloop_addnewfdtimer(NULL, "GPS read timeout", GPS_RETRY_TIMEOUT, gps_readtimeout, gps, &e) < 0)
+		{
+			LOG(LOG_ERR, "Could not create GPS read monitor: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
+	*/
+
+	return gps;
 }
 
 static bool gps_init() {

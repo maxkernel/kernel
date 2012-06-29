@@ -19,10 +19,9 @@ module_config(udp_timeout, 'd', "UDP timeout (in seconds) with no heartbeat befo
 
 typedef struct
 {
+	fdwatcher_t watcher;
 	mutex_t lock;
 	list_t clients;
-
-	int fd;
 } udpstream_t;
 
 typedef struct
@@ -30,12 +29,12 @@ typedef struct
 	client_t * client;
 	list_t stream_list;
 
-	uint32_t ip;
-	uint16_t port;
+	in_addr_t ip;
+	in_port_t port;
 } udpclient_t;
 
 
-static inline string_t addr2string(uint32_t ip)
+static inline string_t addr2string(in_addr_t ip)
 {
 	unsigned char a4 = (ip & 0xFF000000) >> 24;
 	unsigned char a3 = (ip & 0x00FF0000) >> 16;
@@ -48,17 +47,27 @@ static void udp_streamdestroy(stream_t * stream)
 {
 	udpstream_t * udpstream = stream_data(stream);
 
-	// TODO - finish me
+	// Destroy the udp watcher
+	{
+		exception_t * e = NULL;
+		if (!mainloop_removewatch(&udpstream->watcher, &e) || exception_check(&e))
+		{
+			LOG(LOG_WARN, "Could not remove udp stream watcher: %s", exception_message(e));
+			exception_free(e);
+		}
+	}
 
-	close(udpstream->fd);
 	mutex_destroy(&udpstream->lock);
 }
 
 static bool udp_clientsend(client_t * client, int64_t microtimestamp, const buffer_t * data)
 {
+	udpclient_t * udpclient = client_data(client);
 	udpstream_t * udpstream = stream_data(client_stream(client));
 
-	// TODO - finish me
+	LOG(LOG_INFO, "SEND TO UDP GS");
+	unused(udpclient);
+	unused(udpstream);
 
 	return true;
 }
@@ -66,26 +75,22 @@ static bool udp_clientsend(client_t * client, int64_t microtimestamp, const buff
 static void udp_clientheartbeat(client_t * client)
 {
 	udpclient_t * udpclient = client_data(client);
+	udpstream_t * udpstream = stream_data(client_stream(client));
 
-	// TODO - finish me
-	/*
-	// Write the one-byte heartbeat code
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(struct sockaddr_in));
+	addr.sin_family = AF_INET;
+	addr.sin_port = udpclient->port;
+	addr.sin_addr.s_addr = udpclient->ip;
+
 	static const uint8_t data = SC_HEARTBEAT;
-	write(udpclient->fd, &data, sizeof(uint8_t));
-	*/
+	sendto(watcher_fd(&udpstream->watcher), &data, sizeof(uint8_t), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
 }
 
 static bool udp_clientcheck(client_t * client)
 {
 	// Return false if client hasn't heartbeat'd since more than DEFAULT_NET_TIMEOUT ago
 	return (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
-}
-
-static void udp_clientdestroy(client_t * client)
-{
-	udpclient_t * udpclient = client_data(client);
-
-	// TODO - finish me
 }
 
 static bool udp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
@@ -110,8 +115,8 @@ static bool udp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 		return true;
 	}
 
-	uint32_t ip = addr.sin_addr.s_addr;
-	uint16_t port = addr.sin_port;
+	in_addr_t ip = addr.sin_addr.s_addr;
+	in_port_t port = addr.sin_port;
 
 	// Look up the client
 	client_t * client = NULL;
@@ -160,8 +165,12 @@ static bool udp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 	}
 
 
-	ssize_t size = clienthelper_control(client, buffer, read);
-
+	ssize_t size = client_control(client, buffer, read);
+	if (size <= 0)
+	{
+		// Close client or did not receive complete packet
+		client_destroy(client);
+	}
 
 	//uint16_t clientid =
 	// TODO - finish me!
@@ -223,23 +232,24 @@ bool udp_init(exception_t ** err)
 		return true;
 	}
 
-	stream_t * stream = stream_new("udp", sizeof(udpstream_t), udp_streamdestroy, sizeof(udpclient_t), udp_clientsend, udp_clientheartbeat, udp_clientcheck, udp_clientdestroy, err);
+	int fd = udp_server(udp_port, err);
+	if (fd < 0 || exception_check(err))
+	{
+		return false;
+	}
+
+	stream_t * stream = stream_new("udp", sizeof(udpstream_t), udp_streamdestroy, sizeof(udpclient_t), udp_clientsend, udp_clientheartbeat, udp_clientcheck, NULL, err);
 	if (stream == NULL || exception_check(err))
 	{
 		return false;
 	}
 
 	udpstream_t * udpstream = stream_data(stream);
+	udpstream->watcher = mainloop_newfdwatcher(fd, FD_READ, udp_newdata, stream);
 	mutex_init(&udpstream->lock, M_RECURSIVE);
 	list_init(&udpstream->clients);
-	udpstream->fd = udp_server(udp_port, err);
-	if (udpstream->fd < 0 || exception_check(err))
-	{
-		stream_destroy(stream);
-		return false;
-	}
 
-	if (!mainloop_addfdwatch(stream_mainloop(stream), udpstream->fd, FD_READ, udp_newdata, stream, err))
+	if (!mainloop_addfdwatch(stream_mainloop(stream), &udpstream->watcher, err) || exception_check(err))
 	{
 		stream_destroy(stream);
 		return false;

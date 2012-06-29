@@ -39,6 +39,8 @@ int udp_server(uint16_t port, exception_t ** err)
 		return -1;
 	}
 
+	// TODO IMPORTANT - add nonblocking and setsockopts
+
 	return sock;
 }
 

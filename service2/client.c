@@ -91,7 +91,7 @@ void client_destroy(client_t * client)
 	mutex_unlock(client_lock(client));
 }
 
-ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
+ssize_t client_control(client_t * client, void * buffer, size_t length)
 {
 	// Sanity check
 	{
@@ -226,7 +226,7 @@ ssize_t clienthelper_control(client_t * client, void * buffer, size_t length)
 			buffer_t * buffer = buffer_new();
 			{
 				service_listxml(buffer);
-				success = client_send(client, kernel_timestamp(), buffer);
+				success = client_sender(client)(client, kernel_timestamp(), buffer);
 			}
 			buffer_free(buffer);
 

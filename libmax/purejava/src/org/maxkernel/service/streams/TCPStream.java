@@ -104,10 +104,6 @@ public class TCPStream implements Stream {
 				if (!data.read(socket)) {
 					throw new IOException("Could not read all services data!");
 				}
-				
-				System.out.println("SIZE="+data.size());
-				System.out.println("TIME="+data.timestamp());
-				System.out.println("DATA="+new String(data.payload()));
 			
 				try {
 					return ServiceList.parseXML(new Reader() {

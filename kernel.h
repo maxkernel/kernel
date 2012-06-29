@@ -11,6 +11,7 @@
 #include <aul/constraint.h>
 #include <aul/log.h>
 #include <aul/list.h>
+#include <aul/mainloop.h>
 
 #include <maxmodel/meta.h>
 #include <kernel-types.h>
@@ -123,6 +124,7 @@ int kernel_installed();
 int64_t kernel_timestamp();
 int64_t kernel_elapsed();
 const char * kernel_datatype(char type);
+mainloop_t * kernel_mainloop();
 
 const char * kernel_loghistory();
 string_t kernel_logformat(level_t level, const char * domain, uint64_t milliseconds, const char * message);

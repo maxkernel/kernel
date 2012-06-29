@@ -3,7 +3,7 @@
 #include <aul/common.h>
 #include <aul/serial.h>
 
-
+// TODO IMPORTANT - add exception_t to this function!
 int serial_open(const char * port, speed_t speed)
 {
 	int fd = open(port, O_RDWR, O_NOCTTY);

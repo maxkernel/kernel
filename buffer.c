@@ -654,11 +654,11 @@ void buffer_free(buffer_t * buffer)
 	}
 }
 
-bufferpos_t bufferpos_new(buffer_t * buffer)
+bufferpos_t bufferpos_new(buffer_t * buffer, size_t offset)
 {
 	bufferpos_t pos = {
 		.buffer = buffer,
-		.offset = 0,
+		.offset = offset,
 	};
 
 	return pos;
@@ -712,6 +712,27 @@ ssize_t bufferpos_send(bufferpos_t * pos, int fd, size_t length)
 	return sent;
 }
 
+size_t bufferpos_remaining(const bufferpos_t * pos)
+{
+	// Sanity check
+	{
+		if unlikely(pos == NULL)
+		{
+			return 0;
+		}
+	}
+
+	ssize_t remaining = buffer_size(pos->buffer) - pos->offset;
+
+	// Bytes remaining can't be less than zero
+	if (remaining < 0)
+	{
+		remaining = 0;
+	}
+
+	return remaining;
+}
+
 off_t bufferpos_seek(bufferpos_t * pos, off_t offset, int whence)
 {
 	// Sanity check
@@ -728,6 +749,12 @@ off_t bufferpos_seek(bufferpos_t * pos, off_t offset, int whence)
 		case SEEK_CUR:	pos->offset += offset;								break;
 		case SEEK_END:	pos->offset = buffer_size(pos->buffer) + offset;	break;
 		default:		return -1;
+	}
+
+	// Absolute offset can't be less than zero
+	if (pos->offset < 0)
+	{
+		pos->offset = 0;
 	}
 
 	return pos->offset;

@@ -24,8 +24,18 @@ import org.maxkernel.service.streams.TCPStream;
 public class TestService {
 
 	public static void main(String[] args) throws Exception {
+		JFrame f = new JFrame();
+		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		f.setSize(320, 240);
+		
+		JLabel label = new JLabel("", SwingConstants.CENTER);
+		f.getContentPane().add(label);
+		f.setVisible(true);
+		
+		
 		ServiceClient client = new ServiceClient();
 		
+		//Stream stream = new TCPStream(InetAddress.getByName("192.168.1.100"));
 		Stream stream = new TCPStream(InetAddress.getByName("localhost"));
 		
 		List<Service> services = stream.services();
@@ -37,15 +47,6 @@ public class TestService {
 		stream.subscribe(services.get(0));
 		
 		
-		JFrame f = new JFrame();
-		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		f.setSize(320, 240);
-		
-		JLabel label = new JLabel("", SwingConstants.CENTER);
-		f.getContentPane().add(label);
-		f.setVisible(true);
-		
-		
 		System.out.println("Start");
 		client.start(stream);
 		while (true) {
@@ -53,8 +54,10 @@ public class TestService {
 			
 			//ByteBuffer b = ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN);
 			//System.out.println(b.getDouble() + "\t" + b.getDouble()+ "\t" + b.getDouble());
+			
 			BufferedImage img = ImageIO.read(new ByteArrayInputStream(p.data()));
-			label.setIcon(new ImageIcon(img.getScaledInstance(img.getWidth() * 2, img.getHeight() * 2, Image.SCALE_FAST)));
+			//label.setIcon(new ImageIcon(img.getScaledInstance(img.getWidth() * 4, img.getHeight() * 4, Image.SCALE_SMOOTH)));
+			label.setIcon(new ImageIcon(img));
 		}
 		
 	}

@@ -57,6 +57,8 @@ public class ServiceClient {
 						} catch (IOException ex) {
 							closestream(stream);
 							
+							ex.printStackTrace();
+							
 						} catch (Exception ex) {
 							LOG.log(Level.WARNING, "Exception thrown while heartbeating stream", ex);
 							closestream(stream);
@@ -143,6 +145,8 @@ public class ServiceClient {
 			stream.close();
 		} catch (IOException exc) {
 			// Do nothing, we are already trying to close the stream
+			exc.printStackTrace();
+			
 		} catch (Exception exc) {
 			LOG.log(Level.WARNING, "Exception thrown while trying to close stream", exc);
 		}
