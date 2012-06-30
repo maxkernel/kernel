@@ -654,14 +654,11 @@ void buffer_free(buffer_t * buffer)
 	}
 }
 
-bufferpos_t bufferpos_new(buffer_t * buffer, size_t offset)
+void bufferpos_new(bufferpos_t * pos, buffer_t * buffer, size_t offset)
 {
-	bufferpos_t pos = {
-		.buffer = buffer,
-		.offset = offset,
-	};
-
-	return pos;
+	bufferpos_clear(pos);
+	pos->buffer = buffer;
+	pos->offset = offset;
 }
 
 bool bufferpos_write(bufferpos_t * pos, const void * data, size_t length)

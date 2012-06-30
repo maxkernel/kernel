@@ -33,13 +33,13 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 size_t buffer_size(const buffer_t * buffer);
 void buffer_free(buffer_t * buffer);
 
-bufferpos_t bufferpos_new(buffer_t * buffer, size_t offset);
+void bufferpos_new(bufferpos_t * pos, buffer_t * buffer, size_t offset);
 bool bufferpos_write(bufferpos_t * pos, const void * data, size_t length);
 size_t bufferpos_read(bufferpos_t * pos, void * data, size_t length);
 ssize_t bufferpos_send(bufferpos_t * pos, int fd, size_t length);
 size_t bufferpos_remaining(const bufferpos_t * pos);
 off_t bufferpos_seek(bufferpos_t * pos, off_t offset, int whence);
-
+#define bufferpos_clear(b)	({ (b)->buffer = NULL; (b)->offset = 0; })
 
 #ifdef __cplusplus
 }

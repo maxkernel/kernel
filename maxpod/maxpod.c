@@ -39,7 +39,7 @@
 typedef struct
 {
 	fdwatcher_t watcher;
-	timerfdwatcher_t timer;
+	timerwatcher_t timer;
 	bool hasresponded;
 	queue_t queue;
 	char data[QUEUE_SIZE];
@@ -49,14 +49,14 @@ typedef struct
 static inline void maxpod_write(const maxpod_t * maxpod, uint8_t cmd, uint8_t param1, uint8_t param2)
 {
 	char data[6] = {STX, param1, param2, cmd, (param1+param2+cmd)%256, ETX};
-	write(watcher_fd(maxpod->watcher), data, sizeof(data));
+	write(watcher_fd(&maxpod->watcher), data, sizeof(data));
 }
 
 static inline void maxpod_write_padding(const maxpod_t * maxpod)
 {
 	char data[6];
 	memset(data, DLE, sizeof(data));
-	write(watcher_fd(maxpod->watcher), data, sizeof(data));
+	write(watcher_fd(&maxpod->watcher), data, sizeof(data));
 }
 
 static inline void maxpod_write_int16(const maxpod_t * maxpod, uint8_t cmd, uint16_t param)
@@ -98,14 +98,14 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 	{
 		char data = 0;
 
-		if (queue_size(&queue) < PACKET_SIZE)
+		if (queue_size(&maxpod->queue) < PACKET_SIZE)
 		{
 			// We don't have a full packet
 			goto end;
 		}
 
 		//dump all DLE's not in a packet
-		queue_dequeue(&queue, &data, sizeof(char));
+		queue_dequeue(&maxpod->queue, &data, sizeof(char));
 
 		if (data == STX)
 		{
@@ -121,7 +121,7 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 	{
 		int packet[PACKET_SIZE - 1];
 
-		queue_dequeue(&queue, packet, sizeof(packet));
+		queue_dequeue(&maxpod->queue, packet, sizeof(packet));
 
 		// Frame error
 		if (packet[4] != ETX)
@@ -129,7 +129,7 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 			if (maxpod->hasresponded)
 			{
 				LOG(LOG_WARN, "Frame error in MaxPOD");
-				maxpod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
+				maxpod_write(maxpod, PCMD_ERROR, PERR_MALFORMED_CMD, 0);
 			}
 			goto end;
 		}
@@ -138,7 +138,7 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 		{
 			// Bad checksum
 			LOG(LOG_WARN, "Checksum error in MaxPOD");
-			maxpod_write(PCMD_ERROR, PERR_MALFORMED_CMD, 0);
+			maxpod_write(maxpod, PCMD_ERROR, PERR_MALFORMED_CMD, 0);
 			goto end;
 		}
 
@@ -160,7 +160,7 @@ static bool maxpod_newdata(mainloop_t * loop, int fd, fdcond_t condition, void *
 
 			case PCMD_ERROR:
 				LOG(LOG_ERR, "Error received from MaxPOD (opcode=%d, param=%d)", packet[0], packet[1]);
-				maxpod_write_padding();
+				maxpod_write_padding(maxpod);
 				break;
 
 			default:
@@ -218,8 +218,8 @@ static void * maxpod_new(const char * serial_port)
 	// Add fd to mainloop
 	{
 		exception_t * e = NULL;
-		maxpod->watcher = mainloop_newfdwatcher(fd, FD_READ, maxpod_newdata, maxpod);
-		if (!mainloop_addfdwatcher(kernel_mainloop(), &maxpod->watcher, &e) || exception_check(&e))
+		watcher_newfd(&maxpod->watcher, fd, FD_READ, maxpod_newdata, maxpod);
+		if (!mainloop_addwatcher(kernel_mainloop(), &maxpod->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add maxpod fd to mainloop: %s", exception_message(e));
 			exception_free(e);
@@ -232,7 +232,7 @@ static void * maxpod_new(const char * serial_port)
 	// Create a heartbeat timerfd
 	{
 		exception_t * e = NULL;
-		if (!mainloop_newfdtimer(&maxpod->timer, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, maxpod) || exception_check(&e))
+		if (!watcher_newtimer(&maxpod->timer, "MaxPOD Heartbeat", MAXPOD_HEARTBEAT, maxpod_heartbeat, maxpod, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not create heartbeat timerfd: %s", exception_message(e));
 			exception_free(e);
@@ -240,7 +240,7 @@ static void * maxpod_new(const char * serial_port)
 			goto after_timer;
 		}
 
-		if (!mainloop_addfdtimer(kernel_mainloop(), watcher_cast(&maxpod->timer), &e) || exception_check(&e))
+		if (!mainloop_addwatcher(kernel_mainloop(), watcher_cast(&maxpod->timer), &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add maxpod heartbeat timerfd to mainloop: %s", exception_message(e));
 			exception_free(e);
@@ -270,7 +270,7 @@ static void maxpod_destroy(void * object)
 	// Destroy watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(maxpod->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&maxpod->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove maxpod watch: %s", exception_message(e));
 			exception_free(e);
@@ -280,7 +280,7 @@ static void maxpod_destroy(void * object)
 	// Destroy timer watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(maxpod->timer, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(watcher_cast(&maxpod->timer), &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove maxpod timer: %s", exception_message(e));
 			exception_free(e);

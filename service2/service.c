@@ -40,6 +40,7 @@ static cond_t packets_barrier;
 
 static volatile bool stop = false;
 static int dispatch_threads = 1;
+static timerwatcher_t monitor_watcher;
 
 static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
 {
@@ -59,7 +60,7 @@ static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * user
 
 					// Run the heartbeat function
 					{
-						LOG(LOG_INFO, "SEND HEARTBEAT");
+						//LOG(LOG_INFO, "SEND HEARTBEAT");
 
 						clientheartbeat_f heartbeater = client->heartbeater;
 						if (heartbeater != NULL)
@@ -430,9 +431,16 @@ static bool service_init()
 	// Initialize the service monitor timer
 	{
 		exception_t * e = NULL;
-		if (mainloop_addnewfdtimer(NULL, "Service monitor", SERVICE_MONITOR_TIMEOUT, service_monitor, NULL, &e) < 0)
+		if (!watcher_newtimer(&monitor_watcher, "Service monitor", SERVICE_MONITOR_TIMEOUT, service_monitor, NULL, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not create service monitor timer: %s", exception_message(e));
+			exception_free(e);
+			return false;
+		}
+
+		if (!mainloop_addwatcher(kernel_mainloop(), watcher_cast(&monitor_watcher), &e) || exception_check(&e))
+		{
+			LOG(LOG_ERR, "Could not add service monitor timer to mainloop: %s", exception_message(e));
 			exception_free(e);
 			return false;
 		}

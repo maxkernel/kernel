@@ -99,7 +99,7 @@ bool module_init()
 {
 	exception_t * e = NULL;
 
-	ctx = http_new(port, NULL, &e);
+	ctx = http_new(port, kernel_mainloop(), &e);
 	if (ctx == NULL || exception_check(&e))
 	{
 		LOG(LOG_ERR, "Could not create netui HTTP server on port %d: %s", port, exception_message(e));

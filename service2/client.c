@@ -125,7 +125,7 @@ ssize_t client_control(client_t * client, void * buffer, size_t length)
 
 		case SC_HEARTBEAT:
 		{
-			LOG(LOG_INFO, "HEARTBEAT");
+			//LOG(LOG_INFO, "HEARTBEAT");
 			client_lastheartbeat(client) = kernel_timestamp();
 			return sizeof(uint8_t);
 		}

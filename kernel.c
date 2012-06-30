@@ -55,7 +55,7 @@ static list_t kobjects = {0,0};
 static mutex_t kobj_mutex;
 
 static mutex_t kthreads_mutex;
-static timerfdwatcher_t kthreads_task;
+static timerwatcher_t kthreads_timer;
 
 static char logbuf[LOGBUF_SIZE] = {0};
 static size_t loglen = 0;
@@ -107,7 +107,7 @@ static void signal_int(int signo)
 	unused(signo);
 
 	exception_t * e = NULL;
-	if (!mainloop_stop(NULL, &e))
+	if (!mainloop_stop(kernel_mainloop(), &e))
 	{
 		LOGK(LOG_ERR, "Mainloop failed to stop: %s", exception_message(e));
 	}
@@ -752,6 +752,15 @@ int main(int argc, char * argv[])
 			// Will exit
 		}
 
+		// Ensure proper void pointer arithmetic
+		{
+			if (((void *)0 + (size_t)1) != (void *)1)
+			{
+				LOGK(LOG_FATAL, "Failed void pointer arithmetic runtime check!");
+				// Will exit
+			}
+		}
+
 		// Test for thread-local support
 		{
 			static threadlocal volatile bool testtl = true;
@@ -775,11 +784,19 @@ int main(int argc, char * argv[])
 			}
 		}
 
-		// Ensure proper void pointer arithmetic
+		// Check clock resolution
 		{
-			if (((void *)0 + (size_t)1) != (void *)1)
+			struct timespec res;
+			if (clock_getres(CLOCK_MONOTONIC, &res) != 0)
 			{
-				LOGK(LOG_FATAL, "Failed void pointer arithmetic runtime check!");
+				LOGK(LOG_FATAL, "Could not get clock resolution!");
+				// Will exit
+			}
+
+			uint64_t resolution = (uint64_t)res.tv_sec * NANOS_PER_SECOND + res.tv_nsec;
+			if (resolution > WORST_CLOCK_RESOLUTION)
+			{
+				LOGK(LOG_FATAL, "Failed clock resolution runtime check! The clock resolution is %" PRIu64 " nanoseconds. Allowable is %d", resolution, WORST_CLOCK_RESOLUTION);
 				// Will exit
 			}
 		}
@@ -855,6 +872,7 @@ int main(int argc, char * argv[])
 	hashtable_init(&syscalls, hash_str, hash_streq);
 	mutex_init(&kobj_mutex, M_RECURSIVE);
 	mutex_init(&kthreads_mutex, M_RECURSIVE);
+	watcher_init(watcher_cast(&kthreads_timer));
 	mutex_init(&io_lock, M_RECURSIVE);
 
 	// Set start time
@@ -1861,13 +1879,13 @@ int main(int argc, char * argv[])
 		// Check for new kernel thread tasks every second
 		{
 			exception_t * e = NULL;
-			if (!mainloop_newfdtimer(&kthreads_task, "KThread task handler", NANOS_PER_SECOND, kthread_dotasks, NULL, &e) || exception_check(&e))
+			if (!watcher_newtimer(&kthreads_timer, "KThread task handler", KTHREAD_TASK_PERIOD, kthread_dotasks, NULL, &e) || exception_check(&e))
 			{
 				LOGK(LOG_FATAL, "Could not create kthread task handler timer: %s", exception_message(e));
 				// Will exit
 			}
 
-			if (!mainloop_addwatcher(kernel_mainloop(), watcher_cast(&kthreads_task), &e) || exception_check(&e))
+			if (!mainloop_addwatcher(kernel_mainloop(), watcher_cast(&kthreads_timer), &e) || exception_check(&e))
 			{
 				LOGK(LOG_FATAL, "Could not add kthread task handler to mainloop: %s", exception_message(e));
 				// Will exit
@@ -1878,7 +1896,7 @@ int main(int argc, char * argv[])
 	// Run maxkernel mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_run(NULL, &e))
+		if (!mainloop_run(kernel_mainloop(), &e))
 		{
 			LOGK(LOG_ERR, "Mainloop exited with failure: %s", exception_message(e));
 		}

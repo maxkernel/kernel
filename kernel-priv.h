@@ -31,6 +31,18 @@ extern "C" {
 #define CAL_SIZE_CACHE			AUL_STRING_MAXLEN
 #define CONFIG_SIZE_CACHE		MODEL_SIZE_VALUE
 
+#define WORST_CLOCK_RESOLUTION	10						// 10 nanoseconds
+
+#define LOGFILE					"maxkernel.log"
+#define PIDFILE					"/var/run/maxkernel.pid"
+#define LOGBUF_SIZE				(400 * 1024)			// 400 KB
+
+#define SCHED_POLICY			SCHED_RR
+#define SCHED_PRIO_BASE			5
+
+#define KTHREAD_TASK_PERIOD		NANOS_PER_SECOND
+
+
 typedef struct __block_t block_t;
 typedef struct __blockinst_t blockinst_t;
 typedef struct __trigger_t trigger_t;
@@ -311,14 +323,6 @@ typedef struct
 	handler_f stop;
 	void * userdata;
 } kthreaddata_t;
-
-
-#define LOGFILE					"maxkernel.log"
-#define PIDFILE					"/var/run/maxkernel.pid"
-#define LOGBUF_SIZE				(400 * 1024)		// 400 KB
-
-#define SCHED_POLICY				SCHED_RR
-#define SCHED_PRIO_BASE		5
 
 
 typedef enum

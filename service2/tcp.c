@@ -32,11 +32,8 @@ typedef struct
 	uint8_t buffer[SC_BUFFERSIZE];
 	size_t size;
 
-	mutex_t savedlock;
-	bool savederr;
-	fdwatcher_t savedwatcher;
-	buffer_t * saved;
-	bufferpos_t savedpos;
+	buffer_t * payload;
+	bufferpos_t payload_pos;
 } tcpclient_t;
 
 
@@ -56,7 +53,7 @@ static void tcp_streamdestroy(stream_t * stream)
 	// Remove the watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&tcpstream->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&tcpstream->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove tcp stream watcher: %s", exception_message(e));
 			exception_free(e);
@@ -112,33 +109,14 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 
 	// Check to make sure there isn't a saved buffer still
 	{
-		bool savedfail = false;
-
-		mutex_lock(&tcpclient->savedlock);
+		if (tcpclient->payload != NULL)
 		{
-			if (tcpclient->savederr || /*tcpclient->savedfd != -1 ||*/ tcpclient->saved != NULL)
-			{
-				// Error sending saved buffer or could not send out all buffer data from previous send operation
-				// This is bad, just return false to indicate error (and drop client)
-				/*exception_t * e = NULL;
-				if (!mainloop_removefdwatch(stream_mainloop(client_stream(client)), tcpclient->savedfd, EPOLLET | EPOLLOUT, &e) || exception_check(&e))
-				{
-					LOG(LOG_INFO, "ERRRRJFKFGLSFGJSF: %s", exception_message(e));
-					exception_free(e);
-				}
-				*/
-
-				LOG(LOG_INFO, "SAVED BUFFER ERROR %d %d %d %zu %zu", tcpclient->savederr, tcpclient->savedfd != -1, tcpclient->saved != NULL, buffer_size(tcpclient->saved), bufferpos_remaining(&tcpclient->savedpos));
-				savedfail = true;
-			}
-		}
-		mutex_unlock(&tcpclient->savedlock);
-
-		if (savedfail)
-		{
-			return true;
+			LOG(LOG_WARN, "Could send complete service data payload to client before new data payload. Dropping client");
+			return false;
 		}
 	}
+
+	LOG(LOG_INFO, "SENDING FRAME");
 
 	// Write the header
 	{
@@ -152,7 +130,7 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 			a(s)[0], a(s)[1], a(s)[2], a(s)[3]													// Size of data payload to follow
 		};
 
-		ssize_t wrote = write(tcpclient->fd, header, sizeof(header));
+		ssize_t wrote = write(watcher_fd(&tcpclient->watcher), header, sizeof(header));
 		if (wrote != sizeof(header))
 		{
 			// Unable to complete write, return false to indicate error
@@ -164,7 +142,7 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 	// Write the payload
 	{
 		size_t size = buffer_size(data);
-		ssize_t wrote = buffer_send(data, tcpclient->fd, 0, size);
+		ssize_t wrote = buffer_send(data, watcher_fd(&tcpclient->watcher), 0, size);
 		if (wrote < 0)
 		{
 			// Some error happened during send
@@ -173,8 +151,13 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 		}
 		else if (wrote != size)
 		{
+			LOG(LOG_INFO, "DEFERING");
+
 			// Could not send all data, queue up the buffer and try to send more when available
-			bool success = false;
+			tcpclient->payload = buffer_dup(data);
+			bufferpos_new(&tcpclient->payload_pos, tcpclient->payload, wrote);
+
+			//bool success = false;
 
 #if 0
 			LOG(LOG_INFO, "DEFERING");
@@ -222,7 +205,7 @@ static bool tcp_clientsend(client_t * client, int64_t microtimestamp, const buff
 #endif
 
 
-			return success;
+			//return success;
 		}
 	}
 	return true;
@@ -247,26 +230,20 @@ static void tcp_clientdestroy(client_t * client)
 {
 	tcpclient_t * tcpclient = client_data(client);
 
-	// Destroy the saved buffer (if present)
-	if (tcpclient->saved != NULL)
+	// Free the payload if set
 	{
-		buffer_free(tcpclient->saved);
-
-		// Destroy the dup'd socket watcher
-		exception_t * e = NULL;
-		if (!mainloop_removewatch(&tcpclient->savedwatcher, &e) || exception_check(&e))
+		if (tcpclient->payload != NULL)
 		{
-			LOG(LOG_WARN, "Could not remove tcp client dup'd watcher: %s", exception_message(e));
-			exception_free(e);
+			buffer_free(tcpclient->payload);
+			tcpclient->payload = NULL;
+			bufferpos_clear(&tcpclient->payload_pos);
 		}
 	}
-
-	mutex_destroy(&tcpclient->savedlock);
 
 	// Destroy the client tcp watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&tcpclient->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&tcpclient->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove tcp client watcher: %s", exception_message(e));
 			exception_free(e);
@@ -279,43 +256,79 @@ static bool tcp_newdata(mainloop_t * loop, int fd, fdcond_t cond, void * userdat
 	client_t * client = userdata;
 	tcpclient_t * tcpclient = client_data(client);
 
-	// Update buffer
+	LOG(LOG_INFO, "TCP_NEWDATA");
+
+	if (cond & FD_READ)
 	{
-		ssize_t bytesread = read(fd, &tcpclient->buffer[tcpclient->size], SC_BUFFERSIZE - tcpclient->size);
-		if (bytesread <= 0)
+		// There is pending data to be read on the socket
+
+		// Update buffer
 		{
-			// Normal disconnect
-			LOG(LOG_DEBUG, "Abnormal tcp service client disconnect %s", addr2string(tcpclient->ip).string);
-			client_destroy(client);
-			return false;
+			ssize_t bytesread = read(fd, &tcpclient->buffer[tcpclient->size], SC_BUFFERSIZE - tcpclient->size);
+			if (bytesread <= 0)
+			{
+				// Abnormal disconnect
+				LOG(LOG_DEBUG, "Abnormal tcp service client disconnect %s", addr2string(tcpclient->ip).string);
+				client_destroy(client);
+
+				// Return true because we already closed the client in client_detsroy (avoid the warning of double closure)
+				return true;
+			}
+
+			tcpclient->size += bytesread;
 		}
 
-		tcpclient->size += bytesread;
+		// Parse the control codes out
+		{
+			ssize_t size = 0;
+
+			do
+			{
+				size = client_control(client, tcpclient->buffer, tcpclient->size);
+				if (size < 0)
+				{
+					// -1 means free the client
+					LOG(LOG_INFO, "Destroy because of control");
+					client_destroy(client);
+
+					return true;
+				}
+
+				if (size > 0)
+				{
+					// Size is the number of control bytes consumed
+					memmove(tcpclient->buffer, &tcpclient->buffer[size], tcpclient->size - size);
+					tcpclient->size -= size;
+				}
+
+			} while (size > 0 && tcpclient->size > 0);
+		}
 	}
 
-	// Parse the control codes out
+
+	if (cond & FD_WRITE && tcpclient->payload != NULL)
 	{
-		ssize_t size = 0;
+		LOG(LOG_INFO, "Delay send");
 
-		do
+		size_t remaining = bufferpos_remaining(&tcpclient->payload_pos);
+		ssize_t sent = bufferpos_send(&tcpclient->payload_pos, fd, remaining);
+
+		if (sent < 0)
 		{
-			size = client_control(client, tcpclient->buffer, tcpclient->size);
-			if (size < 0)
-			{
-				// -1 means free the client
-				LOG(LOG_INFO, "Destroy because of control");
-				client_destroy(client);
-				return false;
-			}
+			// Error during send, destroy client
+			LOG(LOG_WARN, "Could not send tcp service data to client: %s", strerror(errno));
+			client_destroy(client);
 
-			if (size > 0)
-			{
-				// size is the number of control bytes consumed
-				memmove(tcpclient->buffer, &tcpclient->buffer[size], tcpclient->size - size);
-				tcpclient->size -= size;
-			}
+			return true;
+		}
 
-		} while (size > 0 && tcpclient->size > 0);
+		if (sent == remaining)
+		{
+			// Sent all data, destroy the payload buffer
+			buffer_free(tcpclient->payload);
+			tcpclient->payload = NULL;
+			bufferpos_clear(&tcpclient->payload_pos);
+		}
 	}
 
 	return true;
@@ -405,19 +418,16 @@ static bool tcp_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * 
 	// Init the tcpstream
 	tcpclient_t * tcpclient = client_data(client);
 	memset(tcpclient, 0, sizeof(tcpclient_t));
-	tcpclient->watcher = mainloop_newfdwatcher(sock, FD_READ, tcp_newdata, client);
+	watcher_newfd(&tcpclient->watcher, sock, FD_EDGE_TRIG | FD_READ | FD_WRITE, tcp_newdata, client);
 	tcpclient->ip = addr.sin_addr.s_addr;
-	mutex_init(&tcpclient->savedlock, M_NORMAL);
-	tcpclient->savederr = false;
-	watcher_clear(&tcpclient->savedwatcher);
-	tcpclient->saved = NULL;
+	tcpclient->payload = NULL;
 
 	LOG(LOG_DEBUG, "New tcp service client from %s", addr2string(tcpclient->ip).string);
 
 	// Add it to the mainloop
 	{
 		exception_t * e = NULL;
-		if (!mainloop_addfdwatch(stream_mainloop(stream), &tcpclient->watcher, &e) || exception_check(&e))
+		if (!mainloop_addwatcher(stream_mainloop(stream), &tcpclient->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not add tcp client to mainloop: %s", exception_message(e));
 			exception_free(e);
@@ -451,8 +461,8 @@ bool tcp_init(exception_t ** err)
 	}
 
 	tcpstream_t * tcpstream = stream_data(stream);
-	tcpstream->watcher = mainloop_newfdwatcher(fd, FD_READ, tcp_newclient, stream);
-	if (!mainloop_addfdwatch(stream_mainloop(stream), &tcpstream->watcher, err) || exception_check(err))
+	watcher_newfd(&tcpstream->watcher, fd, FD_READ, tcp_newclient, stream);
+	if (!mainloop_addwatcher(stream_mainloop(stream), &tcpstream->watcher, err) || exception_check(err))
 	{
 		stream_destroy(stream);
 		return false;

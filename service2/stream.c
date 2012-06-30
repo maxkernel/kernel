@@ -15,6 +15,7 @@ static mainloop_t * streamloop;
 
 static list_t streams;
 static mutex_t streams_lock;
+static timerwatcher_t monitor_watcher;
 
 
 static bool stream_monitor(mainloop_t * loop, uint64_t nanoseconds, void * userdata)
@@ -196,22 +197,34 @@ void stream_preact()
 bool stream_init(exception_t ** err)
 {
 	// Create the mainloop
-	streamloop = mainloop_new("Service stream network loop", err);
-	if (streamloop == NULL || exception_check(err))
 	{
-		streamloop = NULL;
-		return false;
+		streamloop = mainloop_new("Service stream network loop", err);
+		if (streamloop == NULL || exception_check(err))
+		{
+			streamloop = NULL;
+			return false;
+		}
 	}
 
 	// Create the stream monitor timer
-	if (mainloop_addnewfdtimer(streamloop, "Service stream monitor", STREAM_MONITOR_TIMEOUT, stream_monitor, NULL, err) < 0)
 	{
-		return false;
+		if (!watcher_newtimer(&monitor_watcher, "Service stream monitor", STREAM_MONITOR_TIMEOUT, stream_monitor, NULL, err) || exception_check(err))
+		{
+			return false;
+		}
+
+		if (!mainloop_addwatcher(streamloop, watcher_cast(&monitor_watcher), err) || exception_check(err))
+		{
+			return false;
+		}
 	}
 
-	if (!kthread_newthread("Service stream handler", KTH_PRIO_LOW, stream_runloop, stream_stoploop, streamloop, err))
+	// Create the mainloop thread
 	{
-		return false;
+		if (!kthread_newthread("Service stream handler", KTH_PRIO_LOW, stream_runloop, stream_stoploop, streamloop, err))
+		{
+			return false;
+		}
 	}
 
 	return true;

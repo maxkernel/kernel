@@ -38,7 +38,7 @@ typedef struct
 
 typedef struct
 {
-	list_t free_list;	// Maintain a list of free/used buffers. Used in console.c only
+	//list_t free_list;	// Maintain a list of free/used buffers. Used in console.c only
 
 	size_t size;
 	size_t index;

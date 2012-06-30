@@ -9,7 +9,7 @@ extern "C" {
 
 #define CONSOLE_BUFFERMAX		128
 #define CONSOLE_HEADERSIZE		10
-#define CONSOLE_BUFFERS			5
+#define CONSOLE_MAXCLIENTS			5
 
 #define CONSOLE_SOCKFILE		"/var/run/maxkernel.socket"
 #define CONSOLE_TCPPORT			48000

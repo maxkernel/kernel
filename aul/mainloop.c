@@ -78,6 +78,8 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 				for (size_t i = 0; i < bits; i++)
 				{
 					fdwatcher_t * watcher = events[i].data.ptr;
+					//log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "H %d", watcher->fd);
+
 					if (!watcher->listener(loop, watcher->fd, events[i].events, watcher->userdata))
 					{
 						exception_t * e = NULL;
@@ -212,22 +214,18 @@ bool mainloop_removewatcher(fdwatcher_t * watcher, exception_t ** err)
 }
 
 
-fdwatcher_t mainloop_newfdwatcher(int fd, fdcond_t events, watch_f listener, void * userdata)
+void watcher_newfd(fdwatcher_t * watcher, int fd, fdcond_t events, watch_f listener, void * userdata)
 {
-	fdwatcher_t watcher = {
-		.loop = NULL,
-		.fd = fd,
-		.events = events,
-		.listener = listener,
-		.userdata = userdata,
-	};
-
-	return watcher;
+	watcher_init(watcher);
+	watcher->fd = fd;
+	watcher->events = events;
+	watcher->listener = listener;
+	watcher->userdata = userdata;
 }
 
 static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
-	timerfdwatcher_t * timerwatcher = userdata;
+	timerwatcher_t * timerwatcher = userdata;
 
 	uint64_t timeouts = 0;
 	ssize_t r = read(fd, &timeouts, sizeof(timeouts));
@@ -250,7 +248,7 @@ static bool mainloop_timerfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 
 static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
-	eventfdwatcher_t * eventwatcher = userdata;
+	eventwatcher_t * eventwatcher = userdata;
 
 	eventfd_t counter = 0;
 	if (eventfd_read(fd, &counter) < 0)
@@ -266,7 +264,7 @@ static bool mainloop_eventfddispatch(mainloop_t * loop, int fd, fdcond_t cond, v
 	return eventwatcher->listener(loop, counter, eventwatcher->userdata);
 }
 
-bool mainloop_newfdtimer(timerfdwatcher_t * timerwatcher, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
+bool watcher_newtimer(timerwatcher_t * timerwatcher, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -318,8 +316,8 @@ bool mainloop_newfdtimer(timerfdwatcher_t * timerwatcher, const char * name, uin
 		return false;
 	}
 
-	memset(timerwatcher, 0, sizeof(timerfdwatcher_t));
-	timerwatcher->watcher = mainloop_newfdwatcher(fd, FD_READ, mainloop_timerfddispatch, timerwatcher);
+	memset(timerwatcher, 0, sizeof(timerwatcher_t));
+	watcher_newfd(&timerwatcher->watcher, fd, FD_READ, mainloop_timerfddispatch, timerwatcher);
 	timerwatcher->name = name;
 	timerwatcher->nanoseconds = nanoseconds;
 	timerwatcher->listener = listener;
@@ -328,7 +326,7 @@ bool mainloop_newfdtimer(timerfdwatcher_t * timerwatcher, const char * name, uin
 	return true;
 }
 
-bool mainloop_newfdevent(eventfdwatcher_t * eventwatcher, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
+bool watcher_newevent(eventwatcher_t * eventwatcher, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -352,8 +350,8 @@ bool mainloop_newfdevent(eventfdwatcher_t * eventwatcher, const char * name, uns
 		return false;
 	}
 
-	memset(eventwatcher, 0, sizeof(eventfdwatcher_t));
-	eventwatcher->watcher = mainloop_newfdwatcher(fd, FD_READ, mainloop_eventfddispatch, eventwatcher);
+	memset(eventwatcher, 0, sizeof(eventwatcher_t));
+	watcher_newfd(&eventwatcher->watcher, fd, FD_READ, mainloop_eventfddispatch, eventwatcher);
 	eventwatcher->name = name;
 	eventwatcher->listener = listener;
 	eventwatcher->userdata = userdata;

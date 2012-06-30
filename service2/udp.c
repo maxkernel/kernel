@@ -50,7 +50,7 @@ static void udp_streamdestroy(stream_t * stream)
 	// Destroy the udp watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&udpstream->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&udpstream->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove udp stream watcher: %s", exception_message(e));
 			exception_free(e);
@@ -245,11 +245,11 @@ bool udp_init(exception_t ** err)
 	}
 
 	udpstream_t * udpstream = stream_data(stream);
-	udpstream->watcher = mainloop_newfdwatcher(fd, FD_READ, udp_newdata, stream);
+	watcher_newfd(&udpstream->watcher, fd, FD_READ, udp_newdata, stream);
 	mutex_init(&udpstream->lock, M_RECURSIVE);
 	list_init(&udpstream->clients);
 
-	if (!mainloop_addfdwatch(stream_mainloop(stream), &udpstream->watcher, err) || exception_check(err))
+	if (!mainloop_addwatcher(stream_mainloop(stream), &udpstream->watcher, err) || exception_check(err))
 	{
 		stream_destroy(stream);
 		return false;

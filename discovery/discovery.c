@@ -17,7 +17,7 @@
 
 static bool enable_discovery = false;
 static char hostname[HOSTNAME_LEN];
-static fdwatcher_t udp_watcher = watcher_empty();
+static fdwatcher_t udp_watcher;
 
 static bool discovery_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * userdata)
 {
@@ -59,11 +59,19 @@ static bool discovery_init()
 {
 	labels(after_udp);
 
-	memset(hostname, 0, HOSTNAME_LEN);
-	if (gethostname(hostname, HOSTNAME_LEN - 1) < 0)
+	// Initialize the watchers
 	{
-		LOG(LOG_WARN, "Could not get computer hostname for discovery clients. Using default: %s", HOSTNAME_DEFAULT);
-		strncpy(hostname, HOSTNAME_DEFAULT, HOSTNAME_LEN - 1);
+		watcher_init(&udp_watcher);
+	}
+
+	// Get the hostname
+	{
+		memset(hostname, 0, HOSTNAME_LEN);
+		if (gethostname(hostname, HOSTNAME_LEN - 1) < 0)
+		{
+			LOG(LOG_WARN, "Could not get computer hostname for discovery clients. Using default: %s", HOSTNAME_DEFAULT);
+			strncpy(hostname, HOSTNAME_DEFAULT, HOSTNAME_LEN - 1);
+		}
 	}
 
 	// Set up udp discovery server
@@ -79,14 +87,13 @@ static bool discovery_init()
 			goto after_udp;
 		}
 
-		udp_watcher = mainloop_newfdwatcher(sock, FD_READ, discovery_newclient, NULL);
-		if (!mainloop_addwatcher(kernel_mainloop(), &udp_watcher, &e) == NULL || exception_check(&e))
+		watcher_newfd(&udp_watcher, sock, FD_READ, discovery_newclient, NULL);
+		if (!mainloop_addwatcher(kernel_mainloop(), &udp_watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add udp discovery socket to mainloop: %s", exception_message(e));
 			exception_free(e);
 
-			close(watcher_fd(&udp_watcher));
-			watcher_clear(&udp_watcher);
+			watcher_close(&udp_watcher);
 			goto after_udp;
 		}
 
@@ -102,7 +109,7 @@ static void discovery_destroy()
 	// Remove udp watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&udp_watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&udp_watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove udp watcher: %s", exception_message(e));
 			exception_free(e);

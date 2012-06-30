@@ -227,7 +227,7 @@ static void gps_destroy(void * object)
 	// Remove gps watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&gps->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&gps->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove gps watcher: %s", exception_message(e));
 			exception_free(e);
@@ -261,7 +261,7 @@ static void * gps_new(char * serial_port, int baud)
 	memset(gps, 0, sizeof(gps_t));
 	gps->serial_port = strdup(serial_port);
 	gps->serial_speed = speed;
-	gps->watcher = mainloop_newfdwatcher(fd, FD_READ, gps_newdata, gps);
+	watcher_newfd(&gps->watcher, fd, FD_READ, gps_newdata, gps);
 	gps->readsuccess = false;
 	mutex_init(&gps->lock, M_RECURSIVE);
 	gps->lastupdate = 0;

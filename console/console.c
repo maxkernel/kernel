@@ -17,19 +17,30 @@
 #include <message.h>
 
 
-static stack_t free_buffers;
+typedef struct
+{
+	list_t free_list;
+	fdwatcher_t socket;
+	msgbuffer_t buffer;
+} client_t;
+
+// TODO - add mutex around free_clients!
+static stack_t free_clients;
 static bool enable_network = false;
 
+static fdwatcher_t unix_watcher;
+static fdwatcher_t tcp_watcher;
 
-static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
+static bool console_newdata(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
-	msgbuffer_t * buffer = userdata;
+	client_t * client = userdata;
+	msgbuffer_t * buffer = &client->buffer;
 	msgstate_t state = message_readfd(fd, buffer);
 
 	if (state >= P_ERROR)
 	{
 		// Add buffer back to free list
-		stack_push(&free_buffers, &buffer->free_list);
+		stack_push(&free_clients, &client->free_list);
 
 		return false;
 	}
@@ -106,8 +117,8 @@ static bool console_clientdata(mainloop_t * loop, int fd, fdcond_t condition, vo
 
 static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, void * userdata)
 {
-	int client = accept(fd, NULL, NULL);
-	if (client < 0)
+	int sock = accept(fd, NULL, NULL);
+	if (sock < 0)
 	{
 		if (errno != EAGAIN && errno != EWOULDBLOCK)
 		{
@@ -122,28 +133,34 @@ static bool console_newclient(mainloop_t * loop, int fd, fdcond_t condition, voi
 	// TODO IMPORTANT - make non-block
 
 	// Get a free buffer
-	list_t * entry = stack_pop(&free_buffers);
-	if (entry == NULL)
+	list_t * client_entry = stack_pop(&free_clients);
+	if (client_entry == NULL)
 	{
-		LOG(LOG_WARN, "Console out of free buffers! (CONSOLE_BUFFERS = %d)", CONSOLE_BUFFERS);
-		close(client);
+		LOG(LOG_WARN, "Console out of free buffers! (CONSOLE_BUFFERS = %d)", CONSOLE_MAXCLIENTS);
+		close(sock);
 		return true;
 	}
 
-	msgbuffer_t * buffer = list_entry(entry, msgbuffer_t, free_list);
+	client_t * client = list_entry(client_entry, client_t, free_list);
 
 	// Clear the message
-	message_clear(buffer);
+	message_clear(&client->buffer);
+
+	// Create the socket watcher
+	watcher_newfd(&client->socket, sock, FD_READ, console_newdata, client);
 
 	// Add socket to mainloop watch
 	exception_t * e = NULL;
-	if (mainloop_addfdwatcher(kernel_mainloop(), client, FD_READ, console_clientdata, buffer, &e) == NULL || exception_check(&e))
+	if (!mainloop_addwatcher(loop, &client->socket, &e) || exception_check(&e))
 	{
 		LOG(LOG_ERR, "Could not add console client to mainloop: %s", exception_message(e));
 		exception_free(e);
 
+		// Destroy the watcher
+		watcher_close(&client->socket);
+
 		// Add buffer back to free list
-		stack_push(&free_buffers, &buffer->free_list);
+		stack_push(&free_clients, &client->free_list);
 		return true;
 	}
 
@@ -155,14 +172,24 @@ static bool console_init()
 	labels(after_unix, after_network);
 
 	// Initialize buffers
-	stack_init(&free_buffers);
-	msgbuffer_t * buffers = malloc(sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
-	memset(buffers, 0, sizeof(msgbuffer_t) * CONSOLE_BUFFERS);
-
-	for (size_t i = 0; i<CONSOLE_BUFFERS; i++)
 	{
-		stack_push(&free_buffers, &buffers[i].free_list);
+		client_t * clients = malloc(sizeof(client_t) * CONSOLE_MAXCLIENTS);
+		memset(clients, 0, sizeof(client_t) * CONSOLE_MAXCLIENTS);
+
+		stack_init(&free_clients);
+		for (size_t i = 0; i < CONSOLE_MAXCLIENTS; i++)
+		{
+			watcher_init(&clients[i].socket);
+			stack_push(&free_clients, &clients[i].free_list);
+		}
 	}
+
+	// Initialize the watchers
+	{
+		watcher_init(&unix_watcher);
+		watcher_init(&tcp_watcher);
+	}
+
 
 	// Start unix socket
 	{
@@ -184,11 +211,13 @@ static bool console_init()
 			goto after_unix;
 		}
 
-		if (mainloop_newfdwatcher(kernel_mainloop(), unixsock, FD_READ, console_newclient, NULL, &e) == NULL || exception_check(&e))
+		watcher_newfd(&unix_watcher, unixsock, FD_READ, console_newclient, NULL);
+		if (!mainloop_addwatcher(kernel_mainloop(), &unix_watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add console unix_socket fd to mainloop: %s", exception_message(e));
-			mainloop_freefdwatcher(watcher);
-			goto after_unixsock;
+			exception_free(e);
+			// TODO - free watcher
+			goto after_unix;
 		}
 
 		LOG(LOG_DEBUG, "Awaiting console clients on file %s", CONSOLE_SOCKFILE);
@@ -209,10 +238,12 @@ after_unix:
 			goto after_network;
 		}
 
-		if (mainloop_newfdwatcher(kernel_mainloop(), tcpsock, FD_READ, console_newclient, NULL, &e) == NULL || exception_check(&e))
+		watcher_newfd(&tcp_watcher, tcpsock, FD_READ, console_newclient, NULL);
+		if (!mainloop_addwatcher(kernel_mainloop(), &tcp_watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_ERR, "Could not add console tcp fd to mainloop: %s", exception_message(e));
 			exception_free(e);
+			// TODO - free watcher
 			goto after_network;
 		}
 

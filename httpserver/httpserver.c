@@ -252,6 +252,8 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 
 	// TODO IMPORTANT - make sock non-blocking
 
+	// TODO - add lock around getting free buffers
+
 	httpbuffer_t * buffer = NULL;
 	for (size_t i = 0; i < NUM_BUFFERS; i++)
 	{
@@ -270,20 +272,20 @@ static bool http_newclient(mainloop_t * loop, int fd, fdcond_t cond, void * user
 	}
 	// Set up the buffer
 	buffer->inuse = true;
-	buffer->watcher = mainloop_newfdwatcher(sock, FD_READ, http_newdata, buffer);
+	watcher_newfd(&buffer->watcher, sock, FD_READ, http_newdata, buffer);
 	buffer->buffer[0] = '\0';
 	buffer->length = 0;
 	buffer->ctx = ctx;
 
 	// Now set up the watch on the accept'd file descriptor
 	exception_t * e = NULL;
-	if (!mainloop_addwatcher(loop, &buffer->watcher, &e) == NULL || exception_check(&e))
+	if (!mainloop_addwatcher(loop, &buffer->watcher, &e) || exception_check(&e))
 	{
 		LOG(LOG_WARN, "Could not add http client fd to mainloop: %s", exception_message(e));
 		exception_free(e);
 
 		// Remove the in-use flag to make it available again
-		close(watcher_fd(&buffer->watcher));
+		watcher_close(&buffer->watcher);
 		buffer->inuse = false;
 		goto end;
 	}
@@ -318,7 +320,7 @@ httpcontext_t * http_new(uint16_t port, mainloop_t * mainloop, exception_t ** er
 
 	httpcontext_t * ctx = malloc(sizeof(httpcontext_t));
 	memset(ctx, 0, sizeof(httpcontext_t));
-	ctx->watcher = mainloop_newfdwatcher(sock, FD_READ, http_newclient, ctx);
+	watcher_newfd(&ctx->watcher, sock, FD_READ, http_newclient, ctx);
 	list_init(&ctx->filters);
 
 	if (!mainloop_addwatcher(mainloop, &ctx->watcher, err) || exception_check(err))
@@ -391,7 +393,7 @@ void http_destroy(httpcontext_t * ctx)
 	// Remove http ctx watcher
 	{
 		exception_t * e = NULL;
-		if (!mainloop_removewatch(&ctx->watcher, &e) || exception_check(&e))
+		if (!mainloop_removewatcher(&ctx->watcher, &e) || exception_check(&e))
 		{
 			LOG(LOG_WARN, "Could not remove http ctx watcher: %s", exception_message(e));
 			exception_free(e);

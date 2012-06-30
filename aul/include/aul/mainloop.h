@@ -14,19 +14,16 @@
 extern "C" {
 #endif
 
-//#define AUL_MAINLOOP_ROOT_NAME			"Root"
 #define AUL_MAINLOOP_TIMEOUT_MS			100
-#define AUL_MAINLOOP_MAX_WATCHERS		100
-#define AUL_MAINLOOP_MAX_TIMERFDS		75
-#define AUL_MAINLOOP_MAX_EVENTFDS		25
 
-#define AUL_MAINLOOP_SIZE_HINT			10
+#define AUL_MAINLOOP_SIZE_HINT			50
 #define AUL_MAINLOOP_EPOLL_EVENTS		100
 
 typedef enum
 {
-	FD_READ		= EPOLLIN,
-	FD_WRITE	= EPOLLOUT,
+	FD_EDGE_TRIG	= EPOLLET,
+	FD_READ			= EPOLLIN,
+	FD_WRITE		= EPOLLOUT,
 } fdcond_t;
 
 typedef struct
@@ -58,7 +55,7 @@ typedef struct
 	uint64_t nanoseconds;
 	timerfd_f listener;
 	void * userdata;
-} timerfdwatcher_t;
+} timerwatcher_t;
 
 typedef struct
 {
@@ -67,7 +64,7 @@ typedef struct
 	const char * name;		// TODO - Is this necessary?
 	eventfd_f listener;
 	void * userdata;
-} eventfdwatcher_t;
+} eventwatcher_t;
 
 mainloop_t * mainloop_new(const char * name, exception_t ** err);
 bool mainloop_run(mainloop_t * loop, exception_t ** err);
@@ -76,24 +73,16 @@ bool mainloop_stop(mainloop_t * loop, exception_t ** err);
 bool mainloop_addwatcher(mainloop_t * loop, fdwatcher_t * watcher, exception_t ** err);
 bool mainloop_removewatcher(fdwatcher_t * watcher, exception_t ** err);
 
-fdwatcher_t mainloop_newfdwatcher(int fd, fdcond_t events, watch_f listener, void * userdata);
-bool mainloop_newfdtimer(timerfdwatcher_t * timerwatcher, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
-bool mainloop_newfdevent(eventfdwatcher_t * eventwatcher, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
-
-#define watcher_empty()		{ NULL, -1, 0, NULL, NULL }
-#define watcher_clear(w)	({ (w)->loop = NULL; (w)->fd = -1; (w)->events = 0; (w)->listener = NULL; (w)->userdata = NULL; })
-#define watcher_cast(o)		(&(o)->watcher)
+void watcher_newfd(fdwatcher_t * watcher, int fd, fdcond_t events, watch_f listener, void * userdata);
+bool watcher_newtimer(timerwatcher_t * timerwatcher, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
+bool watcher_newevent(eventwatcher_t * eventwatcher, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
 #define watcher_fd(w)		((w)->fd)
 #define watcher_events(w)	((w)->events)
 #define watcher_data(w)		((w)->userdata)
 
-/*
-fdwatcher_t * mainloop_addfdwatch(mainloop_t * loop, int fd, fdcond_t cond, watch_f listener, void * userdata, exception_t ** err);
-bool mainloop_removefdwatch(mainloop_t * loop, fdwatcher_t * watcher, exception_t ** err);
-
-int mainloop_addnewfdtimer(mainloop_t * loop, const char * name, uint64_t nanoseconds, timerfd_f listener, void * userdata, exception_t ** err);
-int mainloop_addnewfdevent(mainloop_t * loop, const char * name, unsigned int initialvalue, eventfd_f listener, void * userdata, exception_t ** err);
-*/
+#define watcher_cast(o)		(&(o)->watcher)
+#define watcher_init(w)		({ (w)->loop = NULL; (w)->fd = -1; (w)->events = 0; (w)->listener = NULL; (w)->userdata = NULL; })
+#define watcher_close(w)	({ close(watcher_fd(w)); watcher_init(w); })
 
 #ifdef __cplusplus
 }
