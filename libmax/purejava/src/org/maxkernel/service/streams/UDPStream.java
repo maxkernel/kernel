@@ -11,11 +11,14 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServiceList;
+import org.maxkernel.service.ServicePacket;
 import org.maxkernel.service.streams.Stream.Mode;
 import org.xml.sax.SAXException;
 
@@ -73,6 +76,8 @@ public class UDPStream implements Stream {
 					{
 						// On a new data packet
 						clear();
+						this.timestamp = timestamp;
+						this.size = size;
 						payload = new byte[size];
 					}
 					
@@ -85,6 +90,8 @@ public class UDPStream implements Stream {
 					body.get(payload, offset, length);
 					
 					this.numpackets += 1;
+					//System.out.println("PACKET "+this.numpackets +" / "+ numpackets);
+					
 					return numpackets == this.numpackets;
 				}
 				
@@ -106,6 +113,7 @@ public class UDPStream implements Stream {
 
 	private static final int SEND_BUFFER_SIZE = 128;
 	private static final int HEARTBEAT_TIMEOUT = 5000;
+	private static final long LIST_TIMEOUT = 250;
 	
 	private Mode mode;
 	private long lastheartbeat;
@@ -114,6 +122,8 @@ public class UDPStream implements Stream {
 	private DatagramChannel socket;
 	private ByteBuffer sendbuf;
 	
+	private Packet packet;
+	
 	public UDPStream(InetSocketAddress sockaddress) throws IOException {
 		mode = Mode.UNLOCKED;
 		lastheartbeat = 0;
@@ -121,7 +131,10 @@ public class UDPStream implements Stream {
 		
 		socket = DatagramChannel.open();
 		socket.connect(sockaddress);
+		socket.configureBlocking(false);
 		sendbuf = ByteBuffer.allocate(SEND_BUFFER_SIZE);
+		
+		packet = new Packet();
 	}
 	
 	public UDPStream(InetAddress address, int port) throws IOException {
@@ -132,6 +145,21 @@ public class UDPStream implements Stream {
 		this(address, DEFAULT_PORT);
 	}
 	
+	private void send(byte[] data) throws IOException {
+		// TODO - make sure that data can fit into sendbuf
+		// TODO - make smarter!! (split data into multiple passes of sendbuf!)
+		
+		synchronized (socket) {
+			sendbuf.clear();
+			sendbuf.put(data);
+			sendbuf.flip();
+			
+			if (socket.write(sendbuf) != data.length) {
+				throw new IOException("Could not send all data to server");
+			}
+		}
+	}
+	
 	@Override
 	public Mode mode() {
 		return mode;
@@ -139,11 +167,158 @@ public class UDPStream implements Stream {
 	
 	@Override
 	public List<Service> services() throws IOException {
-		// TODO - finish me!
-		return new ArrayList<Service>();
+		if (mode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Attempting to get service list from locked stream!");
+		}
+		
+		synchronized (socket) {
+			
+			Selector selector = Selector.open();
+			
+			try {
+				
+				socket.register(selector, SelectionKey.OP_READ);
+				send(new byte[]{ Stream.LISTXML });
+				
+				do {
+					
+					if (selector.select(LIST_TIMEOUT) == 0) {
+						throw new IOException("Could not read all services data!");
+					}
+					
+				} while (!packet.read(socket));
+				
+				selector.close();
+				
+				
+				try {
+					return ServiceList.parseXML(new Reader() {
+						int left = packet.payload().length;
+						
+						@Override
+						public int read(char[] cbuf, int off, int len) throws IOException {
+							if (left == 0) {
+								return -1;
+							}
+							
+							int amount = Math.min(len, left);
+							char[] array = new String(packet.payload(), packet.payload().length - left, amount).toCharArray();
+							left -= amount;
+							
+							System.arraycopy(array, 0, cbuf, off, array.length);
+							return array.length;
+						}
+						
+						@Override
+						public void close() throws IOException {
+							// Ignore it
+						}
+					});
+				} catch (SAXException e) {
+					throw new InvalidObjectException("XML parse exception. Bad data: "+e.getMessage());
+				}
+				
+				
+			} finally {
+				packet.clear();
+				selector.close();
+			}
+		}
 	}
 	
+	@Override
+	public void subscribe(Service service) throws IOException {
+		if (mode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+mode());
+		}
+		
+		this.service = service;
+		
+		String name = service.getName();
+		int length = name.length();
+		
+		byte[] data = new byte[length + 2];
+		data[0] = Stream.SUBSCRIBE;
+		System.arraycopy(name.getBytes("UTF8"), 0, data, 1, length);
+		data[length+1] = 0;
+		send(data);
+	}
 	
+	@Override
+	public void unsubscribe() throws IOException {
+		if (mode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+mode());
+		}
+		
+		send(new byte[]{ Stream.UNSUBSCRIBE });
+	}
+	
+	@Override
+	public void begin(Selector selector) throws IOException {
+		if (mode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+mode());
+		}
+		
+		// Lock the stream
+		this.lastheartbeat = System.currentTimeMillis();
+		this.mode = Mode.LOCKED;
+		send(new byte[]{ Stream.BEGIN });
+		
+		// Set up the selector
+		socket.register(selector, SelectionKey.OP_READ, this);
+	}
+	
+	@Override
+	public void heartbeat() throws IOException {
+		if (mode != Mode.LOCKED) {
+			return;
+		}
+		
+		// Don't try to throttle the heartbeat rates
+		send(new byte[]{ Stream.HEARTBEAT });
+	}
+	
+	@Override
+	public boolean check() {
+		if (mode() != Mode.LOCKED) {
+			return true;
+		}
+		
+		return (this.lastheartbeat + HEARTBEAT_TIMEOUT) > System.currentTimeMillis();
+	}
+	
+	@Override
+	public ServicePacket handle() throws IOException {
+		if (mode() != Mode.LOCKED) {
+			throw new SyncFailedException("Bad stream state: "+mode());
+		}
+		
+		synchronized (socket) {
+		
+			if (!packet.read(socket)) {
+				return null;
+			}
+			
+			switch (packet.code()) {
+				case Stream.HEARTBEAT: {
+					lastheartbeat = System.currentTimeMillis();
+					packet.clear();
+					return null;
+				}
+				
+				case Stream.DATA: {
+					ServicePacket servicepacket = new ServicePacket(service, this, packet.timestamp(), packet.payload());
+					packet.clear();
+					
+					return servicepacket;
+				}
+				
+				default: {
+					throw new InvalidObjectException("Unknown code received from service server: "+packet.code());
+				}
+			}
+		}
+	}
 	
 	@Override
 	public void close() throws IOException {

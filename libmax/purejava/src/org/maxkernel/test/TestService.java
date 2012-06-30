@@ -20,6 +20,7 @@ import org.maxkernel.service.ServiceClient;
 import org.maxkernel.service.ServicePacket;
 import org.maxkernel.service.streams.Stream;
 import org.maxkernel.service.streams.TCPStream;
+import org.maxkernel.service.streams.UDPStream;
 
 public class TestService {
 
@@ -31,32 +32,36 @@ public class TestService {
 		JLabel label = new JLabel("", SwingConstants.CENTER);
 		f.getContentPane().add(label);
 		f.setVisible(true);
+		f.setExtendedState(JFrame.MAXIMIZED_BOTH);
 		
 		
 		ServiceClient client = new ServiceClient();
 		
-		//Stream stream = new TCPStream(InetAddress.getByName("192.168.1.100"));
-		Stream stream = new TCPStream(InetAddress.getByName("localhost"));
+		//Stream tcpstream = new TCPStream(InetAddress.getByName("192.168.1.100"));
+		Stream udpstream = new UDPStream(InetAddress.getByName("192.168.1.100"));
+		//Stream stream = new TCPStream(InetAddress.getByName("localhost"));
 		
-		List<Service> services = stream.services();
+		List<Service> services = udpstream.services();
 		if (services == null) {
 			throw new Exception("Services list is NULL!");
 		}
 		
 		//System.out.println("Services: "+services);
-		stream.subscribe(services.get(0));
+		udpstream.subscribe(services.get(0));
+		//tcpstream.subscribe(services.get(0));
 		
+		client.begin(udpstream);
 		
-		System.out.println("Start");
-		client.start(stream);
 		while (true) {
 			ServicePacket p = client.dequeue();
 			
 			//ByteBuffer b = ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN);
 			//System.out.println(b.getDouble() + "\t" + b.getDouble()+ "\t" + b.getDouble());
 			
+			//final int blowup = 3;
+			
 			BufferedImage img = ImageIO.read(new ByteArrayInputStream(p.data()));
-			//label.setIcon(new ImageIcon(img.getScaledInstance(img.getWidth() * 4, img.getHeight() * 4, Image.SCALE_SMOOTH)));
+			//label.setIcon(new ImageIcon(img.getScaledInstance(img.getWidth() * blowup, img.getHeight() * blowup, Image.SCALE_FAST)));
 			label.setIcon(new ImageIcon(img));
 		}
 		

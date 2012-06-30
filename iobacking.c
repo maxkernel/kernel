@@ -59,7 +59,8 @@ iobacking_t * iobacking_new(char sig, exception_t ** err)
 			//  [  char *  |   string...      ]
 			// First member points to the rest of the string
 			//   we use this so that when we return the data chunk pointer, its of type pointer to char *
-			*(char **)&backing->data[0] = (char *)&backing->data[sizeof(char *)];
+			char ** head = (char **)&backing[0];
+			*head = (char *)&backing->data[sizeof(char *)];
 			break;
 		}
 
@@ -96,14 +97,44 @@ void iobacking_copy(iobacking_t * backing, const void * data)
 	// Copy data into backing
 	switch (iobacking_sig(backing))
 	{
-		case T_BOOLEAN:		*(bool *)iobacking_data(backing) = (data == NULL)? false : *(const bool *)data;			break;
-		case T_INTEGER:		*(int *)iobacking_data(backing) = (data == NULL)? 0 : *(const int *)data;				break;
-		case T_DOUBLE:		*(double *)iobacking_data(backing) = (data == NULL)? 0.0 : *(const double *)data;		break;
-		case T_CHAR:		*(char *)iobacking_data(backing) = (data == NULL)? '\0' : *(const char *)data;			break;
+		case T_BOOLEAN:
+		{
+			const bool * from = (const bool *)data;
+			bool * to = (bool *)iobacking_data(backing);
+			*to = (from == NULL)? false : *from;
+			break;
+		}
+
+		case T_INTEGER:
+		{
+			const int * from = (const int *)data;
+			int * to = (int *)iobacking_data(backing);
+			*to = (from == NULL)? 0 : *from;
+			break;
+		}
+
+		case T_DOUBLE:
+		{
+			const double * from = (const double *)data;
+			double * to = (double *)iobacking_data(backing);
+			*to = (from == NULL)? 0.0 : *from;
+			break;
+		}
+
+		case T_CHAR:
+		{
+			const char * from = (const char *)data;
+			char * to = (char *)iobacking_data(backing);
+			*to = (from == NULL)? '\0' : *from;
+			break;
+		}
+
 		case T_STRING:
 		{
-			const char * str = (data == NULL)? "" : ((*(const char **)data == NULL)? "" : *(const char **)data);
-			strncpy(*(char **)iobacking_data(backing), str, AUL_STRING_MAXLEN - 1);
+			const char * const * from = (const char * const *)data;
+			char ** to = (char **)iobacking_data(backing);
+			const char * str = (from == NULL)? "" : ((*from == NULL)? "" : *from);
+			strncpy(*to, str, AUL_STRING_MAXLEN - 1);
 			break;
 		}
 
@@ -112,14 +143,18 @@ void iobacking_copy(iobacking_t * backing, const void * data)
 		case T_ARRAY_DOUBLE:
 		case T_BUFFER:
 		{
+			const buffer_t ** from = (const buffer_t **)data;
+			buffer_t ** to = (buffer_t **)iobacking_data(backing);
+
 			if (!iobacking_isnull(backing))
 			{
-				buffer_free(*(buffer_t **)iobacking_data(backing));
+				buffer_free(*to);
+				*to = NULL;
 			}
 
-			if (data != NULL)
+			if (from != NULL)
 			{
-				*(buffer_t **)iobacking_data(backing) = buffer_dup(*(const buffer_t **)data);
+				*to = buffer_dup(*from);
 			}
 
 			break;

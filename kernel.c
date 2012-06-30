@@ -125,7 +125,10 @@ static void signal_coredump(const char * name, const char * code)
 	string_t cmd = string_new("/bin/bash %s/debug/core.debug.bash %d %s '%s'", INSTALL, getpid(), file.string, name);
 
 	// Execute the script file the uses gdb to grab a stack trace
-	system(cmd.string);
+	if (system(cmd.string) == -1)
+	{
+		LOGK(LOG_ERR, "Could not generate gdb coredump: %s", strerror(errno));
+	}
 
 	// Now output the log
 	FILE * fp = fopen(file.string, "a");
@@ -804,7 +807,11 @@ int main(int argc, char * argv[])
 
 	// Set up the working directory to the install dir
 	{
-		chdir(INSTALL);
+		if (chdir(INSTALL) < 0)
+		{
+			LOGK(LOG_WARN, "Change directory operation failed: %s", strerror(errno));
+		}
+
 		path_set(".", NULL);
 	}
 	

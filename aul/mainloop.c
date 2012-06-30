@@ -152,23 +152,64 @@ bool mainloop_addwatcher(mainloop_t * loop, fdwatcher_t * watcher, exception_t *
 		}
 	}
 
-	// Add watcher fd to epoll
-	{
-		struct epoll_event event;
-		memset(&event, 0, sizeof(struct epoll_event));
-		event.events = watcher->events;
-		event.data.ptr = watcher;
+	struct epoll_event event;
+	memset(&event, 0, sizeof(struct epoll_event));
+	event.events = watcher->events;
+	event.data.ptr = watcher;
 
-		if (epoll_ctl(loop->epollfd, EPOLL_CTL_ADD, watcher->fd, &event) < 0)
-		{
-			exception_set(err, errno, "Could not configure epoll to watch fd %d: %s", watcher->fd, strerror(errno));
-			return false;
-		}
+	// Add watcher fd to epoll
+	if (epoll_ctl(loop->epollfd, EPOLL_CTL_ADD, watcher->fd, &event) < 0)
+	{
+		exception_set(err, errno, "Could not configure epoll to watch fd %d: %s", watcher->fd, strerror(errno));
+		return false;
 	}
 
 	watcher->loop = loop;
 
 	return watcher;
+}
+
+bool mainloop_rearmwatcher(fdwatcher_t * watcher, exception_t ** err)
+{
+	// Sanity check
+	{
+		if unlikely(exception_check(err))
+		{
+			return false;
+		}
+
+		if unlikely(watcher == NULL)
+		{
+			exception_set(err, EINVAL, "Bad arguments!");
+			return false;
+		}
+
+		if unlikely(watcher->fd < 0)
+		{
+			exception_set(err, EINVAL, "Invalid file descriptor");
+			return false;
+		}
+
+		if unlikely(watcher->loop == NULL)
+		{
+			exception_set(err, EINVAL, "Watcher not added to mainloop");
+			return false;
+		}
+	}
+
+	struct epoll_event event;
+	memset(&event, 0, sizeof(struct epoll_event));
+	event.events = watcher->events;
+	event.data.ptr = watcher;
+
+	// Rearm the watcher in epoll
+	if (epoll_ctl(watcher->loop->epollfd, EPOLL_CTL_MOD, watcher->fd, &event) < 0)
+	{
+		exception_set(err, errno, "Could not re-configure epoll to watch fd %d: %s", watcher->fd, strerror(errno));
+		return false;
+	}
+
+	return true;
 }
 
 bool mainloop_removewatcher(fdwatcher_t * watcher, exception_t ** err)
@@ -317,7 +358,7 @@ bool watcher_newtimer(timerwatcher_t * timerwatcher, const char * name, uint64_t
 	}
 
 	memset(timerwatcher, 0, sizeof(timerwatcher_t));
-	watcher_newfd(&timerwatcher->watcher, fd, FD_READ, mainloop_timerfddispatch, timerwatcher);
+	watcher_newfd(&timerwatcher->watcher, fd, FD_EDGE_TRIG | FD_READ, mainloop_timerfddispatch, timerwatcher);
 	timerwatcher->name = name;
 	timerwatcher->nanoseconds = nanoseconds;
 	timerwatcher->listener = listener;
@@ -351,7 +392,7 @@ bool watcher_newevent(eventwatcher_t * eventwatcher, const char * name, unsigned
 	}
 
 	memset(eventwatcher, 0, sizeof(eventwatcher_t));
-	watcher_newfd(&eventwatcher->watcher, fd, FD_READ, mainloop_eventfddispatch, eventwatcher);
+	watcher_newfd(&eventwatcher->watcher, fd, FD_EDGE_TRIG | FD_READ, mainloop_eventfddispatch, eventwatcher);
 	eventwatcher->name = name;
 	eventwatcher->listener = listener;
 	eventwatcher->userdata = userdata;

@@ -71,6 +71,7 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err);
 bool mainloop_stop(mainloop_t * loop, exception_t ** err);
 
 bool mainloop_addwatcher(mainloop_t * loop, fdwatcher_t * watcher, exception_t ** err);
+bool mainloop_rearmwatcher(fdwatcher_t * watcher, exception_t ** err);
 bool mainloop_removewatcher(fdwatcher_t * watcher, exception_t ** err);
 
 void watcher_newfd(fdwatcher_t * watcher, int fd, fdcond_t events, watch_f listener, void * userdata);

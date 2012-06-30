@@ -16,9 +16,9 @@
 #define PAGES_PER_BUFFER	((BUFFER_PAGESIZE - sizeof(buffer_t)) / sizeof(buffer_t *))
 #define BYTES_PER_PAGE		(BUFFER_PAGESIZE - sizeof(page_t))
 #define BYTES_PER_BUFFER	(BYTES_PER_PAGE * PAGES_PER_BUFFER)
-#define PAGE_SIZE_OFFSET	(BYTES_PER_PAGE - sizeof(uint16_t))
 
-#define page_size(p)		((uint16_t *)&(p)->data[PAGE_SIZE_OFFSET])
+#define BYTES_PER_SMALLPAGE	(BYTES_PER_PAGE - sizeof(uint16_t))
+#define smallpage_size(p)	((uint16_t *)&(p)->data[BYTES_PER_SMALLPAGE])
 
 
 typedef struct
@@ -89,7 +89,7 @@ static inline void putfree(void * page)
 static inline buffer_t * promote(page_t * page)
 {
 	page_t * new = NULL;
-	uint16_t size = *page_size(page);
+	uint16_t size = *smallpage_size(page);
 
 	if (size > 0)
 	{
@@ -100,7 +100,7 @@ static inline buffer_t * promote(page_t * page)
 		}
 
 		branchpage(page, new);
-		*page_size(new) = 0;		// Clear out the size info of the new page
+		*smallpage_size(new) = 0;		// Clear out the size info of the new page
 	}
 
 	buffer_t * buffer = (buffer_t *)page;
@@ -262,7 +262,7 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 		size_t ensuresize = offset + length;
 		page_t * page = (page_t *)buffer;
 
-		if (ensuresize > (BYTES_PER_PAGE - sizeof(uint16_t)))
+		if (ensuresize > BYTES_PER_SMALLPAGE)
 		{
 			// We need more room than this page, promote this page to a full buffer
 			// Let the next root if-statement catch it and do the writing
@@ -275,7 +275,7 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 		else
 		{
 			// We have enough room in this page to write the data
-			uint16_t * size = page_size(page);
+			uint16_t * size = smallpage_size(page);
 			if (offset > *size)
 			{
 				// Make sure that the memory between page->size and offset are filled with zeros
@@ -401,7 +401,7 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 	if (buffer->type == TYPE_PAGE)
 	{
 		const page_t * page = (const page_t *)buffer;
-		size_t size = *page_size(page);
+		size_t size = *smallpage_size(page);
 		if (offset >= size)
 		{
 			return 0;
@@ -498,7 +498,7 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 	if (buffer->type == TYPE_PAGE)
 	{
 		const page_t * page = (const page_t *)buffer;
-		size_t size = *page_size(page);
+		size_t size = *smallpage_size(page);
 		if (offset >= size)
 		{
 			return 0;
@@ -509,7 +509,7 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 	}
 	else if (buffer->type == TYPE_BUFFER)
 	{
-		size_t numpages = length / BYTES_PER_PAGE + 2;
+		size_t numvectors = length / BYTES_PER_PAGE + 2;
 
 		// Find starting buffer
 		while (offset >= BYTES_PER_BUFFER)
@@ -524,8 +524,8 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 		}
 
 		size_t index = 0;
-		struct iovec vector[numpages];
-		memset(vector, 0, sizeof(struct iovec) * numpages);
+		struct iovec vector[numvectors];
+		memset(vector, 0, sizeof(struct iovec) * numvectors);
 
 
 		size_t pagenum = offset / BYTES_PER_PAGE;
@@ -601,7 +601,7 @@ size_t buffer_size(const buffer_t * buffer)
 	if (buffer->type == TYPE_PAGE)
 	{
 		const page_t * page = (const page_t *)buffer;
-		return *page_size(page);
+		return *smallpage_size(page);
 	}
 	else if (buffer->type == TYPE_BUFFER)
 	{
@@ -704,7 +704,7 @@ ssize_t bufferpos_send(bufferpos_t * pos, int fd, size_t length)
 	}
 
 	ssize_t sent = buffer_send(pos->buffer, fd, pos->offset, length);
-	pos += (sent < 0)? 0 : sent;
+	pos->offset += (sent < 0)? 0 : sent;
 
 	return sent;
 }

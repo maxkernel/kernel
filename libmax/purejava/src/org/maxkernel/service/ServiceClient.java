@@ -3,13 +3,10 @@ package org.maxkernel.service;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -21,11 +18,10 @@ import org.maxkernel.service.streams.Stream;
 public class ServiceClient {
 	private static final Logger LOG = Logger.getLogger(ServiceClient.class.getCanonicalName());
 	
-	private static int PACKET_QUEUE_LIMIT	= 25;
 	private static int HEARTBEAT_PERIOD		= 500;
 	private static int CHECK_PERIOD			= 500;
 	
-	private static int SELECTOR_TIMEOUT		= 200;
+	private static int SELECTOR_TIMEOUT		= 100;
 	
 	private Set<Stream> streams;
 	private BlockingQueue<ServicePacket> packets;
@@ -33,7 +29,7 @@ public class ServiceClient {
 	
 	public ServiceClient() throws IOException {
 		streams = new HashSet<Stream>();
-		packets = new ArrayBlockingQueue<ServicePacket>(PACKET_QUEUE_LIMIT);
+		packets = new LinkedBlockingQueue<ServicePacket>();
 		selector = Selector.open();
 		
 		ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
@@ -107,10 +103,6 @@ public class ServiceClient {
 						try {
 							ServicePacket packet = stream.handle();
 							if (packet != null) {
-								if (packets.remainingCapacity() == 0) {
-									packets.remove();
-								}
-								
 								packets.offer(packet);
 							}
 							
@@ -155,7 +147,7 @@ public class ServiceClient {
 		// TODO - handle disconnected listener
 	}
 	
-	public void start(Stream stream) throws IOException {
+	public void begin(Stream stream) throws IOException {
 		synchronized (streams) {
 			if (streams.contains(stream)) {
 				throw new IllegalArgumentException("Stream has already been added!");
@@ -165,6 +157,7 @@ public class ServiceClient {
 		}
 		
 		stream.begin(selector);
+		selector.wakeup();
 	}
 	
 	public ServicePacket dequeue() throws InterruptedException {

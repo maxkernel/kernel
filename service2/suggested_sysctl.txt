@@ -1,0 +1,28 @@
+# This is the suggested sysctl.conf kernel tweaks for better service performance
+# Add the contents of this file to /etc/sysctl.conf
+# Reload the changes by executing 'sysctl -p'
+
+
+# Set the core read and write memory buffers to 12 MB
+net.core.wmem_max= 12582912
+net.core.rmem_max= 12582912
+
+# Set the tcp read and write buffer sizes (minimum, initial, maximum)
+net.ipv4.tcp_rmem= 10240 87380 12582912
+net.ipv4.tcp_wmem= 10240 87380 12582912
+
+# Turn on window scaling to enlarge the transfer window
+net.ipv4.tcp_window_scaling= 1
+
+# Enable timestamps as defined in RFC1323
+net.ipv4.tcp_timestamps= 1
+
+# Enable select acknowledgments
+net.ipv4.tcp_sack= 1
+
+# Disable connection metrics cache so future connections won't have stale initial conditions
+net.ipv4.tcp_no_metrics_save= 1
+
+# Enusre that immediatly subsequent connections use these values
+net.ipv4.route.flush= 1
+

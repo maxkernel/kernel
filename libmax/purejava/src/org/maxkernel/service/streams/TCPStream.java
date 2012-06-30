@@ -65,10 +65,8 @@ public class TCPStream implements Stream {
 			sendbuf.put(data);
 			sendbuf.flip();
 			
-			while (sendbuf.hasRemaining()) {
-				if (socket.write(sendbuf) <= 0) {
-					throw new IOException("Could not send all data to server");
-				}
+			if (socket.write(sendbuf) != data.length) {
+				throw new IOException("Could not send all data to server");
 			}
 		}
 	}
@@ -144,11 +142,16 @@ public class TCPStream implements Stream {
 			throw new SyncFailedException("Bad stream state: "+mode());
 		}
 		
-		send(new byte[]{ Stream.SUBSCRIBE });
-		send(service.getName().getBytes("UTF8"));
-		send(new byte[]{ 0 });
-		
 		this.service = service;
+		
+		String name = service.getName();
+		int length = name.length();
+		
+		byte[] data = new byte[length + 2];
+		data[0] = Stream.SUBSCRIBE;
+		System.arraycopy(name.getBytes("UTF8"), 0, data, 1, length);
+		data[length+1] = 0;
+		send(data);
 	}
 	
 	@Override
@@ -219,7 +222,7 @@ public class TCPStream implements Stream {
 						return null;
 					}
 					
-					ServicePacket packet = new ServicePacket(service, null, data.timestamp(), data.payload());
+					ServicePacket packet = new ServicePacket(service, this, data.timestamp(), data.payload());
 					code.clear();
 					data.clear();
 					
