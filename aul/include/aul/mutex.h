@@ -59,16 +59,17 @@ static inline cond_t * cond_new()
 	return cond;
 }
 
-static inline void cond_wait(cond_t * cond, mutex_t * mutex, uint64_t nanoseconds)
+static inline bool cond_wait(cond_t * cond, mutex_t * mutex, uint64_t nanoseconds)
 {
 	if (nanoseconds == 0LL)
 	{
-		pthread_cond_wait(cond, mutex);
+		return pthread_cond_wait(cond, mutex) == 0;
 	}
 	else
 	{
 		struct timespec tm;
-		clock_gettime(CLOCK_MONOTONIC, &tm);
+		clock_gettime(CLOCK_REALTIME, &tm);		// MUST be realtime! (DO NOT USE MONOTONIC)
+												// pthreads expect realtime, so using monotonic will not block
 
 		uint64_t nanos = ((uint64_t)tm.tv_nsec) + (nanoseconds % NANOS_PER_SECOND);
 		if (nanos > NANOS_PER_SECOND)
@@ -80,7 +81,7 @@ static inline void cond_wait(cond_t * cond, mutex_t * mutex, uint64_t nanosecond
 		tm.tv_sec += nanoseconds / NANOS_PER_SECOND;
 		tm.tv_nsec = nanos;
 
-		pthread_cond_timedwait(cond, mutex, &tm);
+		return pthread_cond_timedwait(cond, mutex, &tm) == 0;
 	}
 }
 

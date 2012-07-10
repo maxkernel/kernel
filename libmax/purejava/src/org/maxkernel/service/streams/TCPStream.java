@@ -105,7 +105,7 @@ public class TCPStream implements Stream {
 			
 				try {
 					return ServiceList.parseXML(new Reader() {
-						int left = data.payload().length;
+						int left = data.size();
 						
 						@Override
 						public int read(char[] cbuf, int off, int len) throws IOException {
@@ -114,7 +114,7 @@ public class TCPStream implements Stream {
 							}
 							
 							int amount = Math.min(len, left);
-							char[] array = new String(data.payload(), data.payload().length - left, amount).toCharArray();
+							char[] array = new String(data.payload(), data.size() - left, amount).toCharArray();
 							left -= amount;
 							
 							System.arraycopy(array, 0, cbuf, off, array.length);

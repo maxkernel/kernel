@@ -38,19 +38,18 @@ public class TestService {
 		ServiceClient client = new ServiceClient();
 		
 		//Stream tcpstream = new TCPStream(InetAddress.getByName("192.168.1.100"));
-		Stream udpstream = new UDPStream(InetAddress.getByName("192.168.1.100"));
-		//Stream stream = new TCPStream(InetAddress.getByName("localhost"));
+		//Stream udpstream = new UDPStream(InetAddress.getByName("192.168.1.100"));
+		Stream stream = new UDPStream(InetAddress.getByName("localhost"));
 		
-		List<Service> services = udpstream.services();
+		List<Service> services = stream.services();
 		if (services == null) {
 			throw new Exception("Services list is NULL!");
 		}
 		
-		//System.out.println("Services: "+services);
-		udpstream.subscribe(services.get(0));
-		//tcpstream.subscribe(services.get(0));
+		System.out.println("Services: "+services);
+		stream.subscribe(services.get(0));
 		
-		client.begin(udpstream);
+		client.begin(stream);
 		
 		while (true) {
 			ServicePacket p = client.dequeue();

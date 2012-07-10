@@ -74,6 +74,9 @@ public class UDPStream implements Stream {
 					
 					if (timestamp != this.timestamp || size != this.size)
 					{
+						//int numpackets = (size + BODY_SIZE - 1) / BODY_SIZE;
+						//System.out.println("New frame "+this.numpackets+" / "+numpackets);
+						
 						// On a new data packet
 						clear();
 						this.timestamp = timestamp;
@@ -193,7 +196,7 @@ public class UDPStream implements Stream {
 				
 				try {
 					return ServiceList.parseXML(new Reader() {
-						int left = packet.payload().length;
+						int left = packet.size();
 						
 						@Override
 						public int read(char[] cbuf, int off, int len) throws IOException {
@@ -202,7 +205,7 @@ public class UDPStream implements Stream {
 							}
 							
 							int amount = Math.min(len, left);
-							char[] array = new String(packet.payload(), packet.payload().length - left, amount).toCharArray();
+							char[] array = new String(packet.payload(), packet.size() - left, amount).toCharArray();
 							left -= amount;
 							
 							System.arraycopy(array, 0, cbuf, off, array.length);
@@ -302,7 +305,6 @@ public class UDPStream implements Stream {
 			switch (packet.code()) {
 				case Stream.HEARTBEAT: {
 					lastheartbeat = System.currentTimeMillis();
-					packet.clear();
 					return null;
 				}
 				

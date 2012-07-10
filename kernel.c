@@ -377,6 +377,11 @@ static void kthread_destroy(kobject_t * object)
 		LOGK(LOG_WARN, "KThread stop function returned failure");
 	}
 
+	if (pthread_cancel(kth->thread) != 0)
+	{
+		LOGK(LOG_WARN, "KThread cancel failure: %s", strerror(errno));
+	}
+
 	if (kth->running && kth != kthread_self())
 	{
 		// TODO - read thread return (2nd parameter)
@@ -802,6 +807,29 @@ int main(int argc, char * argv[])
 				LOGK(LOG_FATAL, "Failed clock resolution runtime check! The clock resolution is %" PRIu64 " nanoseconds. Allowable is %d", resolution, WORST_CLOCK_RESOLUTION);
 				// Will exit
 			}
+		}
+	}
+
+	// Set up stdout/stderr
+	{
+		int out, err;
+
+		if ((out = fcntl(STDOUT_FILENO, F_GETFL, 0)) < 0)
+		{
+			LOGK(LOG_WARN, "Could not get status flags on stdout: %s", strerror(errno));
+		}
+		else if (fcntl(STDOUT_FILENO, F_SETFL, out | O_NDELAY) < 0)
+		{
+			LOGK(LOG_WARN, "Could not set status flags (O_NDELAY) on stdout: %s", strerror(errno));
+		}
+
+		if ((err = fcntl(STDERR_FILENO, F_GETFL, 0)) < 0)
+		{
+			LOGK(LOG_WARN, "Could not get status flags on stderr: %s", strerror(errno));
+		}
+		else if (fcntl(STDERR_FILENO, F_SETFL, err | O_NDELAY) < 0)
+		{
+			LOGK(LOG_WARN, "Could not set status flags (O_NDELAY) on stderr: %s", strerror(errno));
 		}
 	}
 
@@ -1989,6 +2017,35 @@ int main(int argc, char * argv[])
 	// Destroy the log subsystem
 	log_destroy();
 
+	// Flush stdout and stderr
+	{
+		// Turn off ndelay in stdout/stderr
+		{
+			int out, err;
+
+			if ((out = fcntl(STDOUT_FILENO, F_GETFL, 0)) < 0)
+			{
+				LOGK(LOG_WARN, "Could not get status flags on stdout: %s", strerror(errno));
+			}
+			else if (fcntl(STDOUT_FILENO, F_SETFL, out & ~O_NDELAY) < 0)
+			{
+				LOGK(LOG_WARN, "Could not set status flags (~O_NDELAY) on stdout: %s", strerror(errno));
+			}
+
+			if ((err = fcntl(STDERR_FILENO, F_GETFL, 0)) < 0)
+			{
+				LOGK(LOG_WARN, "Could not get status flags on stderr: %s", strerror(errno));
+			}
+			else if (fcntl(STDERR_FILENO, F_SETFL, err & ~O_NDELAY) < 0)
+			{
+				LOGK(LOG_WARN, "Could not set status flags (~O_NDELAY) on stderr: %s", strerror(errno));
+			}
+		}
+
+		// Sync them
+		fdatasync(STDERR_FILENO);
+		fdatasync(STDOUT_FILENO);
+	}
 	// Goodbye
 	return 0;
 }

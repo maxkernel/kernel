@@ -330,7 +330,7 @@ module_oninitialize(gps_init);
 define_block(	nmea,	"NMEA GPS device", gps_new, "si", "(1) Serial port [eg. /dev/ttyUSB0], (2) Baud rate of the GPS device [eg. 4800]");
 block_onupdate(	nmea,	gps_update);
 block_ondestroy(nmea,	gps_destroy);
-block_output(	nmea,	lastupdate,	'i',	"The millisecond timestamp for the last GPS reading (default is 0)s");
+block_output(	nmea,	lastupdate,	'i',	"The millisecond timestamp for the last GPS reading (default is 0)");
 block_output(	nmea,	lock,		'b',	"True if the device has a GPS lock (default is false)");
 //block_output(	nmea,	time,		's'); // TODO - add UTC time as string
 block_output(	nmea,	latitude,	'd',	"The latitude reading (default is 0)");

@@ -78,7 +78,6 @@ bool mainloop_run(mainloop_t * loop, exception_t ** err)
 				for (size_t i = 0; i < bits; i++)
 				{
 					fdwatcher_t * watcher = events[i].data.ptr;
-					//log_write(LEVEL_WARNING, AUL_LOG_DOMAIN, "H %d", watcher->fd);
 
 					if (!watcher->listener(loop, watcher->fd, events[i].events, watcher->userdata))
 					{
