@@ -1,5 +1,6 @@
 package org.maxkernel.service.streams;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InvalidObjectException;
 import java.io.Reader;
@@ -7,19 +8,106 @@ import java.io.SyncFailedException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.util.List;
+import java.util.Map;
 
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServiceList;
 import org.maxkernel.service.ServicePacket;
-import org.maxkernel.service.priv.packet.CodePacket;
-import org.maxkernel.service.priv.packet.DataPacket;
 import org.xml.sax.SAXException;
 
 public class TCPStream implements Stream {
+	private static class CodePacket {
+		private static final int SIZE = 1;
+		
+		private static final int CODE_OFFSET = 0;
+		
+		private ByteBuffer packet;
+		
+		public CodePacket() {
+			packet = ByteBuffer.allocate(SIZE);
+			clear();
+		}
+		
+		public boolean read(ReadableByteChannel channel) throws IOException {
+			if (packet.remaining() == 0) {
+				return true;
+			}
+			
+			channel.read(packet);
+			return packet.remaining() == 0;
+		}
+		
+		public void clear() { packet.clear(); }
+		public byte code() { return packet.get(CODE_OFFSET); }
+	}
+	
+	private static class DataPacket {
+		private static final int HEADER_SIZE = 12;
+		private static final int BODY_SIZE = 256;
+		
+		private static final int TIMESTAMP_OFFSET = 0;
+		private static final int SIZE_OFFSET = 8;
+		
+		private ByteBuffer header, body;
+		
+		private byte[] payload;
+		private int index;
+		
+		public DataPacket() {
+			header = ByteBuffer.allocate(HEADER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+			body = ByteBuffer.allocateDirect(BODY_SIZE);
+			clear();
+		}
+		
+		public boolean read(ReadableByteChannel channel) throws IOException {
+			if (header.remaining() > 0) {
+				// Read in the header
+				int read = channel.read(header);
+				if (read < 0) {
+					throw new EOFException();
+				}
+			}
+			
+			if (header.remaining() == 0) {
+				if (payload == null) {
+					payload = new byte[header.getInt(SIZE_OFFSET)];
+					index = 0;
+				}
+				
+				if (index == payload.length) {
+					return true;
+				}
+				
+				body.clear();
+				body.limit(Math.min(body.capacity(), payload.length - index));
+				int read = channel.read(body);
+				body.flip();
+				
+				if (read < 0) {
+					throw new EOFException();
+				}
+				
+				body.get(payload, index, read);
+				index += read;
+				
+				return index == payload.length;
+			}
+			
+			return false;
+		}
+		
+		public void clear() { header.clear(); payload = null; }
+		public long timestamp() { return header.getLong(TIMESTAMP_OFFSET); }
+		public int size() { return header.getInt(SIZE_OFFSET); }
+		public byte[] payload() { return payload; }
+	}
+	
+	
 	public static final int DEFAULT_PORT = 10001;
 	
 	private static final int SEND_BUFFER_SIZE = 128;
@@ -77,7 +165,7 @@ public class TCPStream implements Stream {
 	}
 	
 	@Override
-	public List<Service> services() throws IOException {
+	public Map<String, Service> services() throws IOException {
 		if (mode() != Mode.UNLOCKED) {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}

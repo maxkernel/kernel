@@ -2,7 +2,7 @@ package org.maxkernel.service.streams;
 
 import java.io.IOException;
 import java.nio.channels.Selector;
-import java.util.List;
+import java.util.Map;
 
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServicePacket;
@@ -24,7 +24,7 @@ public interface Stream {
 	
 	
 	public Mode mode();
-	public List<Service> services() throws IOException;
+	public Map<String, Service> services() throws IOException;
 	public void subscribe(Service service) throws IOException;
 	public void unsubscribe() throws IOException;
 	public void begin(Selector selector) throws IOException;

@@ -2014,9 +2014,6 @@ int main(int argc, char * argv[])
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");
 
-	// Destroy the log subsystem
-	log_destroy();
-
 	// Flush stdout and stderr
 	{
 		// Turn off ndelay in stdout/stderr
@@ -2046,6 +2043,10 @@ int main(int argc, char * argv[])
 		fdatasync(STDERR_FILENO);
 		fdatasync(STDOUT_FILENO);
 	}
+
+	// Destroy the log subsystem
+	log_destroy();
+
 	// Goodbye
 	return 0;
 }

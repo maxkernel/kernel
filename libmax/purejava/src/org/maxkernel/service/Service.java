@@ -17,6 +17,10 @@ public class Service {
 	public String getFormat() { return format; }
 	public String getDescription() { return desc; }
 	
+	public boolean equals(Object o) {
+		return o instanceof Service && ((Service)o).name == name && ((Service)o).format == format;
+	}
+	
 	public String toString() {
 		return "Service name='"+getName()+"' format='"+getFormat()+"' description='"+getDescription()+"'";
 	}

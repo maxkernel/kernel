@@ -13,13 +13,11 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
 
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServiceList;
 import org.maxkernel.service.ServicePacket;
-import org.maxkernel.service.streams.Stream.Mode;
 import org.xml.sax.SAXException;
 
 public class UDPStream implements Stream {
@@ -60,7 +58,7 @@ public class UDPStream implements Stream {
 				
 			}
 			
-			this.code = body.get(CODE_OFFSET);
+			byte code = this.code = body.get(CODE_OFFSET);
 			switch (code) {
 				case Stream.DATA: {
 					if (read < HEADER_SIZE)
@@ -79,9 +77,10 @@ public class UDPStream implements Stream {
 						
 						// On a new data packet
 						clear();
+						this.code = code;
 						this.timestamp = timestamp;
 						this.size = size;
-						payload = new byte[size];
+						this.payload = new byte[size];
 					}
 					
 					int numpackets = (size + BODY_SIZE - 1) / BODY_SIZE;
@@ -169,7 +168,7 @@ public class UDPStream implements Stream {
 	}
 	
 	@Override
-	public List<Service> services() throws IOException {
+	public Map<String, Service> services() throws IOException {
 		if (mode() != Mode.UNLOCKED) {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}

@@ -3,8 +3,8 @@ package org.maxkernel.service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -38,8 +38,8 @@ public class ServiceList {
 		}
 	}
 	
-	public static List<Service> parseXML(Document doc) {
-		List<Service> services = new ArrayList<Service>();
+	public static Map<String, Service> parseXML(Document doc) {
+		Map<String, Service> services = new HashMap<String, Service>();
 		
 		Element root = doc.getDocumentElement();
 		for (Node child = root.getFirstChild(); child != null; child = child.getNextSibling()) {
@@ -50,7 +50,7 @@ public class ServiceList {
 					String format = attributes.getNamedItem("format").getNodeValue();
 					String desc = attributes.getNamedItem("description").getNodeValue();
 					
-					services.add(new Service(name, format, desc));
+					services.put(name, new Service(name, format, desc));
 					
 				} catch (NullPointerException e) {
 					LOG.log(Level.WARNING, "Malformed XML attribute. Skipping.");
@@ -65,7 +65,7 @@ public class ServiceList {
 		return services;
 	}
 	
-	public static List<Service> parseXML(InputStream in) throws IOException, SAXException {
+	public static Map<String, Service> parseXML(InputStream in) throws IOException, SAXException {
 		if (parser == null) {
 			throw new SAXException("SAX Parser not defined!");
 		}
@@ -73,7 +73,7 @@ public class ServiceList {
 		return parseXML(parser.parse(in));
 	}
 	
-	public static List<Service> parseXML(Reader reader) throws IOException, SAXException{
+	public static Map<String, Service> parseXML(Reader reader) throws IOException, SAXException{
 		if (parser == null) {
 			throw new SAXException("SAX Parser not defined!");
 		}
