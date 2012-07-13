@@ -60,7 +60,7 @@ int main(int argc, char ** argv)
 	
 	const char * syscall_name = argv[argi++];
 
-	success = max_syscall(&hand, &e, &ret, "syscall_signature", "s:s", syscall_name);
+	success = max_syscall(&hand, &e, "syscall_signature", "s:s", &ret, syscall_name);
 	if (!success || exception_check(&e))
 	{
 		fprintf(stderr, "<error> Error during syscall lookup: %s\n", exception_message(e));
@@ -168,7 +168,7 @@ int main(int argc, char ** argv)
 		index += 1;
 	}
 
-	success = max_asyscall(&hand, &e, &ret, syscall_name, syscall_sig, syscall_args);
+	success = max_asyscall(&hand, &e, syscall_name, syscall_sig, &ret, syscall_args);
 	if (!success || exception_check(&e))
 	{
 		fprintf(stderr, "<error> Could not complete syscall: %s\n", exception_message(e));

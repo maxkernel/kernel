@@ -32,7 +32,6 @@ import org.maxkernel.service.streams.UDPStream;
 public class TestService {
 
 	public static void main(String[] args) throws Exception {
-		/*
 		JFrame f = new JFrame();
 		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		f.setSize(320, 240);
@@ -41,7 +40,6 @@ public class TestService {
 		f.getContentPane().add(label);
 		f.setVisible(true);
 		f.setExtendedState(JFrame.MAXIMIZED_BOTH);
-		*/
 		
 		
 		ServiceClient client = new ServiceClient();
@@ -56,15 +54,15 @@ public class TestService {
 		}
 		
 		System.out.println("Services: "+services);
-		stream.subscribe(services.get("dstream"));
+		stream.subscribe(services.get("Camera video stream"));
 		
-		//BlockingQueue<ServicePacket> imgqueue = new LinkedBlockingQueue<ServicePacket>();
-		//BufferedImageFormat imgformat = new BufferedImageFormat(imgqueue);
-		//client.begin(stream, imgqueue);
+		BlockingQueue<ServicePacket> imgqueue = new LinkedBlockingQueue<ServicePacket>();
+		BufferedImageFormat imgformat = new BufferedImageFormat(imgqueue);
+		client.begin(stream, imgqueue);
 		
-		BlockingQueue<ServicePacket> dqueue = new LinkedBlockingQueue<ServicePacket>();
-		DoubleArrayFormat dformat = new DoubleArrayFormat(dqueue);
-		client.begin(stream, dqueue);
+		//BlockingQueue<ServicePacket> dqueue = new LinkedBlockingQueue<ServicePacket>();
+		//DoubleArrayFormat dformat = new DoubleArrayFormat(dqueue);
+		//client.begin(stream, dqueue);
 		
 		while (true) {
 			//BufferedImage img = imgformat.dequeue().payload();
@@ -76,8 +74,8 @@ public class TestService {
 			
 			//BufferedImage img = ImageIO.read(new ByteArrayInputStream(p.data()));
 			//label.setIcon(new ImageIcon(img.getScaledInstance(img.getWidth() * blowup, img.getHeight() * blowup, Image.SCALE_FAST)));
-			//label.setIcon(new ImageIcon(img));
-			System.out.println(Arrays.toString(dformat.dequeue().payload()));
+			label.setIcon(new ImageIcon(imgformat.dequeue().data()));
+			//System.out.println(Arrays.toString(dformat.dequeue().data()));
 		}
 		
 	}

@@ -21,7 +21,7 @@ import org.maxkernel.service.ServicePacket;
 import org.xml.sax.SAXException;
 
 public class TCPStream implements Stream {
-	private static class CodePacket {
+	private static final class CodePacket {
 		private static final int SIZE = 1;
 		
 		private static final int CODE_OFFSET = 0;
@@ -46,7 +46,7 @@ public class TCPStream implements Stream {
 		public byte code() { return packet.get(CODE_OFFSET); }
 	}
 	
-	private static class DataPacket {
+	private static final class DataPacket {
 		private static final int HEADER_SIZE = 12;
 		private static final int BODY_SIZE = 256;
 		
@@ -232,7 +232,7 @@ public class TCPStream implements Stream {
 		
 		this.service = service;
 		
-		String name = service.getName();
+		String name = service.name();
 		int length = name.length();
 		
 		byte[] data = new byte[length + 2];

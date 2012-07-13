@@ -117,11 +117,11 @@ bool max_connect(maxhandle_t * hand, const char * host, exception_t ** err)
 	return true;
 }
 
-bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...)
+bool max_syscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, ...)
 {
 	va_list args;
-	va_start(args, sig);
-	bool r = max_vsyscall(hand, err, ret, syscall, sig, args);
+	va_start(args, ret);
+	bool r = max_vsyscall(hand, err, syscall, sig, ret, args);
 	va_end(args);
 
 	return r;
@@ -208,7 +208,7 @@ static bool max_waitreply(maxhandle_t * hand, exception_t ** err, return_t * ret
 	return true;
 }
 
-bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args)
+bool max_vsyscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, va_list args)
 {
 	if (exception_check(err))
 	{
@@ -234,7 +234,7 @@ bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const 
 	return r;
 }
 
-bool max_asyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, void ** args)
+bool max_asyscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, void ** args)
 {
 	if (exception_check(err))
 	{

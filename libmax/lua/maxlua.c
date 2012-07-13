@@ -104,7 +104,7 @@ static int l_dosyscall(lua_State * L)
 	}
 
 	return_t ret;
-	bool success = max_asyscall(hand, &err, &ret, syscall->name, syscall->sig, header);
+	bool success = max_asyscall(hand, &err, syscall->name, syscall->sig, &ret, header);
 	if (exception_check(&err) || !success)
 	{
 		string_t msg = string_new("Could not complete syscall %s: %s", syscall->name, err == NULL? "Unknown Error" : err->message);

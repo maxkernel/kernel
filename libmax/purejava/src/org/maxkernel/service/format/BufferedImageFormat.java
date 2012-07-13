@@ -17,8 +17,8 @@ public class BufferedImageFormat implements ServiceFormat<BufferedImage> {
 		this.queue = queue;
 	}
 	
-	public Payload<BufferedImage> dequeue() throws IOException, InterruptedException {
+	public FormattedServicePacket<BufferedImage> dequeue() throws IOException, InterruptedException {
 		ServicePacket p = queue.take();
-		return new Payload<BufferedImage>(p.timestamp(), ImageIO.read(new ByteArrayInputStream(p.data())));
+		return new FormattedServicePacket<BufferedImage>(p.timestamp(), ImageIO.read(new ByteArrayInputStream(p.data())));
 	}
 }

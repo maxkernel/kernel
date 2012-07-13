@@ -13,15 +13,15 @@ public class Service {
 		this(name, "Unknown", null);
 	}
 	
-	public String getName() { return name; }
-	public String getFormat() { return format; }
-	public String getDescription() { return desc; }
+	public String name() { return name; }
+	public String format() { return format; }
+	public String description() { return desc; }
 	
 	public boolean equals(Object o) {
-		return o instanceof Service && ((Service)o).name == name && ((Service)o).format == format;
+		return o instanceof Service && ((Service)o).name() == name() && ((Service)o).format() == format();
 	}
 	
 	public String toString() {
-		return "Service name='"+getName()+"' format='"+getFormat()+"' description='"+getDescription()+"'";
+		return "Service name='"+name()+"' format='"+format()+"' description='"+description()+"'";
 	}
 }

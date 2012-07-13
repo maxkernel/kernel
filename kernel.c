@@ -2012,8 +2012,6 @@ int main(int argc, char * argv[])
 		unlink(PIDFILE);
 	}
 
-	LOGK(LOG_INFO, "MaxKernel Exit.");
-
 	// Flush stdout and stderr
 	{
 		// Turn off ndelay in stdout/stderr
@@ -2043,6 +2041,8 @@ int main(int argc, char * argv[])
 		fdatasync(STDERR_FILENO);
 		fdatasync(STDOUT_FILENO);
 	}
+
+	LOGK(LOG_INFO, "MaxKernel Exit.");
 
 	// Destroy the log subsystem
 	log_destroy();

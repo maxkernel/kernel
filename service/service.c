@@ -80,9 +80,6 @@ static bool service_monitor(mainloop_t * loop, uint64_t nanoseconds, void * user
 
 static bool service_rundispatch(void * userdata)
 {
-	// TODO - HERE
-	//if (true) return false;
-
 	while (!stop)
 	{
 		list_t * packet_entry = NULL;

@@ -15,13 +15,13 @@ public class DoubleArrayFormat implements ServiceFormat<double[]> {
 		this.queue = queue;
 	}
 	
-	public Payload<double[]> dequeue() throws InterruptedException {
+	public FormattedServicePacket<double[]> dequeue() throws InterruptedException {
 		ServicePacket p = queue.take();
 		DoubleBuffer b = ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer();
 		
 		double[] a = new double[b.capacity()];
 		b.get(a);
 		
-		return new Payload<double[]>(p.timestamp(), a);
+		return new FormattedServicePacket<double[]>(p.timestamp(), a);
 	}
 }

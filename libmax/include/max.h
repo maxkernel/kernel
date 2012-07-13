@@ -85,9 +85,9 @@ bool max_connect(maxhandle_t * hand, const char * host, exception_t ** err);
 bool max_connectlocal(maxhandle_t * hand, exception_t ** err);
 void * max_destroy(maxhandle_t * hand);
 
-bool max_syscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, ...);
-bool max_vsyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, va_list args);
-bool max_asyscall(maxhandle_t * hand, exception_t ** err, return_t * ret, const char * syscall, const char * sig, void ** args);
+bool max_syscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, ...);
+bool max_vsyscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, va_list args);
+bool max_asyscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, void ** args);
 
 void max_syscallcache_enable(maxhandle_t * hand);
 void max_syscallcache_destroy(maxhandle_t * hand);

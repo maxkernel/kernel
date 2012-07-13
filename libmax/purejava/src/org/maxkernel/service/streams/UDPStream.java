@@ -21,7 +21,7 @@ import org.maxkernel.service.ServicePacket;
 import org.xml.sax.SAXException;
 
 public class UDPStream implements Stream {
-	private static class Packet {
+	private static final class Packet {
 		private static final int HEADER_SIZE = 17;
 		private static final int BODY_SIZE = 512 - HEADER_SIZE;
 		
@@ -190,7 +190,7 @@ public class UDPStream implements Stream {
 					
 				} while (!packet.read(socket));
 				
-				selector.close();
+				//selector.close();
 				
 				
 				try {
@@ -236,7 +236,7 @@ public class UDPStream implements Stream {
 		
 		this.service = service;
 		
-		String name = service.getName();
+		String name = service.name();
 		int length = name.length();
 		
 		byte[] data = new byte[length + 2];

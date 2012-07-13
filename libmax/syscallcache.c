@@ -75,7 +75,7 @@ syscall_t * max_syscallcache_lookup(maxhandle_t * hand, exception_t ** err, cons
 	mutex_unlock(&cache->syscalls_mutex);
 
 	return_t r;
-	bool success = max_syscall(hand, err, &r, "syscall_signature", "s:s", name);
+	bool success = max_syscall(hand, err, "syscall_signature", "s:s", &r, name);
 	if (exception_check(err) || !success || r.type != T_RETURN || strlen(r.data.t_string) == 0)
 	{
 		// Error'd on connection or syscall doesn't exist
