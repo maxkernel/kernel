@@ -29,12 +29,16 @@ public class ServiceClient {
 	private Map<Stream, BlockingQueue<ServicePacket>> packets;
 	private Selector selector;
 	
+	private ScheduledThreadPoolExecutor executor;
+	private volatile boolean closeflag;
+	
 	public ServiceClient() throws IOException {
 		streams = new HashSet<Stream>();
 		packets = Collections.synchronizedMap(new HashMap<Stream, BlockingQueue<ServicePacket>>()); //new LinkedBlockingQueue<ServicePacket>();
 		selector = Selector.open();
+		closeflag = false;
 		
-		ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
+		executor = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
 			@Override
 			public Thread newThread(Runnable r) {
 				Thread t = new Thread(r);
@@ -44,7 +48,7 @@ public class ServiceClient {
 		});
 		
 		// Set up the heartbeat task
-		e.scheduleAtFixedRate(new Runnable() {
+		executor.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
 				synchronized (streams) {
@@ -68,7 +72,7 @@ public class ServiceClient {
 		}, 0, HEARTBEAT_PERIOD, TimeUnit.MILLISECONDS);
 		
 		// Set up the check task
-		e.scheduleAtFixedRate(new Runnable() {
+		executor.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
 				synchronized (streams) {
@@ -92,6 +96,10 @@ public class ServiceClient {
 					} catch (IOException ex) {
 						LOG.log(Level.WARNING, "Exception thrown during service select() operation", ex);
 						continue;
+					}
+					
+					if (closeflag) {
+						return;
 					}
 					
 					Set<SelectionKey> keys = selector.selectedKeys();
@@ -168,5 +176,15 @@ public class ServiceClient {
 		packets.put(stream, queue);
 		stream.begin(selector);
 		selector.wakeup();
+	}
+	
+	public void close() throws IOException {
+		executor.shutdown();
+		closeflag = true;
+		selector.close();
+		
+		for (Stream stream : streams.toArray(new Stream[streams.size()])) {
+			closestream(stream);
+		}
 	}
 }

@@ -9,8 +9,12 @@ public class Service {
 		this.desc = desc;
 	}
 	
+	public Service(String name, String format) {
+		this(name, format, null);
+	}
+	
 	public Service(String name) {
-		this(name, "Unknown", null);
+		this(name, "Unknown");
 	}
 	
 	public String name() { return name; }

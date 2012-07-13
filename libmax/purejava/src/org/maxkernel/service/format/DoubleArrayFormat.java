@@ -24,4 +24,8 @@ public class DoubleArrayFormat implements ServiceFormat<double[]> {
 		
 		return new FormattedServicePacket<double[]>(p.timestamp(), a);
 	}
+	
+	public void clear() {
+		queue.clear();
+	}
 }

@@ -21,4 +21,8 @@ public class BufferedImageFormat implements ServiceFormat<BufferedImage> {
 		ServicePacket p = queue.take();
 		return new FormattedServicePacket<BufferedImage>(p.timestamp(), ImageIO.read(new ByteArrayInputStream(p.data())));
 	}
+	
+	public void clear() {
+		queue.clear();
+	}
 }
