@@ -7,7 +7,8 @@ RELEASE		= BETA
 
 MODEL       = Max 5J
 
-MODULES		= console discovery netui httpserver map service motionmodel webcam ssc gps network maxpod jpeg
+MODULES		= console discovery netui httpserver map service motionmodel webcam ssc gps network maxpod jpeg usrf_reader
+#WORKING_ON	= roomba serialpwm
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
 HEADERS		= kernel.h kernel-types.h buffer.h array.h serialize.h method.h

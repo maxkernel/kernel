@@ -323,7 +323,7 @@ static int l_newsyscall(lua_State * L)
 					return luaL_error(L, "Invalid linkable for item a%d", index);
 				}
 
-				string_t aname = string_new("a%d", index);
+				string_t aname = string_new("a%zu", index);
 
 				model_link_t * link = model_newlink(env->model, env->script, syscall, aname.string, (model_linkable_t *)avalue->head, avalue->name, &e);
 				if (link == NULL || exception_check(&e))

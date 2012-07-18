@@ -23,7 +23,7 @@ display(services);
 
 %% Connect to a service
 
-NAME = 'Camera video stream';
+NAME = 'usrf';
 
 % To subscribe to a service, use the service object from the map returned
 % from the services() call
@@ -40,39 +40,39 @@ queue = client.begin(tcpstream);
 
 figure(1);
 
-% x = [];
-% y = [];
-% h = line(nan, nan);
-% 
-% for i = 1:500
-%     packet = queue.dequeue();
-%     
-%     timestamp = packet.timestamp();
-%     data = packet.data();
-%     
-%     x = [x timestamp];
-%     y = [y data(1)];
-%     set(h, 'XData', x, 'YData', y);
-%     drawnow;
-% end
+x = [];
+y = [];
+h = line(nan, nan);
 
-for n = 1:500
+for i = 1:1000
     packet = queue.dequeue();
-    img = packet.data();
     
-    % Convert from java BufferedImage to native MATLAB image
-    w=img.getWidth();
-    h=img.getHeight();
-    b = uint8(zeros([h,w,3]));
-    pixels = uint8(img.getData().getPixels(0,0,w,h,[]));
-    for i = 1 : h
-        base = (i-1)*w*3+1;
-        b(i,1:w,:) = deal(reshape(pixels(base:(base+3*w-1)),3,w)');
-    end
+    timestamp = packet.timestamp();
+    data = packet.data();
     
-    image(b);
+    x = [x timestamp];
+    y = [y data(1)];
+    set(h, 'XData', x, 'YData', y);
     drawnow;
 end
+
+% for n = 1:1000
+%     packet = queue.dequeue();
+%     img = packet.data();
+%     
+%     % Convert from java BufferedImage to native MATLAB image
+%     w=img.getWidth();
+%     h=img.getHeight();
+%     b = uint8(zeros([h,w,3]));
+%     pixels = uint8(img.getData().getPixels(0,0,w,h,[]));
+%     for i = 1 : h
+%         base = (i-1)*w*3+1;
+%         b(i,1:w,:) = deal(reshape(pixels(base:(base+3*w-1)),3,w)');
+%     end
+%     
+%     image(b);
+%     drawnow;
+% end
 
 %% Clean up
 

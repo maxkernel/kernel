@@ -830,7 +830,7 @@ model_linkable_t * model_newrategroup(model_t * model, model_script_t * script, 
 	{
 		if (elems[i]->head.type != model_blockinst)
 		{
-			exception_set(err, EINVAL, "Element #%d to rategroup %s is not a block instance!", i+1, groupname);
+			exception_set(err, EINVAL, "Element #%zu to rategroup %s is not a block instance!", i+1, groupname);
 			return NULL;
 		}
 	}

@@ -181,7 +181,7 @@ meta_t * meta_parseelf(const char * path, exception_t ** err)
 
 					if (i == length)
 					{
-						exception_set(err, ENOMEM, "Out of %s memory! (size = %d)", name, length);
+						exception_set(err, ENOMEM, "Out of %s memory! (size = %zu)", name, length);
 						goto end;
 					}
 

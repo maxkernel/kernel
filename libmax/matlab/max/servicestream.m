@@ -62,7 +62,6 @@ classdef servicestream < handle
             end
             
             for s = o.services_'
-                display(s);
                 if strcmp(s(1), service)
                     % Found the service we want, subscribe
                     o.service_ = Service(s(1), s(2));

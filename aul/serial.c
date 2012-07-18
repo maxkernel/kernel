@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <fcntl.h>
 
 #include <aul/common.h>
@@ -13,8 +14,14 @@ int serial_open(const char * port, speed_t speed)
 		return -1;
 	}
 
-	tcflush(fd, TCIOFLUSH);
-	serial_setattr(fd, speed);
+	serial_flush(fd);
+	if (!serial_setattr(fd, speed))
+	{
+		close(fd);
+		return -1;
+	}
+
+	//tcflush(fd, TCIOFLUSH);
 
 	return fd;
 }
@@ -28,13 +35,20 @@ bool serial_setattr(int fd, speed_t speed)
 {
 	struct termios tp;
 	memset(&tp, 0, sizeof(struct termios));
-	tp.c_iflag = IGNBRK|IGNPAR;
-	tp.c_oflag = 0;
-	tp.c_cflag = CS8|CREAD|CLOCAL;
-	tp.c_lflag = 0;
 
-	cfsetispeed(&tp, speed);
-	cfsetospeed(&tp, speed);
+	cfmakeraw(&tp);
+
+#if 0
+	tp.c_cflag = speed|CS8|CREAD|CLOCAL;
+	tp.c_iflag = /*IGNBRK|*/IGNPAR;
+	tp.c_oflag = 0;
+	tp.c_lflag = 0;
+#endif
+
+	cfsetspeed(&tp, speed);
+
+	//cfsetispeed(&tp, speed);
+	//cfsetospeed(&tp, speed);
 
 	if (tcsetattr(fd, TCSAFLUSH, &tp) < 0)
 	{
@@ -47,8 +61,15 @@ bool serial_setattr(int fd, speed_t speed)
 
 speed_t serial_getspeed(int baud)
 {
+
 	switch (baud)
 	{
+		case 150:		return B150;
+		case 200:		return B200;
+		case 300:		return B300;
+		case 600:		return B600;
+		case 1200:		return B1200;
+		case 1800:		return B1800;
 		case 2400:		return B2400;
 		case 4800:		return B4800;
 		case 9600:		return B9600;
