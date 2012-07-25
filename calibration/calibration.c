@@ -5,8 +5,8 @@
 typedef struct
 {
 	map_t * map;
-	double n1, z, p1;
-	double cal_preview;
+	int n1, z, p1;
+	int cal_preview;
 } unit_t;
 
 static void unit_setmaps(unit_t * unit)
@@ -25,7 +25,7 @@ static void unit_setmaps(unit_t * unit)
 static void unit_calpreview(void * object, const char * domain, const char * name, const char sig, void * backing, char * hint, size_t hint_length)
 {
 	unit_t * unit = object;
-	unit->cal_preview = *(double *)backing;
+	unit->cal_preview = *(int *)backing;
 }
 
 static void unit_calmodechange(void * object, calmode_t mode, calstatus_t status)
@@ -39,7 +39,7 @@ static void unit_calmodechange(void * object, calmode_t mode, calstatus_t status
 	}
 }
 
-static void * unit_new(const char * domain, double n1, const char * n1_desc, double z, const char * z_desc, double p1, const char * p1_desc)
+static void * unit_new(const char * domain, int n1, const char * n1_desc, int z, const char * z_desc, int p1, const char * p1_desc)
 {
 	unit_t * unit = malloc(sizeof(unit_t));
 	memset(unit, 0, sizeof(unit_t));
@@ -49,14 +49,14 @@ static void * unit_new(const char * domain, double n1, const char * n1_desc, dou
 	unit->p1 = p1;
 	unit->cal_preview = z;
 
-	cal_register(domain,	"negative",	&unit->n1,	'd',	n1_desc,	unit_calpreview,	unit);
-	cal_register(domain,	"zero",		&unit->z,	'd',	z_desc,		unit_calpreview,	unit);
-	cal_register(domain,	"positive",	&unit->p1,	'd',	p1_desc,	unit_calpreview,	unit);
+	cal_register(domain,	"negative",	&unit->n1,	T_INTEGER,	n1_desc,	unit_calpreview,	unit);
+	cal_register(domain,	"zero",		&unit->z,	T_INTEGER,	z_desc,		unit_calpreview,	unit);
+	cal_register(domain,	"positive",	&unit->p1,	T_INTEGER,	p1_desc,	unit_calpreview,	unit);
 	cal_onmodechange(unit_calmodechange, unit);
 
 	unit_setmaps(unit);
 
-	return NULL;
+	return unit;
 }
 
 static void unit_update(void * object)
@@ -74,7 +74,7 @@ static void unit_update(void * object)
 	if (cal_getmode() == calmode_runtime)
 	{
 		const double * in = input(value);
-		double out = map_tovalue(unit->map, (in == NULL)? 0.0 : *in);
+		int out = (int)map_tovalue(unit->map, (in == NULL)? 0.0 : *in);
 		output(value, &out);
 	}
 	else
@@ -105,9 +105,9 @@ module_author("Andrew Klofas <andrew@maxkernel.com>");
 module_description("Exposes the MaxKernel calibration subsystem to the siticher layer as Blocks");
 module_dependency("map");
 
-define_block(unit, "-1 to 1 Calibration Mapping", unit_new, "sdsdsds", "(1) Cal domain (2) -1.0 Default map (3) -1.0 Cal Desc (4) 0.0 Default map (5) 0.0 Cal Desc (6) 1.0 Default map (7) 1.0 Cal Desc");
+define_block(unit, "-1 to 1 Calibration Mapping", unit_new, "sisisis", "(1) Cal domain (2) -1.0 Default map (3) -1.0 Cal Desc (4) 0.0 Default map (5) 0.0 Cal Desc (6) 1.0 Default map (7) 1.0 Cal Desc");
 block_onupdate(unit, unit_update);
 block_ondestroy(unit, unit_destroy);
 block_input(unit, value, T_DOUBLE, "Input value (-1.0 to 1.0)");
-block_output(unit, value, T_DOUBLE, "Output value (determined by calibration)");
+block_output(unit, value, T_INTEGER, "Output value (determined by calibration)");
 

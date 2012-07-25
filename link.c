@@ -433,6 +433,13 @@ static void copy_d2d(const void * linkdata, const void * from, bool from_isnull,
 	*(double *)to = *(const double *)from;
 }
 
+static void copy_d2i(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
+{
+	unused(linkdata); unused(from_isnull); unused(to_isnull);
+
+	*(int *)to = (int)*(const double *)from;
+}
+
 static void copy_c2c(const void * linkdata, const void * from, bool from_isnull, void * to, bool to_isnull)
 {
 	unused(linkdata); unused(from_isnull); unused(to_isnull);
@@ -489,6 +496,7 @@ link_f link_getfunction(const model_linksymbol_t * linksym, char fromsig, char t
 
 	// Match double -> ?
 	func_match(	T_DOUBLE,			T_DOUBLE,			data_null(),	copy_d2d	);
+	func_match(	T_DOUBLE,			T_INTEGER,			data_null(),	copy_d2i	);
 	func_match(	T_DOUBLE,			T_ARRAY_DOUBLE,		data_index(),	copy_d2D	);
 
 	// Match char -> ?

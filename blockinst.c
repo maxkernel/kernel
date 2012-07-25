@@ -136,7 +136,7 @@ bool blockinst_create(blockinst_t * blockinst, exception_t ** err)
 
 			case T_DOUBLE:
 			{
-				double v = parse_bool(blockinst->args[index], err);
+				double v = parse_double(blockinst->args[index], err);
 				memcpy(array, &v, min(arraylen, sizeof(double)));
 				return sizeof(double);
 			}

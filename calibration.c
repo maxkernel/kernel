@@ -83,7 +83,7 @@ static bool cal_updatecache(calentry_t * entry)
 
 		case T_DOUBLE:
 		{
-			wrote = snprintf(entry->cache, CAL_SIZE_CACHE, "%f", *(double *)entry->backing);
+			wrote = snprintf(cache, CAL_SIZE_CACHE, "%f", *(double *)entry->backing);
 			break;
 		}
 
