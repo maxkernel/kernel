@@ -1,6 +1,8 @@
 #ifndef __MAP_H
 #define __MAP_H
 
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

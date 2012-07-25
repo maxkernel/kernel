@@ -112,6 +112,7 @@ public class TCPStream implements Stream {
 	
 	private static final int SEND_BUFFER_SIZE = 128;
 	private static final int HEARTBEAT_TIMEOUT = 5000;
+	private static final long LIST_TIMEOUT = 250;
 	
 	private Mode mode;
 	private long lastheartbeat;
@@ -130,6 +131,7 @@ public class TCPStream implements Stream {
 		
 		socket = SocketChannel.open();
 		socket.connect(sockaddress);
+		socket.configureBlocking(false);
 		sendbuf = ByteBuffer.allocate(SEND_BUFFER_SIZE);
 		
 		code = new CodePacket();
@@ -170,11 +172,19 @@ public class TCPStream implements Stream {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}
 		
-		send(new byte[]{ Stream.LISTXML });
-		
 		synchronized (socket) {
-		
+			
+			Selector selector = Selector.open();
+			
 			try {
+				
+				socket.register(selector, SelectionKey.OP_READ);
+				send(new byte[]{ Stream.LISTXML });
+				
+				if (selector.select(LIST_TIMEOUT) == 0) {
+					throw new IOException("Could not read all services data!");
+				}
+				
 				if (!code.read(socket)) {
 					throw new IOException("Could not read all services data!");
 				}
@@ -182,11 +192,7 @@ public class TCPStream implements Stream {
 				if (code.code() != Stream.DATA) {
 					throw new InvalidObjectException("Bad return code from service server: "+code.code());
 				}
-			} finally {
-				code.clear();
-			}
-			
-			try {
+				
 				if (!data.read(socket)) {
 					throw new IOException("Could not read all services data!");
 				}
@@ -219,7 +225,9 @@ public class TCPStream implements Stream {
 				}
 				
 			} finally {
+				code.clear();
 				data.clear();
+				selector.close();
 			}
 		}
 	}
@@ -263,7 +271,6 @@ public class TCPStream implements Stream {
 		send(new byte[]{ Stream.BEGIN });
 		
 		// Set up the selector
-		socket.configureBlocking(false);
 		socket.register(selector, SelectionKey.OP_READ, this);
 	}
 	

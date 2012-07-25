@@ -14,7 +14,7 @@ addpath('/home/dklofas/Projects/maxkernel/kernel/libmax/matlab/max')
 client = serviceclient();
 
 % Here, we create a tcp stream and connect to localhost using the default port
-tcpstream = servicestream('tcp', 'localhost');
+tcpstream = servicestream('tcp', '192.168.2.3');
 
 % Now list the available services
 services = tcpstream.services();
@@ -38,21 +38,51 @@ queue = client.begin(tcpstream);
 
 %% Display the data real-time
 
-figure(1);
-
 x = [];
 y = [];
-h = line(nan, nan);
 
-for i = 1:1000
+figure(1);
+h1 = line(nan, nan);
+
+figure(2);
+h2 = line(nan, nan);
+
+%
+s = syscallclient('192.168.2.3');
+sp = [];
+pheight = 1000;
+%
+
+for i = 1:100000
     packet = queue.dequeue();
     
     timestamp = packet.timestamp();
     data = packet.data();
     
+    if data(2) < -5000
+        data(2) = 0;
+    end
+    
     x = [x timestamp];
     y = [y data(1)];
-    set(h, 'XData', x, 'YData', y);
+    sp = [sp data(2)-1500];
+    yfilt = filter(Hd, y);
+    
+    %speed = sin(pi/10 * i) * 500;
+    
+    height = (yfilt(length(yfilt)) - 1000) / 500;
+    %height = (y(length(y)) - 1000) / 500;
+    speed = (height * 250) + (height - pheight) * 200;
+    
+    pheight = height;
+    
+    s.syscall('l', 1500 + speed * 5);
+    s.syscall('r', 1500 - speed * 5);
+    %sp = [sp speed];
+    
+    
+    set(h1, 'XData', x, 'YData', yfilt);
+    set(h2, 'XData', x, 'YData', sp);
     drawnow;
 end
 

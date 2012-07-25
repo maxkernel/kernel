@@ -190,9 +190,11 @@ void cal_doregister(const char * domain, const char * name, const char sig, cons
 	// Check to see if entry has already been registered
 	// TODO IMPORTANT - FINISH ME
 
+	// TODO - Add destroy function to entry!
+
 	calentry_t * entry = malloc(sizeof(calentry_t));
 	memset(entry, 0, sizeof(calentry_t));
-	entry->domain = (domain == NULL)? NULL : strdup(domain);
+	entry->domain = (domain == NULL || strlen(domain) == 0)? NULL : strdup(domain);
 	entry->name = strdup(name);
 	entry->sig = sig;
 	entry->constraints = constraints;

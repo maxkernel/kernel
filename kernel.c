@@ -2038,8 +2038,9 @@ int main(int argc, char * argv[])
 		}
 
 		// Sync them
-		fdatasync(STDERR_FILENO);
-		fdatasync(STDOUT_FILENO);
+		sync();
+		//fdatasync(STDERR_FILENO);
+		//fdatasync(STDOUT_FILENO);
 	}
 
 	LOGK(LOG_INFO, "MaxKernel Exit.");

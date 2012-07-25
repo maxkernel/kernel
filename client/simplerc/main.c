@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include <max.h>
+//#include <max.h>
 
 int main(int argc, char ** argv)
 {
@@ -73,41 +73,16 @@ int main(int argc, char ** argv)
 		double r = (double)SDL_JoystickGetAxis(joy, 2) / (double)0x7FFF;
 		//printf("X: %f\tY: %f\tZ: %f\tR: %f\n", x, y, z, r);
 		
-		double speedlimit = 0.75;
-		int dir;
+		double speedlimit = 1;
 		
-		//sprintf(buf, "0%f", -y*speedlimit);
-		//sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-		
-		sprintf(buf, "2%f", 5.0*M_PI/36.0*r);
+		//sprintf(buf, "2%f", 5.0*M_PI/36.0*r);
+		sprintf(buf, "2%f", r);
 		sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-		
-		if (z < 0.0)
-			dir = -1;
-		else
-			dir = 1;
-		
-		/*
-		if (dir != lastdir)
-		{
-			printf("Switch dir\n");
-			fflush(stdout);
-			
-			sprintf(buf, "1%d", dir);
-			sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-			lastdir = dir;
-		}
-		*/
-		
-		if (dir == -1)
-		{
-			y = -0.3;
-		}
 		
 		sprintf(buf, "0%f", -y*speedlimit);
 		sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
 		
-		usleep(30000);
+		usleep(16000);
 	}
 	
 	
