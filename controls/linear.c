@@ -52,7 +52,7 @@ static void linear_destroy(void * object)
 }
 
 
-define_block(linear, "PD control loop", linear_new, "dd", "");
+define_block(linear, "Linear equation y=mx+b", linear_new, "dd", "");
 block_onupdate(linear, linear_update);
 block_ondestroy(linear, linear_destroy);
 block_input(linear, value, T_DOUBLE, "Input value");
