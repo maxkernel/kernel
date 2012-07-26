@@ -25,9 +25,7 @@ classdef serviceclient
                     throw(MException('MaxKernel:FormatError', sprintf('Unknown format: %s', fmt)));
             end
 
-            display('before');
             o.obj_.begin(stream.obj_, bqueue);
-            display('after');
         end
         function close(o)
             o.obj_.close();
