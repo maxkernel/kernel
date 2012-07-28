@@ -1,7 +1,7 @@
 SRCS		= libmax.c syscallcache.c serialize.c message.c
 TARGET		= libmax.so
 PACKAGES	= 
-INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../console -I../console/include
+INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../modules/console -I../modules/console/include
 DEFINES		= -DLIBMAX -D_GNU_SOURCE
 CFLAGS		= -pipe -ggdb3 -Wall -std=gnu99 -fpic $(shell pkg-config --cflags $(PACKAGES) 2>/dev/null)
 LIBS		= $(shell pkg-config --libs $(PACKAGES) 2>/dev/null) -laul -lrt
@@ -40,6 +40,6 @@ rebuild: clean all
 %.o: ../%.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../$*.c -o $*.o
 
-%.o: ../console/%.c
-	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../console/$*.c -o $*.o
+%.o: ../modules/console/%.c
+	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) ../modules/console/$*.c -o $*.o
 

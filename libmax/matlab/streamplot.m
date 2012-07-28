@@ -14,7 +14,7 @@ addpath('/home/dklofas/Projects/maxkernel/kernel/libmax/matlab/max')
 client = serviceclient();
 
 % Here, we create a tcp stream and connect to localhost using the default port
-tcpstream = servicestream('tcp', '192.168.2.3');
+tcpstream = servicestream('tcp', '192.168.2.4');
 
 % Now list the available services
 services = tcpstream.services();
