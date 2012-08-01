@@ -24,7 +24,7 @@ with open(filename) as fp:
 print >> sys.stdout, '''
 OBJS		= $(SRCS:.c=.o)
 TARGET		= %(module)s.mo
-DEFINES		+= %(defines)s -DMODULE
+DEFINES		+= %(defines)s
 INCLUDES	+= -Iinclude -I../.. -I../../aul/include -I../../libmodel/include $(foreach dep,$(DEPENDS),-I../$(dep)/include)
 LIBS		+= $(shell [ -n "$(PACKAGES)" ] && pkg-config --libs $(PACKAGES))
 
@@ -41,7 +41,7 @@ $(TARGET): $(OBJS)
 	[ ! -f compile.part.bash ] || bash compile.part.bash
 
 install:
-	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" 1>&2 && false )
+	[ -n "$(INSTALL)" ] || ( echo "INSTALL variable must be set" >&2 && false )
 	cp -f $(TARGET) $(INSTALL)/modules
 	( cp -f include/* /usr/include/max 2>/dev/null ) || true
 	[ ! -f install.part.bash ] || bash install.part.bash $(INSTALL)
