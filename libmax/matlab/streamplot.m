@@ -23,7 +23,7 @@ display(services);
 
 %% Connect to a service
 
-NAME = 'usrf';
+NAME = 'lidar';
 
 % To subscribe to a service, use the service object from the map returned
 % from the services() call

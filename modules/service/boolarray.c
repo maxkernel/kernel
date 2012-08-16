@@ -5,13 +5,13 @@
 #include <kernel.h>
 
 
-static void * doubles_new(const char * name, const char * desc)
+static void * bools_new(const char * name, const char * desc)
 {
 	exception_t * e = NULL;
-	service_t * service = service_new(name, "doubles", desc, &e);
+	service_t * service = service_new(name, "bools", desc, &e);
 	if (service == NULL || exception_check(&e))
 	{
-		LOG(LOG_ERR, "Could not create new double array service: %s", exception_message(e));
+		LOG(LOG_ERR, "Could not create new boolean array service: %s", exception_message(e));
 		exception_free(e);
 		return NULL;
 	}
@@ -19,7 +19,7 @@ static void * doubles_new(const char * name, const char * desc)
 	return service;
 }
 
-static void doubles_update(void * object)
+static void bools_update(void * object)
 {
 	service_t * service = object;
 	if (service == NULL)
@@ -39,7 +39,7 @@ static void doubles_update(void * object)
 	output(clients, &numclients);
 }
 
-define_block(doubles, "Make a double array available as a service", doubles_new, "ss", "(1) Name of the service. (3) The description of the service");
-block_onupdate(doubles, doubles_update);
-block_input(doubles, array, T_ARRAY_DOUBLE, "Input data double array");
-block_output(doubles, clients, T_INTEGER, "Number of connected clients");
+define_block(bools, "Make a boolean array available as a service", bools_new, "ss", "(1) Name of the service. (3) The description of the service");
+block_onupdate(bools, bools_update);
+block_input(bools, array, T_ARRAY_BOOLEAN, "Input data boolean array");
+block_output(bools, clients, T_INTEGER, "Number of connected clients");

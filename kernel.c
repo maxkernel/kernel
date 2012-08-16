@@ -517,12 +517,14 @@ static bool kthread_dotasks(mainloop_t * loop, uint64_t nanoseconds, void * user
 
 static bool kthread_dopass(kthread_t * thread, kobject_t * object)
 {
+	unused(thread);
 	kthreaddata_t * data = (kthreaddata_t *)object;
 	return data->run(data->userdata);
 }
 
 static bool kthread_dostop(kthread_t * thread, kobject_t * object)
 {
+	unused(thread);
 	kthreaddata_t * data = (kthreaddata_t *)object;
 	return data->stop(data->userdata);
 }
@@ -597,6 +599,17 @@ int kernel_installed()
 {
 	const char * installed = property_get("installed");
 	return (installed != NULL)? parse_int(installed, NULL) : 0;
+}
+
+version_t kernel_version()
+{
+	static version_t version = 0;
+	if (version == 0)
+	{
+		version = version_fromstring(VERSION);
+	}
+
+	return version;
 }
 
 // Microseconds since epoch
@@ -938,7 +951,7 @@ int main(int argc, char * argv[])
 	}
 
 	// Do some basic logging
-	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", VERSION, RELEASE, PROVIDER);
+	LOGK(LOG_INFO, "Welcome to MaxKernel v%s %s by %s", version_tostring(kernel_version()).string, RELEASE, PROVIDER);
 	LOGK(LOG_DEBUG, "Kernel compiled on %s with compiler version %s", __TIMESTAMP__, __VERSION__);
 	{
 		// Log time

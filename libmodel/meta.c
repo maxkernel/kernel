@@ -294,7 +294,7 @@ bool meta_loadmodule(meta_t * meta, exception_t ** err)
 			const metahead_t * head = (const metahead_t *)&buffer[(off_t)meta->buffer_indexes[i] - (off_t)meta->buffer];
 			if (head->type != meta->buffer_layout[i])
 			{
-				exception_set(&e, EINVAL, "Meta section mismatch for element %zu. Expected %zx, is %zx", i, meta->buffer_layout[i], head->type);
+				exception_set(&e, EINVAL, "Meta section mismatch for element %zu. Expected %#x, is %#x", i, (unsigned int)meta->buffer_layout[i], (unsigned int)head->type);
 				goto end_init;
 			}
 

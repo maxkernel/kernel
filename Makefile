@@ -3,9 +3,10 @@ LOGDIR		= /var/log/maxkernel
 DBNAME		= kern-1.1.db
 CONFIG		= max.conf
 MEMFS		= memfs
-RELEASE		= BETA
 
-MODEL       = Robot
+VERSION		= 1.2
+RELEASE		= BETA
+MODEL		= Robot
 
 UTILS		= autostart client syscall
 #OLD_UTILS	= kdump modinfo log
@@ -15,8 +16,8 @@ SRCS		= kernel.c module.c memfs.c path.c function.c syscall.c block.c blockinst.
 #TODO - add -Wextra to CFLAGS
 PACKAGES	= libconfuse libffi sqlite3
 INCLUDES	= -I. -Iaul/include -Ilibmodel/include $(shell pkg-config --cflags-only-I $(PACKAGES))
-DEFINES		= -D_GNU_SOURCE -DKERNEL -DUSE_BFD -DUSE_DL -DUSE_LUA -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\""
-CFLAGS		= -pipe -ggdb3 -Wall -O2 -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
+DEFINES		= -D_GNU_SOURCE -DKERNEL -DUSE_BFD -DUSE_DL -DUSE_LUA -D$(RELEASE) -DVERSION="\"$(VERSION)\"" -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\"" -DLOGDIR="\"$(LOGDIR)\"" -DDBNAME="\"$(DBNAME)\"" -DCONFIG="\"$(CONFIG)\"" -DMEMFS="\"$(MEMFS)\""
+CFLAGS		= -pipe -ggdb3 -Wall -Wextra -O2 -std=gnu99 $(shell pkg-config --cflags-only-other $(PACKAGES))
 LIBS		= $(shell pkg-config --libs $(PACKAGES)) -laul -lmaxmodel -lbfd -ldl -lrt
 LFLAGS		= -Laul -Llibmodel -Wl,--export-dynamic
 
@@ -24,9 +25,10 @@ TARGET		= maxkernel
 
 
 export INSTALL
+export VERSION
 export RELEASE
 
-.PHONY: prepare prereq body all install clean rebuild depend
+.PHONY: prepare prereq body all install clean rebuild depend docs
 
 OBJS		= $(SRCS:.c=.o)
 
@@ -70,7 +72,7 @@ clean:
 	$(MAKE) -C libmax clean
 	$(MAKE) -C testmax clean
 	$(foreach util,$(UTILS), $(MAKE) -C utils -f Makefile.$(util) clean &&) true
-	rm -f $(TARGET) $(OBJS)
+	rm -rf $(TARGET) $(OBJS) doxygen
 
 rebuild: clean all
 
@@ -79,6 +81,12 @@ depend: $(SRCS)
 	$(MAKE) -C aul depend
 	$(MAKE) -C libmodel depend
 	$(MAKE) -C testmax depend
+
+docs:
+	mkdir -p doxygen
+	python docsroot.gen.py >doxygen/index.html
+	$(MAKE) -C libmax docs
+	cp -r libmax/docs doxygen/libmax
 
 prepare:
 	echo "Kernel build log ==----------------------== [$(shell date)]" >buildlog

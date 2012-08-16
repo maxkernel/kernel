@@ -17,6 +17,17 @@ import java.util.logging.Logger;
 
 import org.maxkernel.service.streams.Stream;
 
+/**
+ * A container object that can handle multiple {@link Stream} instances. This class spawns a single
+ * thread that provides to {@link Stream} instances registered with it:
+ *   - Heartbeating
+ *   - Timeout monitoring
+ *   - Disconnection callbacks
+ *   - Queueing {@link ServicePacket}s in a given BlockingQueue
+ * 
+ * @author Andrew Klofas
+ * @version 1.0
+ */
 public class ServiceClient {
 	private static final Logger LOG = Logger.getLogger(ServiceClient.class.getCanonicalName());
 	
@@ -32,9 +43,16 @@ public class ServiceClient {
 	private ScheduledThreadPoolExecutor executor;
 	private volatile boolean closeflag;
 	
+	/**
+	 * Creates a new ServiceClient. This will spawn a new daemon thread that handles
+	 * the IO of each registered {@link Stream} asynchronously. The thread can be
+	 * canceled by calling {@link #close()}.
+	 * @throws IOException
+	 * @see #close()
+	 */
 	public ServiceClient() throws IOException {
 		streams = new HashSet<Stream>();
-		packets = Collections.synchronizedMap(new HashMap<Stream, BlockingQueue<ServicePacket>>()); //new LinkedBlockingQueue<ServicePacket>();
+		packets = Collections.synchronizedMap(new HashMap<Stream, BlockingQueue<ServicePacket>>());
 		selector = Selector.open();
 		closeflag = false;
 		

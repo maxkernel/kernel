@@ -19,8 +19,8 @@ import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-public class ServiceList {
-	private static Logger LOG = Logger.getLogger(ServiceList.class.getCanonicalName());
+public class ServiceListParser {
+	private static Logger LOG = Logger.getLogger(ServiceListParser.class.getCanonicalName());
 	
 	private static DocumentBuilder parser = null;
 	static {

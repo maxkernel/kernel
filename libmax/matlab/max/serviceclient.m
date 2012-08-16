@@ -10,6 +10,7 @@ classdef serviceclient
         end
         function queue = begin(o, stream)
             import java.util.concurrent.LinkedBlockingQueue;
+            import org.maxkernel.service.format.BooleanArrayFormat;
             import org.maxkernel.service.format.DoubleArrayFormat;
             import org.maxkernel.service.format.BufferedImageFormat;
             
@@ -17,6 +18,8 @@ classdef serviceclient
             fmt = char(stream.service_.format());
 
             switch lower(fmt)
+                case 'bools'
+                    queue = BooleanArrayFormat(bqueue);
                 case 'doubles'
                     queue = DoubleArrayFormat(bqueue);
                 case 'jpeg'

@@ -292,7 +292,7 @@ size_t buffer_write(buffer_t * buffer, const void * data, off_t offset, size_t l
 	if (buffer->type == TYPE_BUFFER)
 	{
 		// Pass onto the next
-		if (offset >= BYTES_PER_BUFFER)
+		if ((size_t)offset >= BYTES_PER_BUFFER)
 		{
 			// Make sure that buffer has a next
 			if (buffer->next == NULL)
@@ -402,7 +402,7 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 	{
 		const page_t * page = (const page_t *)buffer;
 		size_t size = *smallpage_size(page);
-		if (offset >= size)
+		if ((size_t)offset >= size)
 		{
 			return 0;
 		}
@@ -413,7 +413,7 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 	}
 	else if (buffer->type == TYPE_BUFFER)
 	{
-		while (offset >= BYTES_PER_BUFFER)
+		while ((size_t)offset >= BYTES_PER_BUFFER)
 		{
 			buffer = buffer->next;
 			offset -= BYTES_PER_BUFFER;
@@ -424,7 +424,7 @@ size_t buffer_read(const buffer_t * buffer, void * data, off_t offset, size_t le
 			}
 		}
 
-		if (offset >= buffer->size)
+		if ((size_t)offset >= buffer->size)
 		{
 			return 0;
 		}
@@ -499,7 +499,7 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 	{
 		const page_t * page = (const page_t *)buffer;
 		size_t size = *smallpage_size(page);
-		if (offset >= size)
+		if ((size_t)offset >= size)
 		{
 			return 0;
 		}
@@ -512,7 +512,7 @@ ssize_t buffer_send(const buffer_t * buffer, int fd, off_t offset, size_t length
 		size_t numvectors = length / BYTES_PER_PAGE + 2;
 
 		// Find starting buffer
-		while (offset >= BYTES_PER_BUFFER)
+		while ((size_t)offset >= BYTES_PER_BUFFER)
 		{
 			buffer = buffer->next;
 			offset -= BYTES_PER_BUFFER;

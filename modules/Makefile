@@ -1,8 +1,5 @@
-
-
 MODULES		= console discovery netui httpserver service
 DEFINES		= -D_GNU_SOURCE -DMODULE -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\""
-
 
 all:
 	$(foreach module,$(MODULES), python makefile.gen.py --module $(module) --defines '$(DEFINES)' >$(module)/Makefile && $(MAKE) -C $(module) depend &&) true

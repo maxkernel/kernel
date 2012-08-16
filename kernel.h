@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #include <aul/common.h>
+#include <aul/version.h>
 #include <aul/exception.h>
 #include <aul/constraint.h>
 #include <aul/log.h>
@@ -20,7 +21,6 @@
 extern "C" {
 #endif
 
-#define	VERSION			"1.1"
 #define	PROVIDER		"maxkernel.com"
 #define	PROVIDER_URL	"http://www.maxkernel.com/"
 
@@ -120,6 +120,7 @@ void rategroup_output(const char * name, const void * output);
 
 const char * max_model();
 const char * kernel_id();
+version_t kernel_version();
 int kernel_installed();
 int64_t kernel_timestamp();
 int64_t kernel_elapsed();

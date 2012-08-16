@@ -16,7 +16,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Map;
 
 import org.maxkernel.service.Service;
-import org.maxkernel.service.ServiceList;
+import org.maxkernel.service.ServiceListParser;
 import org.maxkernel.service.ServicePacket;
 import org.xml.sax.SAXException;
 
@@ -198,7 +198,7 @@ public class TCPStream implements Stream {
 				}
 			
 				try {
-					return ServiceList.parseXML(new Reader() {
+					return ServiceListParser.parseXML(new Reader() {
 						int left = data.size();
 						
 						@Override

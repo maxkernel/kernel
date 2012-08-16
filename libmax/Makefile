@@ -9,7 +9,7 @@ LFLAGS		= -shared -L../aul
 
 OBJS		= $(SRCS:.c=.o)
 
-.PHONY: all test install clean rebuild
+.PHONY: all test install clean rebuild docs
 
 all: $(TARGET)
 
@@ -28,11 +28,16 @@ install:
 	$(MAKE) -C lua install
 
 clean:
-	rm -f $(OBJS) $(TARGET)
-	rm -f test test.o
+	rm -rf $(OBJS) $(TARGET) test test.o docs
 	$(MAKE) -C lua clean
+	$(MAKE) -C purejava clean
 
 rebuild: clean all
+
+docs:
+	mkdir -p docs
+	$(MAKE) -C purejava docs
+	cp -r purejava/docs docs/purejava
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o
