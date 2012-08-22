@@ -21,6 +21,10 @@ import org.maxkernel.service.ServicePacket;
 import org.xml.sax.SAXException;
 
 public class TCPStream implements Stream {
+	
+	/**
+	 * Internal packet parsing class
+	 */
 	private static final class CodePacket {
 		private static final int SIZE = 1;
 		
@@ -46,6 +50,9 @@ public class TCPStream implements Stream {
 		public byte code() { return packet.get(CODE_OFFSET); }
 	}
 	
+	/**
+	 * Internal packet parsing class
+	 */
 	private static final class DataPacket {
 		private static final int HEADER_SIZE = 12;
 		private static final int BODY_SIZE = 256;
@@ -162,13 +169,13 @@ public class TCPStream implements Stream {
 	}
 	
 	@Override
-	public Mode mode() {
+	public Mode getMode() {
 		return mode;
 	}
 	
 	@Override
-	public Map<String, Service> services() throws IOException {
-		if (mode() != Mode.UNLOCKED) {
+	public Map<String, Service> getServices() throws IOException {
+		if (getMode() != Mode.UNLOCKED) {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}
 		
@@ -234,13 +241,17 @@ public class TCPStream implements Stream {
 	
 	@Override
 	public void subscribe(Service service) throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (service == null) {
+			throw new IllegalArgumentException("Service argument is null!");
+		}
+		
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		this.service = service;
 		
-		String name = service.name();
+		String name = service.getName();
 		int length = name.length();
 		
 		byte[] data = new byte[length + 2];
@@ -252,8 +263,8 @@ public class TCPStream implements Stream {
 	
 	@Override
 	public void unsubscribe() throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		send(new byte[]{ Stream.UNSUBSCRIBE });
@@ -261,8 +272,8 @@ public class TCPStream implements Stream {
 	
 	@Override
 	public void begin(Selector selector) throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		// Lock the stream
@@ -285,8 +296,8 @@ public class TCPStream implements Stream {
 	}
 	
 	@Override
-	public boolean check() {
-		if (mode() != Mode.LOCKED) {
+	public boolean checkIO() {
+		if (getMode() != Mode.LOCKED) {
 			return true;
 		}
 		
@@ -294,9 +305,9 @@ public class TCPStream implements Stream {
 	}
 	
 	@Override
-	public ServicePacket handle() throws IOException {
-		if (mode() != Mode.LOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+	public ServicePacket<byte[]> handleIO() throws IOException {
+		if (getMode() != Mode.LOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		synchronized (socket) {
@@ -317,7 +328,7 @@ public class TCPStream implements Stream {
 						return null;
 					}
 					
-					ServicePacket packet = new ServicePacket(service, this, data.timestamp(), data.payload());
+					ServicePacket<byte[]> packet = new ServicePacket<byte[]>(service, this, data.timestamp(), data.payload());
 					code.clear();
 					data.clear();
 					

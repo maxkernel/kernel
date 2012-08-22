@@ -4,7 +4,7 @@ import org.maxkernel.service.streams.Stream;
 
 /**
  * Encapsulates a service type. Used to in streams subscribe to specific services.
- * @see Stream#services()
+ * @see Stream#getServices()
  * @see Stream#subscribe(Service)
  * 
  * @version 1.0
@@ -45,29 +45,29 @@ public class Service {
 	/**
 	 * @return The name of the service
 	 */
-	public String name() {
+	public String getName() {
 		return name;
 	}
 	
 	/**
 	 * @return The format of the service, or "unknown" if not specified
 	 */
-	public String format() {
+	public String getFormat() {
 		return format;
 	}
 	
 	/**
 	 * @return The description of the service, or <code>null</code> if not specified
 	 */
-	public String description() {
+	public String getDescription() {
 		return desc;
 	}
 	
 	public boolean equals(Object o) {
-		return o instanceof Service && ((Service)o).name() == name() && ((Service)o).format() == format();
+		return o instanceof Service && ((Service)o).getName() == getName() && ((Service)o).getFormat() == getFormat();
 	}
 	
 	public String toString() {
-		return "Service name='"+name()+"' format='"+format()+"' description='"+description()+"'";
+		return "Service name='"+getName()+"' format='"+getFormat()+"' description='"+getDescription()+"'";
 	}
 }

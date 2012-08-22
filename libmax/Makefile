@@ -9,13 +9,16 @@ LFLAGS		= -shared -L../aul
 
 OBJS		= $(SRCS:.c=.o)
 
-.PHONY: all test install clean rebuild docs
+.PHONY: all subdirs test install clean rebuild docs
 
-all: $(TARGET)
+all: $(TARGET) subdirs
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
+
+subdirs:
 	$(MAKE) -C lua all
+	$(MAKE) -C purejava all
 
 test: test.o
 	$(CC) -o test test.o -L. -lmax -L../aul -laul
@@ -24,20 +27,21 @@ install:
 	mkdir -p /usr/include/max
 	cp -f $(TARGET) /usr/lib
 	cp -f include/*.h /usr/include/max
-	ldconfig
 	$(MAKE) -C lua install
+	$(MAKE) -C purejava install
+	ldconfig
 
 clean:
-	rm -rf $(OBJS) $(TARGET) test test.o docs
+	rm -rf $(OBJS) $(TARGET) test test.o doxygen
 	$(MAKE) -C lua clean
 	$(MAKE) -C purejava clean
 
 rebuild: clean all
 
 docs:
-	mkdir -p docs
+	mkdir -p doxygen
 	$(MAKE) -C purejava docs
-	cp -r purejava/docs docs/purejava
+	cp -r purejava/doxygen doxygen/purejava
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o

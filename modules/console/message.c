@@ -146,12 +146,14 @@ bool message_awritefd(int fd, char msgtype, const char * name, const char * sig,
 	char buffer[CONSOLE_BUFFERMAX];
 	errno = 0;
 
+	// TODO - add exception handling here (NULL'd out for now)
 	ssize_t hlen = serialize_2array(buffer, sizeof(buffer), NULL, "icss", CONSOLE_FRAMEING, msgtype, name, sig);
 	if (hlen < 0)
 	{
 		return false;
 	}
 
+	// TODO - add exception handling here (NULL'd out for now)
 	ssize_t blen = aserialize_2array(buffer + hlen, sizeof(buffer) - hlen, NULL, method_params(sig), args);
 	if (blen < 0)
 	{

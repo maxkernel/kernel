@@ -1,16 +1,26 @@
+ANT		= /usr/bin/ant
+DOXYGEN		= /usr/bin/doxygen
 
-.PHONY: all install clean rebuid docs
+
+TEST_TARGET	= Service
+
+.PHONY: prereq all install clean rebuid docs
 
 all:
+	$(ANT) -f build.xml all
+
+test:
+	$(ANT) -f build.xml test -Dtest=$(TEST_TARGET)
 
 install:
 
 clean:
-	rm -rf docs
+	$(ANT) -f build.xml clean
+	rm -rf doxygen
 
 rebuild: clean all
 
 docs:
-	mkdir -p docs
-	doxygen
+	mkdir -p doxygen
+	$(DOXYGEN) Doxyfile
 

@@ -7,7 +7,7 @@ extern "C" {
 
 // If you change these, you must also change the corresponding defines in libmax
 
-#define CONSOLE_BUFFERMAX		128
+#define CONSOLE_BUFFERMAX		256
 #define CONSOLE_HEADERSIZE		10
 #define CONSOLE_MAXCLIENTS			5
 

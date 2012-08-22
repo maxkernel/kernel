@@ -163,13 +163,13 @@ public class UDPStream implements Stream {
 	}
 	
 	@Override
-	public Mode mode() {
+	public Mode getMode() {
 		return mode;
 	}
 	
 	@Override
-	public Map<String, Service> services() throws IOException {
-		if (mode() != Mode.UNLOCKED) {
+	public Map<String, Service> getServices() throws IOException {
+		if (getMode() != Mode.UNLOCKED) {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}
 		
@@ -230,13 +230,17 @@ public class UDPStream implements Stream {
 	
 	@Override
 	public void subscribe(Service service) throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (service == null) {
+			throw new IllegalArgumentException("Service argument is null!");
+		}
+		
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		this.service = service;
 		
-		String name = service.name();
+		String name = service.getName();
 		int length = name.length();
 		
 		byte[] data = new byte[length + 2];
@@ -248,8 +252,8 @@ public class UDPStream implements Stream {
 	
 	@Override
 	public void unsubscribe() throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		send(new byte[]{ Stream.UNSUBSCRIBE });
@@ -257,8 +261,8 @@ public class UDPStream implements Stream {
 	
 	@Override
 	public void begin(Selector selector) throws IOException {
-		if (mode() != Mode.UNLOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+		if (getMode() != Mode.UNLOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		// Lock the stream
@@ -281,8 +285,8 @@ public class UDPStream implements Stream {
 	}
 	
 	@Override
-	public boolean check() {
-		if (mode() != Mode.LOCKED) {
+	public boolean checkIO() {
+		if (getMode() != Mode.LOCKED) {
 			return true;
 		}
 		
@@ -290,9 +294,9 @@ public class UDPStream implements Stream {
 	}
 	
 	@Override
-	public ServicePacket handle() throws IOException {
-		if (mode() != Mode.LOCKED) {
-			throw new SyncFailedException("Bad stream state: "+mode());
+	public ServicePacket<byte[]> handleIO() throws IOException {
+		if (getMode() != Mode.LOCKED) {
+			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
 		synchronized (socket) {
@@ -308,7 +312,7 @@ public class UDPStream implements Stream {
 				}
 				
 				case Stream.DATA: {
-					ServicePacket servicepacket = new ServicePacket(service, this, packet.timestamp(), packet.payload());
+					ServicePacket<byte[]> servicepacket = new ServicePacket<byte[]>(service, this, packet.timestamp(), packet.payload());
 					packet.clear();
 					
 					return servicepacket;

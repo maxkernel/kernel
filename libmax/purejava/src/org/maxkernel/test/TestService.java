@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -23,8 +24,8 @@ import javax.swing.SwingConstants;
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServiceClient;
 import org.maxkernel.service.ServicePacket;
-import org.maxkernel.service.format.BufferedImageFormat;
-import org.maxkernel.service.format.DoubleArrayFormat;
+import org.maxkernel.service.queue.BufferedImageServiceQueue;
+import org.maxkernel.service.queue.DoubleArrayServiceQueue;
 import org.maxkernel.service.streams.Stream;
 import org.maxkernel.service.streams.TCPStream;
 import org.maxkernel.service.streams.UDPStream;
@@ -32,6 +33,59 @@ import org.maxkernel.service.streams.UDPStream;
 public class TestService {
 
 	public static void main(String[] args) throws Exception {
+		
+	// Create the service client
+	ServiceClient client = new ServiceClient();
+	
+	// Create our TCPStream as before
+	Stream tcp_stream = new TCPStream(InetAddress.getByName("192.168.1.102")); // Replace with robot IP
+	
+	// Get the service named 'gps'
+	Map<String, Service> services = tcp_stream.getServices();
+	Service gps_service = services.get("gps");  // TODO - check for null
+	
+	// Subscribe to the 'gps' service
+	tcp_stream.subscribe(gps_service);
+	
+	// Create our blocking queue that the raw gps data will go into
+	BlockingQueue<ServicePacket<byte[]>> gps_raw_queue = new LinkedBlockingQueue<>();
+	
+	// The blocking queue will contain ServicePackets of type byte[] (the default format).
+	// The ServiceClient is unable to automatically convert the service data.
+	// In order to convert the data, we must provide a proper converting class.
+	// In this example, we know, however, that the 'gps' service outputs double[]
+	// So, we will use a DoubleArrayServiceQueue to convert the raw byte[] service
+	// data into a usable double[]
+	DoubleArrayServiceQueue gps_queue = new DoubleArrayServiceQueue(gps_raw_queue);
+	
+	// Start the streaming. The service client will put ServicePackets received
+	// by tcp_stream into the gps_packet queue
+	client.begin(tcp_stream, gps_queue);
+	
+	// Loop over 10 packets
+	for (int i=0; i<10; i++) {
+		ServicePacket<double[]> gps_packet = gps_queue.take();
+		
+		long timestamp_us = gps_packet.getTimestamp();  // microsecond timestamp
+		double[] data = gps_packet.getData();
+		
+		Date sample_time = new Date(timestamp_us / 1000);
+		System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], data[1], sample_time));
+	}
+	
+	// Close the ServiceClient (will close all registered streams too)
+	client.close();
+		
+		/*
+		for (Service s : services.values()) {
+			String name = s.getName();
+			String format = s.getFormat();
+			String description = s.getDescription();
+			
+			System.out.println(String.format("%s - (format = %s) %s", name, format, description));
+		}
+		*/
+		
 		/*
 		JFrame f = new JFrame();
 		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -41,37 +95,32 @@ public class TestService {
 		f.getContentPane().add(label);
 		f.setVisible(true);
 		f.setExtendedState(JFrame.MAXIMIZED_BOTH);
-		*/
 		
 		
 		ServiceClient client = new ServiceClient();
-		
-		//Stream tcpstream = new TCPStream(InetAddress.getByName("192.168.1.100"));
-		//Stream udpstream = new UDPStream(InetAddress.getByName("192.168.1.100"));
 		Stream stream = new TCPStream(InetAddress.getByName("localhost"));
 		
-		Map<String, Service> services = stream.services();
+		Map<String, Service> services = stream.getServices();
 		if (services == null) {
 			throw new Exception("Services list is NULL!");
 		}
 		
 		System.out.println("Services: "+services);
-		//stream.subscribe(services.get("Camera video stream"));
-		stream.subscribe(services.get("dstream"));
+		stream.subscribe(services.get("network"));
 		
 		//BlockingQueue<ServicePacket> imgqueue = new LinkedBlockingQueue<ServicePacket>();
 		//BufferedImageFormat imgformat = new BufferedImageFormat(imgqueue);
 		//client.begin(stream, imgqueue);
 		
-		BlockingQueue<ServicePacket> dqueue = new LinkedBlockingQueue<ServicePacket>();
-		DoubleArrayFormat dformat = new DoubleArrayFormat(dqueue);
-		client.begin(stream, dqueue);
+		BlockingQueue<ServicePacket<byte[]>> queue = new LinkedBlockingQueue<ServicePacket<byte[]>>();
+		DoubleArrayServiceQueue format = new DoubleArrayServiceQueue(queue);
+		client.begin(stream, format);
 		
 		while (true) {
 			//BufferedImage img = imgformat.dequeue().payload();
 			
 			//ByteBuffer b = ByteBuffer.wrap(p.data()).order(ByteOrder.LITTLE_ENDIAN);
-			System.out.println(dformat.dequeue().data()[0]);
+			System.out.println(format.take().getData()[0]);
 			
 			//final int blowup = 3;
 			
@@ -80,6 +129,6 @@ public class TestService {
 			//label.setIcon(new ImageIcon(imgformat.dequeue().data()));
 			//System.out.println(Arrays.toString(dformat.dequeue().data()));
 		}
-		
+		*/
 	}
 }
