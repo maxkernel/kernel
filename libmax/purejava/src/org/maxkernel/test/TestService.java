@@ -21,11 +21,13 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
 
+import org.maxkernel.service.DisconnectListener;
 import org.maxkernel.service.Service;
 import org.maxkernel.service.ServiceClient;
 import org.maxkernel.service.ServicePacket;
 import org.maxkernel.service.queue.BufferedImageServiceQueue;
 import org.maxkernel.service.queue.DoubleArrayServiceQueue;
+import org.maxkernel.service.queue.ServiceQueue;
 import org.maxkernel.service.streams.Stream;
 import org.maxkernel.service.streams.TCPStream;
 import org.maxkernel.service.streams.UDPStream;
@@ -36,13 +38,19 @@ public class TestService {
 		
 	// Create the service client
 	ServiceClient client = new ServiceClient();
+	client.addDisconnectListener(new DisconnectListener() {
+		@Override
+		public void streamDisconnected(DisconnectEvent e) {
+			System.out.println(String.format("Stream disconnected! (%s)", e.getStream()));
+		}
+	});
 	
 	// Create our TCPStream as before
-	Stream tcp_stream = new TCPStream(InetAddress.getByName("192.168.1.102")); // Replace with robot IP
+	Stream tcp_stream = new TCPStream(InetAddress.getByName("localhost")); // Replace with robot IP
 	
 	// Get the service named 'gps'
-	Map<String, Service> services = tcp_stream.getServices();
-	Service gps_service = services.get("gps");  // TODO - check for null
+	Map<String, Service> services = tcp_stream.listServices();
+	Service gps_service = services.get("network");  // TODO - check for null
 	
 	// Subscribe to the 'gps' service
 	tcp_stream.subscribe(gps_service);
@@ -56,7 +64,7 @@ public class TestService {
 	// In this example, we know, however, that the 'gps' service outputs double[]
 	// So, we will use a DoubleArrayServiceQueue to convert the raw byte[] service
 	// data into a usable double[]
-	DoubleArrayServiceQueue gps_queue = new DoubleArrayServiceQueue(gps_raw_queue);
+	ServiceQueue<double[]> gps_queue = ServiceQueue.make(double[].class, gps_raw_queue); //new DoubleArrayServiceQueue(gps_raw_queue);
 	
 	// Start the streaming. The service client will put ServicePackets received
 	// by tcp_stream into the gps_packet queue
@@ -70,7 +78,7 @@ public class TestService {
 		double[] data = gps_packet.getData();
 		
 		Date sample_time = new Date(timestamp_us / 1000);
-		System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], data[1], sample_time));
+		System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], /*data[1]*/ 1.0, sample_time));
 	}
 	
 	// Close the ServiceClient (will close all registered streams too)

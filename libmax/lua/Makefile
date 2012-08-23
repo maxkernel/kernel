@@ -10,7 +10,7 @@ LFLAGS		= -L..
 OBJS		= $(SRCS:.c=.o)
 
 
-.PHONY: install clean rebuild depend
+.PHONY: install clean rebuild docs
 
 all: $(TARGET)
 
@@ -22,9 +22,13 @@ install:
 	cp -f $(TARGET) /usr/lib/lua/5.1/
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -rf $(OBJS) $(TARGET) doxygen
 
 rebuild: clean all
+
+docs:
+	mkdir -p doxygen
+	# TODO - build docs
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o

@@ -1,10 +1,16 @@
 package org.maxkernel.service.queue;
 
+import java.awt.image.BufferedImage;
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.maxkernel.service.ServiceClient;
@@ -19,16 +25,83 @@ import org.maxkernel.service.ServicePacket;
  * ({@link ServiceClient#begin(org.maxkernel.service.streams.Stream, BlockingQueue)})
  * with a friendlier BlockingQueue that returns the requested transmuted service packets.
  * 
+ * You can use the static methods {@link #make(Class, BlockingQueue)} and {@link #make(Class)}
+ * to create a ServiceQueue for you.
+ * 
+ * Example:
+ * {@code
+ * // The service client will put received ServicePacket<byte[]> into this raw_queue 
+ * BlockingQueue<ServicePacket<byte[]>> raw_queue = ...
+ * 
+ * // At the end of the day, however, we really want ServicePacket<double[]> and not ServicePacket<byte[]>
+ * // To convert to the desired type, do this:
+ * ServiceQueue<double[]> queue = ServiceQueue.make(double[].class, raw_queue);
+ * // And now we can register this ServiceQueue with ServiceClient
+ * 
+ * 
+ * // Alternatively, if we don't care about declaring the backing BlockingQueue, we can write this
+ * ServiceQueue<double[]> queue = ServiceQueue.make(double[].class);
+ * // This will use a LinkedBlockingQueue (expandable with unlimited space).
+ * 
+ * }
+ * 
  * @author Andrew Klofas
  * @version 1.0
  *
  * @param <E> The class of the payload data in the {@link ServicePacket}
- * @see BooleanArrayServiceQueue
- * @see IntegerArrayServiceQueue
- * @see DoubleArrayServiceQueue
- * @see BufferedImageServiceQueue
  */
 public abstract class ServiceQueue<E> implements BlockingQueue<ServicePacket<E>> {
+	
+	private static final Map<Class<?>, Class<? extends ServiceQueue<?>>> formats =
+		Collections.unmodifiableMap(new HashMap<Class<?>, Class<? extends ServiceQueue<?>>>() {
+			private static final long serialVersionUID = 1L;
+			
+			{ 
+				put(boolean[].class, BooleanArrayServiceQueue.class);
+				put(int[].class, IntegerArrayServiceQueue.class);
+				put(double[].class, DoubleArrayServiceQueue.class);
+				put(BufferedImage.class, BufferedImageServiceQueue.class);
+			}
+		});
+	
+	/**
+	 * Creates a new ServiceQueue that wraps the given queue and converts to the given class.
+	 * If the given class conversion is not supported, a {@link TransmutationNotSupportedException}
+	 * @param type The requested type to convert to
+	 * @param queue The BlockingQueue that holds the raw unconverted packets
+	 * @return The converted queue
+	 * @throws TransmutationNotSupportedException If the conversion is not supported or there was a problem
+	 * creating the converter.
+	 */
+	@SuppressWarnings("unchecked")
+	public static <T> ServiceQueue<T> make(Class<T> type, BlockingQueue<ServicePacket<byte[]>> queue) throws TransmutationNotSupportedException {
+		for (Map.Entry<Class<?>, Class<? extends ServiceQueue<?>>> entry : formats.entrySet()) {
+			if (entry.getKey().isAssignableFrom(type)) {
+				
+				try {
+					Constructor<? extends ServiceQueue<?>> constructor = entry.getValue().getConstructor(BlockingQueue.class);
+					return (ServiceQueue<T>)constructor.newInstance(queue);
+				
+				} catch (ReflectiveOperationException e) {
+					throw new TransmutationNotSupportedException("Exception while creating ServiceQueue", e);
+				}
+			}
+		}
+		
+		throw new TransmutationNotSupportedException(String.format("Unsupported type: %s", type.getCanonicalName()));
+	}
+	
+	/**
+	 * Overrides {@link #make(Class, BlockingQueue)} using LinkedBlockingQueue as the backing queue.
+	 * @param type The requested type to convert to
+	 * @return The converted queue
+	 * @throws TransmutationNotSupportedException If the conversion is not supported or there was a problem
+	 */
+	public static <T> ServiceQueue<T> make(Class<T> type) throws TransmutationNotSupportedException {
+		return make(type, new LinkedBlockingQueue<ServicePacket<byte[]>>());
+	}
+	
+	
 	
 	/**
 	 * The blocking queue that holds the raw binary un-transmuted {@link ServicePacket}.

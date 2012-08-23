@@ -6,12 +6,12 @@
 
 DOXYFILE_ENCODING      = UTF-8
 
-PROJECT_NAME           = "Java bindings for libmax"
+PROJECT_NAME           = "libmax"
 PROJECT_NUMBER         = 1.0
 PROJECT_BRIEF          = 
 PROJECT_LOGO           = 
 
-OUTPUT_DIRECTORY       = doxygen
+OUTPUT_DIRECTORY       = doxygen/c
 CREATE_SUBDIRS         = NO
 
 OUTPUT_LANGUAGE        = English
@@ -27,8 +27,8 @@ STRIP_FROM_PATH        =
 STRIP_FROM_INC_PATH    = 
 
 SHORT_NAMES            = NO
-JAVADOC_AUTOBRIEF      = YES
-QT_AUTOBRIEF           = NO
+JAVADOC_AUTOBRIEF      = NO
+QT_AUTOBRIEF           = YES
 MULTILINE_CPP_IS_BRIEF = NO
 
 INHERIT_DOCS           = YES
@@ -37,8 +37,8 @@ TAB_SIZE               = 4
 
 ALIASES                = 
 
-OPTIMIZE_OUTPUT_FOR_C  = NO
-OPTIMIZE_OUTPUT_JAVA   = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+OPTIMIZE_OUTPUT_JAVA   = NO
 OPTIMIZE_FOR_FORTRAN   = NO
 OPTIMIZE_OUTPUT_VHDL   = NO
 
@@ -65,7 +65,7 @@ LOOKUP_CACHE_SIZE      = 0
 EXTRACT_ALL            = NO
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = NO
-EXTRACT_LOCAL_CLASSES  = YES
+EXTRACT_LOCAL_CLASSES  = NO
 EXTRACT_LOCAL_METHODS  = NO
 EXTRACT_ANON_NSPACES   = NO
 
@@ -126,14 +126,14 @@ WARN_LOGFILE           =
 # configuration options related to the input files
 #---------------------------------------------------------------------------
 
-INPUT                  = "src"
+INPUT                  = include
 INPUT_ENCODING         = UTF-8
-FILE_PATTERNS          = *.java
+FILE_PATTERNS          = *.h
 RECURSIVE              = YES
 
 EXCLUDE                = 
 EXCLUDE_SYMLINKS       = NO
-EXCLUDE_PATTERNS       = */test/*
+EXCLUDE_PATTERNS       = 
 EXCLUDE_SYMBOLS        = 
 
 EXAMPLE_PATH           = docs/example
@@ -184,9 +184,9 @@ HTML_FOOTER            =
 HTML_STYLESHEET        = 
 HTML_EXTRA_FILES       = 
 
-HTML_COLORSTYLE_HUE    = 125
+HTML_COLORSTYLE_HUE    = 10
 HTML_COLORSTYLE_SAT    = 100
-HTML_COLORSTYLE_GAMMA  = 80
+HTML_COLORSTYLE_GAMMA  = 65
 
 HTML_TIMESTAMP         = YES
 HTML_ALIGN_MEMBERS     = YES
@@ -195,10 +195,10 @@ HTML_DYNAMIC_SECTIONS  = YES
 
 GENERATE_DOCSET        = NO
 GENERATE_HTMLHELP      = NO
-CHM_FILE               = libmax_purejava.chm
+CHM_FILE               = libmax.chm
 GENERATE_QHP           = NO
 GENERATE_ECLIPSEHELP   = YES
-ECLIPSE_DOC_ID         = org.maxkernel.libmax.java
+ECLIPSE_DOC_ID         = org.maxkernel.libmax
 
 DISABLE_INDEX          = NO
 GENERATE_TREEVIEW      = YES
@@ -279,7 +279,19 @@ GENERATE_PERLMOD       = NO
 # Configuration options related to the preprocessor
 #---------------------------------------------------------------------------
 
-ENABLE_PREPROCESSING   = NO
+ENABLE_PREPROCESSING   = YES
+
+MACRO_EXPANSION        = NO
+EXPAND_ONLY_PREDEF     = NO
+
+SEARCH_INCLUDES        = NO
+INCLUDE_PATH           = 
+INCLUDE_FILE_PATTERNS  = 
+
+PREDEFINED             = 
+EXPAND_AS_DEFINED      = 
+
+SKIP_FUNCTION_MACROS   = YES
 
 #---------------------------------------------------------------------------
 # Configuration::additions related to external references
@@ -334,7 +346,7 @@ PERL_PATH              = /usr/bin/perl
 # this option also works with HAVE_DOT disabled, but it is recommended to 
 # install and use dot, since it yields more powerful graphs.
 
-CLASS_DIAGRAMS         = NO
+CLASS_DIAGRAMS         = YES
 
 # You can define message sequence charts within doxygen comments using the \msc 
 # command. Doxygen will then run the mscgen tool (see 
@@ -356,7 +368,7 @@ HIDE_UNDOC_RELATIONS   = YES
 # toolkit from AT&T and Lucent Bell Labs. The other options in this section 
 # have no effect if this option is set to NO (the default)
 
-HAVE_DOT               = YES
+HAVE_DOT               = NO
 
 # The DOT_NUM_THREADS specifies the number of dot invocations doxygen is 
 # allowed to run in parallel. When set to 0 (the default) doxygen will 

@@ -1,0 +1,31 @@
+<project name="maxkernel" default="dist" basedir=".">
+	<description>Java bindings for libmax (maxkernel)</description>
+
+	<property name="target" value="maxkernel.jar" />
+	<property name="manifest" value="manifest.mf" />
+	<property name="src" location="src" />
+	<property name="bin" location="bin" />
+
+	<target name="all">
+		<mkdir dir="${bin}" />
+		<depend srcdir="${src}" destdir="${bin}" closure="true" />
+		<javac srcdir="${src}" destdir="${bin}" compiler="javac1.6" includeantruntime="false" listfiles="true" debug="true">
+			<exclude name="**/test/**" />
+		</javac>
+		<jar jarfile="${target}" manifest="${manifest}" basedir="${bin}" />
+	</target>
+
+	<target name="test" depends="all">
+		<javac srcdir="${src}" destdir="${bin}" includeantruntime="false" listfiles="true" debug="true">
+			<include name="**/test/**" />
+		</javac>
+		<echo message="Testing ${test}" />
+		<java classname="org.maxkernel.test.Test${test}" dir="bin" fork="true" />
+	</target>
+
+	<target name="clean">
+		<delete dir="${bin}" file="${target}" />
+	</target>
+
+	<target name="rebuild" depends="clean,all" />
+</project>

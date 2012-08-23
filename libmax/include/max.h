@@ -77,13 +77,25 @@ typedef struct
 } return_t;
 
 
+/*! \defgroup syscall Execute syscalls
+ *  Additional documentation for group 'mygrp'
+ */
+
+/*!
+ * \ingroup syscall
+ * \brief Initializes the members of a maxhandle_t struct.
+ * FooBArBAZ!
+ * \param hand The maxhandle_t struct to initialize.
+ */
 void max_initialize(maxhandle_t * hand);
+
 void max_setmalloc(maxhandle_t * hand, malloc_f mfunc, free_f ffunc, memerr_f efunc);
 void max_memerr();
 
 bool max_connect(maxhandle_t * hand, const char * host, exception_t ** err);
 bool max_connectlocal(maxhandle_t * hand, exception_t ** err);
 void * max_destroy(maxhandle_t * hand);
+
 
 bool max_syscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, ...);
 bool max_vsyscall(maxhandle_t * hand, exception_t ** err, const char * syscall, const char * sig, return_t * ret, va_list args);

@@ -4,7 +4,7 @@ import org.maxkernel.service.streams.Stream;
 
 /**
  * Encapsulates a service type. Used to in streams subscribe to specific services.
- * @see Stream#getServices()
+ * @see Stream#listServices()
  * @see Stream#subscribe(Service)
  * 
  * @version 1.0
@@ -68,6 +68,6 @@ public class Service {
 	}
 	
 	public String toString() {
-		return "Service name='"+getName()+"' format='"+getFormat()+"' description='"+getDescription()+"'";
+		return String.format("Service name='%s' format='%s' description='%s'", getName(), getFormat(), getDescription());
 	}
 }

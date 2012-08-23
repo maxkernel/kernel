@@ -1,21 +1,20 @@
 package org.maxkernel.service.queue;
 
-
 /**
- * This exception is thrown when corrupted or incorrect data is transmuted.
+ * This exception is thrown when a requested transmutation is not supported.
  * 
  * @author Andrew Klofas
  * @version 1.0
  * 
  * @see ServiceQueue
  */
-public class TransmutationException extends RuntimeException {
-	private static final long serialVersionUID = -4880458263423235142L;
+public class TransmutationNotSupportedException extends Exception {
+	private static final long serialVersionUID = -4959511553909842901L;
 
 	/**
 	 * Constructs a new exception with <code>null</code> as the message.
 	 */
-	public TransmutationException() {
+	public TransmutationNotSupportedException() {
         super();
     }
 
@@ -23,7 +22,7 @@ public class TransmutationException extends RuntimeException {
 	 * Constructs a new exception.
 	 * @param message The detailed message.
 	 */
-    public TransmutationException(String message) {
+    public TransmutationNotSupportedException(String message) {
         super(message);
     }
 
@@ -32,7 +31,7 @@ public class TransmutationException extends RuntimeException {
      * @param message The detailed message.
      * @param cause The cause of the exception.
      */
-    public TransmutationException(String message, Throwable cause) {
+    public TransmutationNotSupportedException(String message, Throwable cause) {
         super(message, cause);
     }
 
@@ -40,7 +39,7 @@ public class TransmutationException extends RuntimeException {
      * Constructs a new exception with a <code>null</code> message.
      * @param cause The cause of the exception.
      */
-    public TransmutationException(Throwable cause) {
+    public TransmutationNotSupportedException(Throwable cause) {
         super(cause);
     }
 }

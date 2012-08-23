@@ -82,12 +82,17 @@ public interface Stream {
 	public Mode getMode();
 	
 	/**
+	 * @return The service this stream is subscribed to, or <code>null</code> if unsubscribed.
+	 */
+	public Service getService();
+	
+	/**
 	 * Queries for all available services and returns a map of
 	 * service names -> service objects.
 	 * @return The map of all available services.
 	 * @throws IOException If there was a problem reading the services
 	 */
-	public Map<String, Service> getServices() throws IOException;
+	public Map<String, Service> listServices() throws IOException;
 	
 	/**
 	 * Subscribes to the given service but does not begin streaming yet.

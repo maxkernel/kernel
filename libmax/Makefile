@@ -1,4 +1,8 @@
+LDCONFIG	= /sbin/ldconfig
+DOXYGEN		= /usr/bin/doxygen
+
 SRCS		= libmax.c syscallcache.c serialize.c message.c
+SUBDIRS		= lua purejava matlab
 TARGET		= libmax.so
 PACKAGES	= 
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include -I../modules/console -I../modules/console/include
@@ -17,8 +21,7 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -o $(TARGET) $(OBJS) $(LFLAGS) $(LIBS)
 
 subdirs:
-	$(MAKE) -C lua all
-	$(MAKE) -C purejava all
+	$(foreach subdir,$(SUBDIRS), $(MAKE) -C $(subdir) all &&) true
 
 test: test.o
 	$(CC) -o test test.o -L. -lmax -L../aul -laul
@@ -27,21 +30,19 @@ install:
 	mkdir -p /usr/include/max
 	cp -f $(TARGET) /usr/lib
 	cp -f include/*.h /usr/include/max
-	$(MAKE) -C lua install
-	$(MAKE) -C purejava install
-	ldconfig
+	$(foreach subdir,$(SUBDIRS), $(MAKE) -C $(subdir) install &&) true
+	$(LDCONFIG)
 
 clean:
 	rm -rf $(OBJS) $(TARGET) test test.o doxygen
-	$(MAKE) -C lua clean
-	$(MAKE) -C purejava clean
+	$(foreach subdir,$(SUBDIRS), $(MAKE) -C $(subdir) clean &&) true
 
 rebuild: clean all
 
 docs:
 	mkdir -p doxygen
-	$(MAKE) -C purejava docs
-	cp -r purejava/doxygen doxygen/purejava
+	$(DOXYGEN) Doxyfile
+	$(foreach subdir,$(SUBDIRS), $(MAKE) -C $(subdir) docs && cp -r $(subdir)/doxygen doxygen/$(subdir) &&) true
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $(DEFINES) $(INCLUDES) $*.c -o $*.o

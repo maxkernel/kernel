@@ -20,6 +20,12 @@ import org.maxkernel.service.ServiceListParser;
 import org.maxkernel.service.ServicePacket;
 import org.xml.sax.SAXException;
 
+/**
+ * Represents a TCP stream object capable of streaming any service.
+ * 
+ * @author Andrew Klofas
+ * @version 1.0
+ */
 public class TCPStream implements Stream {
 	
 	/**
@@ -114,7 +120,9 @@ public class TCPStream implements Stream {
 		public byte[] payload() { return payload; }
 	}
 	
-	
+	/**
+	 * The default TCP service port.
+	 */
 	public static final int DEFAULT_PORT = 10001;
 	
 	private static final int SEND_BUFFER_SIZE = 128;
@@ -131,6 +139,11 @@ public class TCPStream implements Stream {
 	private CodePacket code;
 	private DataPacket data;
 	
+	/**
+	 * Connects over TCP to the given socket address.
+	 * @param sockaddress The socket address (host and port).
+	 * @throws IOException If there was a problem connecting.
+	 */
 	public TCPStream(InetSocketAddress sockaddress) throws IOException {
 		mode = Mode.UNLOCKED;
 		lastheartbeat = 0;
@@ -145,10 +158,22 @@ public class TCPStream implements Stream {
 		data = new DataPacket();
 	}
 
+	/**
+	 * Connects over TCP to the given address and port.
+	 * @param address The address to connect to.
+	 * @param port The port to connect to.
+	 * @throws IOException If there was a problem connecting.
+	 */
 	public TCPStream(InetAddress address, int port) throws IOException {
 		this(new InetSocketAddress(address, port));
 	}
 	
+	/**
+	 * Connects over TCP to the given address and default port.
+	 * @param address The address to connect to.
+	 * @throws IOException If there was a problem connecting.
+	 * @see #DEFAULT_PORT
+	 */
 	public TCPStream(InetAddress address) throws IOException {
 		this(address, DEFAULT_PORT);
 	}
@@ -174,7 +199,12 @@ public class TCPStream implements Stream {
 	}
 	
 	@Override
-	public Map<String, Service> getServices() throws IOException {
+	public Service getService() {
+		return service;
+	}
+	
+	@Override
+	public Map<String, Service> listServices() throws IOException {
 		if (getMode() != Mode.UNLOCKED) {
 			throw new SyncFailedException("Attempting to get service list from locked stream!");
 		}
@@ -249,8 +279,6 @@ public class TCPStream implements Stream {
 			throw new SyncFailedException("Bad stream state: "+getMode());
 		}
 		
-		this.service = service;
-		
 		String name = service.getName();
 		int length = name.length();
 		
@@ -258,7 +286,9 @@ public class TCPStream implements Stream {
 		data[0] = Stream.SUBSCRIBE;
 		System.arraycopy(name.getBytes("UTF8"), 0, data, 1, length);
 		data[length+1] = 0;
+		
 		send(data);
+		this.service = service;
 	}
 	
 	@Override
@@ -268,6 +298,7 @@ public class TCPStream implements Stream {
 		}
 		
 		send(new byte[]{ Stream.UNSUBSCRIBE });
+		this.service = null;
 	}
 	
 	@Override

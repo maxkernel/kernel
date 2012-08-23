@@ -1,29 +1,27 @@
 package org.maxkernel.service;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.maxkernel.service.queue.DoubleArrayServiceQueue;
+import org.maxkernel.service.DisconnectListener.DisconnectEvent;
 import org.maxkernel.service.queue.ServiceQueue;
 import org.maxkernel.service.streams.Stream;
 import org.maxkernel.service.streams.TCPStream;
 import org.maxkernel.service.streams.UDPStream;
-import org.maxkernel.syscall.SyscallClient;
 
 /**
  * This class is used to monitor and handle the service streams registered with the robot. This class
@@ -63,7 +61,7 @@ import org.maxkernel.syscall.SyscallClient;
  * Stream tcp_stream = new TCPStream(InetAddress.getByName("192.168.1.102")); // Replace with robot IP
  * 
  * // Get the available services (service name -> service object map)
- * Map<String, Service> services = tcp_stream.getServices();
+ * Map<String, Service> services = tcp_stream.listServices();
  * 
  * // Remember to close the stream when done
  * // Note - you'll probably never be closing the stream directly like this,
@@ -94,7 +92,7 @@ import org.maxkernel.syscall.SyscallClient;
  * Stream tcp_stream = new TCPStream(InetAddress.getByName("192.168.1.102")); // Replace with robot IP
  * 
  * // Get the service named 'gps'
- * Map<String, Service> services = tcp_stream.getServices();
+ * Map<String, Service> services = tcp_stream.listServices();
  * Service gps_service = services.get("gps");  // TODO - check for null
  * 
  * // Subscribe to the 'gps' service
@@ -105,11 +103,10 @@ import org.maxkernel.syscall.SyscallClient;
  * 
  * // The blocking queue will contain ServicePackets of type byte[] (the default format).
  * // The ServiceClient is unable to automatically convert the service data.
- * // In order to convert the data, we must provide a proper converting class.
- * // In this example, we know, however, that the 'gps' service outputs double[]
- * // So, we will use a DoubleArrayServiceQueue to convert the raw byte[] service
- * // data into a usable double[]
- * DoubleArrayServiceQueue gps_queue = new DoubleArrayServiceQueue(gps_raw_queue);
+ * // In order to convert the data, we must know before hand the format of the data
+ * // In this example, however, we know that the 'gps' service outputs a double[] (double array)
+ * // So, we will make a new ServiceQueue that wraps our gps_raw_queue and outputs a double[]
+ * ServiceQueue<double[]> gps_queue = ServiceQueue.make(double[].class, gps_raw_queue); // TODO - check for exceptions
  * 
  * // Start the streaming. The service client will put ServicePackets received
  * // by tcp_stream into the gps_packet queue
@@ -145,6 +142,7 @@ public class ServiceClient {
 	
 	private Set<Stream> streams;
 	private Map<Stream, BlockingQueue<ServicePacket<byte[]>>> packets;
+	private List<DisconnectListener> listeners;
 	private Selector selector;
 	
 	private ScheduledThreadPoolExecutor executor;
@@ -160,6 +158,7 @@ public class ServiceClient {
 	public ServiceClient() throws IOException {
 		streams = new HashSet<Stream>();
 		packets = Collections.synchronizedMap(new HashMap<Stream, BlockingQueue<ServicePacket<byte[]>>>());
+		listeners = new ArrayList<>();
 		selector = Selector.open();
 		closeflag = false;
 		
@@ -280,8 +279,45 @@ public class ServiceClient {
 			LOG.log(Level.WARNING, "Exception thrown while trying to close stream", exc);
 		}
 		
-		System.out.println("DISCONNECT!");
-		// TODO - handle disconnected listener
+		fireDisconnected(new DisconnectEvent(stream));
+	}
+	
+	/**
+	 * Adds a DisconnectListener to be called when a stream is disconnected (manually or automatically).
+	 * @param listener The listener to call.
+	 */
+	public void addDisconnectListener(DisconnectListener listener) {
+		listeners.add(listener);
+	}
+	
+	/**
+	 * Removes the first occurrence of the given DisconnectListener from the list.
+	 * @param listener The listener to remove.
+	 */
+	public void removeDisconnectListener(DisconnectListener listener) {
+		listeners.remove(listener);
+	}
+	
+	/**
+	 * @return All the registered DisconnectListeners
+	 */
+	public DisconnectListener[] getDisconnectListeners() {
+		return listeners.toArray(new DisconnectListener[0]);
+	}
+	
+	/**
+	 * Dispatches the given event to all DisconnectListeners
+	 * @param e The event to dispatch
+	 */
+	protected void fireDisconnected(DisconnectEvent e) {
+		for (DisconnectListener l : listeners) {
+			try {
+				l.streamDisconnected(e);
+				
+			} catch (Exception ex) {
+				LOG.log(Level.WARNING, "Exception thrown while dispatching DisconnectListener", ex);
+			}
+		}
 	}
 	
 	/**
