@@ -21,6 +21,8 @@ public class TestSyscall {
 		Date date = new Date(timestamp * 1000);
 		System.out.println(date);
 		
+		client.close();
+		
 		/*
 		// Get a syscalls iterator
 		int itr = client.<Integer>syscall("syscalls_itr");

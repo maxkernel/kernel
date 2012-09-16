@@ -10,7 +10,7 @@ print >> sys.stdout, '''
 	</head>
 	<body>
 		<h1>MaxKernel API Documentation</h1>
-		<h3>Generated </h3>
+		<h3>Generated %(datetime)s</h3>
 		<ul>
 			<li>Client Library (libmax)</li>
 			<ul>

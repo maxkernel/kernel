@@ -36,53 +36,53 @@ public class TestService {
 
 	public static void main(String[] args) throws Exception {
 		
-	// Create the service client
-	ServiceClient client = new ServiceClient();
-	client.addDisconnectListener(new DisconnectListener() {
-		@Override
-		public void streamDisconnected(DisconnectEvent e) {
-			System.out.println(String.format("Stream disconnected! (%s)", e.getStream()));
+		// Create the service client
+		ServiceClient client = new ServiceClient();
+		client.addDisconnectListener(new DisconnectListener() {
+			@Override
+			public void streamDisconnected(DisconnectEvent e) {
+				System.out.println(String.format("Stream disconnected! (%s)", e.getStream()));
+			}
+		});
+		
+		// Create our TCPStream as before
+		Stream tcp_stream = new TCPStream(InetAddress.getByName("localhost")); // Replace with robot IP
+		
+		// Get the service named 'gps'
+		Map<String, Service> services = tcp_stream.listServices();
+		Service gps_service = services.get("network");  // TODO - check for null
+		
+		// Subscribe to the 'gps' service
+		tcp_stream.subscribe(gps_service);
+		
+		// Create our blocking queue that the raw gps data will go into
+		BlockingQueue<ServicePacket<byte[]>> gps_raw_queue = new LinkedBlockingQueue<>();
+		
+		// The blocking queue will contain ServicePackets of type byte[] (the default format).
+		// The ServiceClient is unable to automatically convert the service data.
+		// In order to convert the data, we must provide a proper converting class.
+		// In this example, we know, however, that the 'gps' service outputs double[]
+		// So, we will use a DoubleArrayServiceQueue to convert the raw byte[] service
+		// data into a usable double[]
+		ServiceQueue<double[]> gps_queue = ServiceQueue.make(double[].class, gps_raw_queue); //new DoubleArrayServiceQueue(gps_raw_queue);
+		
+		// Start the streaming. The service client will put ServicePackets received
+		// by tcp_stream into the gps_packet queue
+		client.begin(tcp_stream, gps_queue);
+		
+		// Loop over 10 packets
+		for (int i=0; i<10; i++) {
+			ServicePacket<double[]> gps_packet = gps_queue.take();
+			
+			long timestamp_us = gps_packet.getTimestamp();  // microsecond timestamp
+			double[] data = gps_packet.getData();
+			
+			Date sample_time = new Date(timestamp_us / 1000);
+			System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], /*data[1]*/ 1.0, sample_time));
 		}
-	});
-	
-	// Create our TCPStream as before
-	Stream tcp_stream = new TCPStream(InetAddress.getByName("localhost")); // Replace with robot IP
-	
-	// Get the service named 'gps'
-	Map<String, Service> services = tcp_stream.listServices();
-	Service gps_service = services.get("network");  // TODO - check for null
-	
-	// Subscribe to the 'gps' service
-	tcp_stream.subscribe(gps_service);
-	
-	// Create our blocking queue that the raw gps data will go into
-	BlockingQueue<ServicePacket<byte[]>> gps_raw_queue = new LinkedBlockingQueue<>();
-	
-	// The blocking queue will contain ServicePackets of type byte[] (the default format).
-	// The ServiceClient is unable to automatically convert the service data.
-	// In order to convert the data, we must provide a proper converting class.
-	// In this example, we know, however, that the 'gps' service outputs double[]
-	// So, we will use a DoubleArrayServiceQueue to convert the raw byte[] service
-	// data into a usable double[]
-	ServiceQueue<double[]> gps_queue = ServiceQueue.make(double[].class, gps_raw_queue); //new DoubleArrayServiceQueue(gps_raw_queue);
-	
-	// Start the streaming. The service client will put ServicePackets received
-	// by tcp_stream into the gps_packet queue
-	client.begin(tcp_stream, gps_queue);
-	
-	// Loop over 10 packets
-	for (int i=0; i<10; i++) {
-		ServicePacket<double[]> gps_packet = gps_queue.take();
 		
-		long timestamp_us = gps_packet.getTimestamp();  // microsecond timestamp
-		double[] data = gps_packet.getData();
-		
-		Date sample_time = new Date(timestamp_us / 1000);
-		System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], /*data[1]*/ 1.0, sample_time));
-	}
-	
-	// Close the ServiceClient (will close all registered streams too)
-	client.close();
+		// Close the ServiceClient (will close all registered streams too)
+		client.close();
 		
 		/*
 		for (Service s : services.values()) {

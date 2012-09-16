@@ -89,6 +89,9 @@ import javax.activation.UnsupportedDataTypeException;
  *     System.err.println("Oh no! kernel_installed doesn't exist!");
  * }
  * 
+ * // Close the client
+ * client.close();
+ * 
  * }
  * 
  * This example will list the names, signatures, and descriptions of each syscall available
@@ -117,6 +120,9 @@ import javax.activation.UnsupportedDataTypeException;
  * 
  * // Make sure to free the iterator when done
  * client.<Void>syscall("itr_free", itr);
+ * 
+ * // Close the client when you're done
+ * client.close();
  * 
  * } 
  * 

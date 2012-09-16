@@ -63,11 +63,18 @@ public class Service {
 		return desc;
 	}
 	
+	@Override
 	public boolean equals(Object o) {
-		return o instanceof Service && ((Service)o).getName() == getName() && ((Service)o).getFormat() == getFormat();
+		return o instanceof Service && ((Service)o).name.equals(name) && ((Service)o).format.equals(format);
 	}
 	
+	@Override
+	public int hashCode() {
+		return name.hashCode();
+	}
+	
+	@Override
 	public String toString() {
-		return String.format("Service name='%s' format='%s' description='%s'", getName(), getFormat(), getDescription());
+		return String.format("Service name='%s' format='%s' description='%s'", name, format, desc);
 	}
 }
