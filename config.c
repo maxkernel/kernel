@@ -12,14 +12,14 @@
 static ssize_t config_desc(const kobject_t * object, char * buffer, size_t length)
 {
 	const config_t * config = (const config_t *)object;
-	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%c', 'value': '%s', 'description': '%s' }", config->name, config->sig, ser_string(config->cache), ser_string(config->desc));
+	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%c', 'value': '%s', 'description': '%s' }", config->name, config->signature, ser_string(config->cache), ser_string(config->description));
 }
 
 void config_destroy(kobject_t * object)
 {
 	config_t * config = (config_t *)object;
 	free(config->name);
-	free(config->desc);
+	free(config->description);
 }
 
 static bool config_updatecache(const meta_variable_t * variable, char * cachebacking, exception_t ** err)
@@ -178,8 +178,8 @@ config_t * config_new(const meta_t * meta, const meta_variable_t * config, excep
 
 	config_t * c = kobj_new("Config", name, config_desc, config_destroy, sizeof(config_t));
 	c->name = strdup(name);
-	c->sig = sig;
-	c->desc = strdup(desc);
+	c->signature = sig;
+	c->description = strdup(desc);
 	c->variable = config;
 	strcpy(c->cache, cache);
 

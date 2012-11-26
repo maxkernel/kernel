@@ -11,10 +11,8 @@
 #include <httpserver.h>
 
 
-#define ROOT		"netui/www"
-
-
 int port = 80;
+char * root = "netui/www";
 
 static httpcontext_t * ctx;
 
@@ -85,13 +83,13 @@ static void handle_root(httpconnection_t * conn, httpcontext_t * ctx, const char
 		uri = "/index.html";
 	}
 
-	string_t path = string_new("%s/%s%s", INSTALL, ROOT, uri);
+	string_t path = string_new("%s/%s%s", INSTALL, root, uri);
 	reply_file(conn, path.string, reply_mimetype(uri), NULL);
 }
 
 static void handle_compressed(httpconnection_t * conn, httpcontext_t * ctx, const char * uri)
 {
-	string_t path = string_new("%s/%s%s.gz", INSTALL, ROOT, uri);
+	string_t path = string_new("%s/%s%s.gz", INSTALL, root, uri);
 	reply_file(conn, path.string, reply_mimetype(uri), "Content-Encoding: gzip\r\n");
 }
 
@@ -135,3 +133,4 @@ module_oninitialize(module_init);
 module_ondestroy(module_destroy);
 
 module_config(port, 'i', "The HTTP port to allow connections over");
+module_config(root, 's', "The base path to the netui files");

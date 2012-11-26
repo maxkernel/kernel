@@ -77,8 +77,10 @@ typedef struct
 } return_t;
 
 
-/*! \defgroup syscall Execute syscalls
- *  Additional documentation for group 'mygrp'
+/*!
+ * \defgroup syscall Execute syscalls
+ * Library functions used to execute maxkernel syscalls over various communication
+ * mediums (unix socket, tcp socket, shared memory)
  */
 
 /*!

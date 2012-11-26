@@ -212,11 +212,15 @@ public class UDPStream implements Stream {
 			
 			Selector selector = Selector.open();
 			
+			System.out.println("**** DEBUG (2) ::::::");
+			
 			try {
 				socket.register(selector, SelectionKey.OP_READ);
 				send(new byte[]{ Stream.LISTXML });
 				
 				do {
+					
+					//System.out.println("**** PACKET READ");
 					
 					if (selector.select(LIST_TIMEOUT) == 0) {
 						throw new IOException("Could not read all services data!");

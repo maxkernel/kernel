@@ -72,7 +72,7 @@ static bool cal_updatecache(calentry_t * entry)
 	size_t wrote = 0;
 	char cache[CAL_SIZE_CACHE] = {0};
 
-	switch (entry->sig)
+	switch (entry->signature)
 	{
 		case T_INTEGER:
 		{
@@ -89,7 +89,7 @@ static bool cal_updatecache(calentry_t * entry)
 
 		default:
 		{
-			LOGK(LOG_ERR, "Unknown calibration entry type %s with sig %c", entry->name, entry->sig);
+			LOGK(LOG_ERR, "Unknown calibration entry type %s with sig %c", entry->name, entry->signature);
 			return false;
 		}
 	}
@@ -109,7 +109,7 @@ static bool cal_updatebacking(calentry_t * entry, const char * value)
 {
 	exception_t * e = NULL;
 
-	switch (entry->sig)
+	switch (entry->signature)
 	{
 		case T_INTEGER:
 		{
@@ -127,7 +127,7 @@ static bool cal_updatebacking(calentry_t * entry, const char * value)
 
 		default:
 		{
-			LOGK(LOG_ERR, "Unknown calibration entry type %s with sig %c", entry->name, entry->sig);
+			LOGK(LOG_ERR, "Unknown calibration entry type %s with sig %c", entry->name, entry->signature);
 			return false;
 		}
 	}
@@ -196,9 +196,9 @@ void cal_doregister(const char * domain, const char * name, const char sig, cons
 	memset(entry, 0, sizeof(calentry_t));
 	entry->domain = (domain == NULL || strlen(domain) == 0)? NULL : strdup(domain);
 	entry->name = strdup(name);
-	entry->sig = sig;
+	entry->signature = sig;
 	entry->constraints = constraints;
-	entry->desc = strdup(desc);
+	entry->description = strdup(desc);
 	entry->backing = backing;
 	entry->onpreview.callback = onpreview;
 	entry->onpreview.object = onpreview_object;
@@ -297,9 +297,9 @@ bool cal_next(iterator_t itr, const char ** domain, const char ** name, char * s
 
 	if (domain != NULL)			*domain			= entry->domain;
 	if (name != NULL)			*name			= entry->name;
-	if (sig != NULL)			*sig			= entry->sig;
+	if (sig != NULL)			*sig			= entry->signature;
 	if (constraints != NULL)	*constraints	= &entry->constraints;
-	if (desc != NULL)			*desc			= entry->desc;
+	if (desc != NULL)			*desc			= entry->description;
 	if (value != NULL)			*value			= entry->cache;
 
 	return true;
@@ -396,7 +396,7 @@ const char * cal_preview(const char * domain, const char * name, const char * va
 				// Call the callback
 				if (entry->onpreview.callback != NULL)
 				{
-					entry->onpreview.callback(entry->onpreview.object, domain, name, entry->sig, entry->backing, hint, hint_length);
+					entry->onpreview.callback(entry->onpreview.object, domain, name, entry->signature, entry->backing, hint, hint_length);
 				}
 
 				// Cache the backing (in case preview changed it)
@@ -411,7 +411,7 @@ const char * cal_preview(const char * domain, const char * name, const char * va
 					calpreview_t * preview = list_entry(pos, calpreview_t, calibration_list);
 					if ((domain == NULL && preview->domain == NULL) || (domain != NULL && preview->domain != NULL && strcmp(domain, preview->domain) == 0))
 					{
-						preview->callback(preview->object, domain, name, entry->sig, entry->backing, hint, hint_length);
+						preview->callback(preview->object, domain, name, entry->signature, entry->backing, hint, hint_length);
 					}
 				}
 			}
@@ -441,7 +441,7 @@ void cal_commit(const char * comment)
 			if (strcmp(entry->cache, entry->checkpoint) != 0)
 			{
 				// Calibration entry has changed, save to database
-				if (!cal_setentry(entry->domain, entry->name, entry->sig, entry->cache, comment))
+				if (!cal_setentry(entry->domain, entry->name, entry->signature, entry->cache, comment))
 				{
 					LOGK(LOG_ERR, "Failed to commit calibration entry %s in domain %s", entry->name, (entry->domain == NULL)? "(none)" : entry->domain);
 				}

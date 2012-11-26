@@ -11,7 +11,7 @@
 static ssize_t block_desc(const kobject_t * object, char * buffer, size_t length)
 {
 	const block_t * blk = (const block_t *)object;
-	return snprintf(buffer, length, "{ 'name': '%s', 'description': '%s', 'signature': '%s', 'signature_description': '%s', 'module_id': '%#x' }", blk->name, ser_string(blk->desc), ser_string(blk->newsig), ser_string(blk->newdesc), kobj_id(kobj_cast(blk->module)));
+	return snprintf(buffer, length, "{ 'name': '%s', 'description': '%s', 'signature': '%s', 'signature_description': '%s', 'module_id': '%#x' }", blk->name, ser_string(blk->description), ser_string(blk->newsignature), ser_string(blk->newdescription), kobj_id(kobj_cast(blk->module)));
 }
 
 static void block_destroy(kobject_t * object)
@@ -28,9 +28,9 @@ static void block_destroy(kobject_t * object)
 
 	function_free(blk->new);
 	free(blk->name);
-	free(blk->desc);
-	free(blk->newsig);
-	free(blk->newdesc);
+	free(blk->description);
+	free(blk->newsignature);
+	free(blk->newdescription);
 }
 
 block_t * block_new(module_t * module, const meta_block_t * block, exception_t ** err)
@@ -88,9 +88,9 @@ block_t * block_new(module_t * module, const meta_block_t * block, exception_t *
 	block_t * blk = kobj_new("Block", name, block_desc, block_destroy, sizeof(block_t));
 	blk->module = module;
 	blk->name = strdup(name);
-	blk->desc = strdup(desc);
-	blk->newsig = strdup(new_sig);
-	blk->newdesc = strdup(new_desc);
+	blk->description = strdup(desc);
+	blk->newsignature = strdup(new_sig);
+	blk->newdescription = strdup(new_desc);
 	blk->new = newffi;
 	blk->onupdate = onupdate_cb;
 	blk->ondestroy = ondestroy_cb;
@@ -189,6 +189,9 @@ iterator_t block_ioitr(const block_t * block)
 				return blockio;
 			}
 		}
+
+		// Impossible to get here, but compiler might complain
+		return NULL;
 	}
 
 	void ioitr_free(const void * object, void * itrobject)

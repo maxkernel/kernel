@@ -164,7 +164,7 @@ bool blockinst_create(blockinst_t * blockinst, exception_t ** err)
 
 	char buffer[BLOCKINST_BUFFERMAX];
 	void ** header = (void **)buffer;
-	ssize_t wrote = serialize_2array_fromcb_wheader(header, BLOCKINST_BUFFERMAX, err, block_newsig(blockinst_block(blockinst)), parse_arg);
+	ssize_t wrote = serialize_2array_fromcb_wheader(header, BLOCKINST_BUFFERMAX, err, block_newsignature(blockinst_block(blockinst)), parse_arg);
 	if (wrote < 0 || exception_check(err))
 	{
 		return false;

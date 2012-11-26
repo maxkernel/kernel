@@ -1,13 +1,7 @@
 #!/bin/bash
 
-if [ $UID != 0 ];
-then
-	echo "Install script must be run as root!"
-	exit 0
-fi
-
 echo -n "=====****----.... MaxRobot software interactive-installer ....----****=====
-* Assumes that OS is a fresh copy of Ubuntu Server 11.10
+* Assumes that OS is a fresh copy of Debian (Wheezy/Ubuntu Server/etc.)
 * Installer must be run as root and have internet access
 *
 * Shall I continue? [Y/n] "
@@ -17,6 +11,12 @@ if [ "$response" = "n" ] || [ "$response" = "N" ];
 then
 	echo "Abort."
 	echo 1
+fi
+
+if [ $UID != 0 ];
+then
+	echo "Install script must be run as root!"
+	exit 0
 fi
 
 #install dependancies

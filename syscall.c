@@ -13,7 +13,7 @@ extern hashtable_t syscalls;
 static ssize_t syscall_desc(const kobject_t * object, char * buffer, size_t length)
 {
 	const syscall_t * syscall = (const syscall_t *)object;
-	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%s', 'description': '%s' }", syscall->name, syscall->sig, ser_string(syscall->desc));
+	return snprintf(buffer, length, "{ 'name': '%s', 'signature': '%s', 'description': '%s' }", syscall->name, syscall->signature, ser_string(syscall->description));
 }
 
 syscall_t * syscall_get(const char * name)
@@ -29,11 +29,11 @@ void syscall_destroy(kobject_t * object)
 
 	function_free(sys->ffi);
 	free(sys->name);
-	free(sys->sig);
+	free(sys->signature);
 
-	if (sys->desc != NULL)
+	if (sys->description != NULL)
 	{
-		free(sys->desc);
+		free(sys->description);
 	}
 }
 
@@ -56,11 +56,11 @@ syscall_t * syscall_new(const char * name, const char * sig, syscall_f func, con
 	syscall_t * syscall = kobj_new("Syscall", name, syscall_desc, syscall_destroy, sizeof(syscall_t));
 
 	syscall->name = strdup(name);
-	syscall->sig = strdup(sig);
+	syscall->signature = strdup(sig);
 	syscall->func = func;
-	syscall->desc = (desc == NULL)? NULL : strdup(desc);
+	syscall->description = (desc == NULL)? NULL : strdup(desc);
 
-	syscall->ffi = function_build(syscall->func, syscall->sig, err);
+	syscall->ffi = function_build(syscall->func, syscall->signature, err);
 	if (syscall->ffi == NULL || exception_check(err))
 	{
 		return NULL;
@@ -110,7 +110,7 @@ bool vsyscall_exec(const char * name, exception_t ** err, void * ret, va_list ar
 
 	{
 		exception_t * e = NULL;
-		ssize_t wrote = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, &e, method_params(syscall->sig), args);
+		ssize_t wrote = vserialize_2array_wheader((void **)array, SYSCALL_BUFFERMAX, &e, method_params(syscall->signature), args);
 		if (wrote <= 0 || exception_check(&e))
 		{
 
@@ -141,7 +141,7 @@ bool syscall_exists(const char * name, const char * sig)
 	
 	if (sig != NULL && strlen(sig) > 0)
 	{
-		return method_isequal(sig, syscall->sig);
+		return method_isequal(sig, syscall->signature);
 	}
 	else
 		return true;

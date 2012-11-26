@@ -115,8 +115,8 @@ typedef struct
 
 	char * name;
 	module_t * module;
-	char * desc;
-	char * sig;
+	char * signature;
+	char * description;
 
 	syscall_f func;			// TODO - remove this member?
 	ffi_function_t * ffi;
@@ -140,8 +140,8 @@ typedef struct {
 
 	list_t module_list;
 	char * name;
-	char sig;
-	char * desc;
+	char signature;
+	char * description;
 
 	const meta_variable_t * variable;	// TODO - remove this field!!!
 	char cache[CONFIG_SIZE_CACHE];
@@ -170,9 +170,10 @@ typedef struct
 
 	char * domain;
 	char * name;
-	char sig;
+	char signature;
+	char * description;
+
 	constraint_t constraints;
-	char * desc;
 
 	char * checkpoint;
 	char cache[CAL_SIZE_CACHE];
@@ -222,10 +223,10 @@ struct __block_t
 
 	module_t * module;
 	char * name;
-	char * desc;
+	char * description;
 
-	char * newsig;
-	char * newdesc;
+	char * newsignature;
+	char * newdescription;
 	ffi_function_t * new;
 
 	blockact_f onupdate;
@@ -387,11 +388,11 @@ void * block_callconstructor(block_t * block, void ** args);
 bool block_iolookup(const block_t * block, const char * ioname, meta_iotype_t iotype, char * io_sig, const char ** io_desc);
 iterator_t block_ioitr(const block_t * block);
 bool block_ionext(iterator_t itr, const meta_blockio_t ** blockio);		// TODO - return the data out of blockio instead of a blockio
-#define block_module(block)		((block)->module)
-#define block_name(block)		((block)->name)
-#define block_cbupdate(block)	((block)->onupdate)
-#define block_cbdestroy(block)	((block)->ondestroy)
-#define block_newsig(block)		((block)->newsig)
+#define block_module(block)			((block)->module)
+#define block_name(block)			((block)->name)
+#define block_cbupdate(block)		((block)->onupdate)
+#define block_cbdestroy(block)		((block)->ondestroy)
+#define block_newsignature(block)	((block)->newsignature)
 
 #define BLOCKINST_BUFFERMAX		256
 blockinst_t * blockinst_new(const model_linkable_t * linkable, exception_t ** err);

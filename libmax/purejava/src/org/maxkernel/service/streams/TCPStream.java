@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.io.SyncFailedException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
@@ -150,6 +151,7 @@ public class TCPStream implements Stream {
 		service = null;
 		
 		socket = SocketChannel.open();
+		socket.setOption(StandardSocketOptions.TCP_NODELAY, true);
 		socket.connect(sockaddress);
 		socket.configureBlocking(false);
 		sendbuf = ByteBuffer.allocate(SEND_BUFFER_SIZE);
@@ -231,9 +233,12 @@ public class TCPStream implements Stream {
 				}
 				
 				if (!data.read(socket)) {
-					throw new IOException("Could not read all services data!");
+					selector.select(LIST_TIMEOUT);
+					if (!data.read(socket)) {
+						throw new IOException("Could not read all services data!");
+					}
 				}
-			
+				
 				try {
 					return ServiceListParser.parseXML(new Reader() {
 						int left = data.size();

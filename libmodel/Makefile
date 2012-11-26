@@ -1,4 +1,4 @@
-SRCS		= meta.c model.c luainterpret.c
+SRCS		= meta.c model.c disabledinterpret.c luainterpret.c
 TARGET		= libmaxmodel.so
 PACKAGES	= lua5.1
 INCLUDES	= -I. -I.. -Iinclude/ -I../aul/include

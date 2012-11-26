@@ -35,7 +35,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 			size_t index = 0;
 
 			const char * param = NULL;
-			method_foreachparam(param, method_params(sb->syscall->sig))
+			method_foreachparam(param, method_params(sb->syscall->signature))
 			{
 				if unlikely(*param == T_VOID)
 				{
@@ -56,7 +56,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 				index += 1;
 			}
 
-			if (method_returntype(sb->syscall->sig) != T_VOID)
+			if (method_returntype(sb->syscall->signature) != T_VOID)
 			{
 				port_t * port = port_lookup(&sb->ports, meta_input, "r");
 				if likely(port != NULL)
@@ -65,7 +65,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 					if (!iobacking_isnull(backing))
 					{
 						const void * r = iobacking_data(backing);
-						switch (method_returntype(sb->syscall->sig))
+						switch (method_returntype(sb->syscall->signature))
 						{
 							case T_BOOLEAN:		memcpy(ret, r, sizeof(bool));	break;
 							case T_INTEGER:		memcpy(ret, r, sizeof(int));	break;
@@ -76,7 +76,7 @@ static void syscallblock_dosyscall(void * ret, const void * args[], void * userd
 					}
 					else
 					{
-						switch (method_returntype(sb->syscall->sig))
+						switch (method_returntype(sb->syscall->signature))
 						{
 							case T_BOOLEAN:		*(bool *)ret = false;		break;
 							case T_INTEGER:		*(int *)ret = 0;			break;

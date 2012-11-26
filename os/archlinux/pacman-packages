@@ -1,0 +1,11 @@
+> pacman -Sy --noconfirm
+
+base-devel
+git
+gdb
+glib2
+confuse (?)
+
+lua
+luasocket
+

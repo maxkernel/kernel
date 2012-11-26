@@ -57,15 +57,17 @@ static inline version_t version_fromstring(const char * string)
 		goto end;
 	}
 
-	char major[AUL_VERSION_TEXTSIZE] = {0};
-	char minor[AUL_VERSION_TEXTSIZE] = {0};
-	char revision[AUL_VERSION_TEXTSIZE] = {0};
+    {
+        char major[AUL_VERSION_TEXTSIZE] = {0};
+        char minor[AUL_VERSION_TEXTSIZE] = {0};
+        char revision[AUL_VERSION_TEXTSIZE] = {0};
 
-	memcpy(major, &string[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
-	memcpy(minor, &string[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
-	memcpy(revision, &string[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
+        memcpy(major, &string[match[1].rm_so], match[1].rm_eo - match[1].rm_so);
+        memcpy(minor, &string[match[2].rm_so], match[2].rm_eo - match[2].rm_so);
+        memcpy(revision, &string[match[3].rm_so], match[3].rm_eo - match[3].rm_so);
 
-	version = version(parse_int(major, NULL), parse_int(minor, NULL), parse_int(revision, NULL));
+        version = version(parse_int(major, NULL), parse_int(minor, NULL), parse_int(revision, NULL));
+    }
 
 end:
 	regfree(&pattern);

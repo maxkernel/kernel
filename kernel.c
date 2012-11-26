@@ -711,7 +711,7 @@ static const char * syscall_info(char * syscall_name)
 		return "Error: Syscall doesn't exist";
 	}
 
-	return sys->desc;
+	return sys->description;
 }
 
 static const char * syscall_signature(char * syscall_name)
@@ -722,7 +722,7 @@ static const char * syscall_signature(char * syscall_name)
 		return "";
 	}
 
-	return sys->sig;
+	return sys->signature;
 }
 
 static int properties_itr()
@@ -1269,7 +1269,11 @@ int main(int argc, char * argv[])
 				string_t path = path_join(prefix, file);
 
 				interpret_f execfunc = NULL;
-				if (strsuffix(path.string, ".lua"))
+				if (strsuffix(path.string, ".d"))
+				{
+					execfunc = interpret_disabled;
+				}
+				else if (strsuffix(path.string, ".lua"))
 				{
 					execfunc = interpret_lua;
 				}
@@ -1348,6 +1352,8 @@ int main(int argc, char * argv[])
 
 		void cfg_errorfunc(cfg_t * cfg, const char * fmt, va_list ap)
 		{
+			unused(cfg);
+
 			string_t str = string_blank();
 			string_vset(&str, fmt, ap);
 			LOGK(LOG_FATAL, "%s", str.string);
@@ -1383,13 +1389,22 @@ int main(int argc, char * argv[])
 			switch (result)
 			{
 				case CFG_FILE_ERROR:
+				{
 					LOGK(LOG_FATAL, "Could not open configuration file %s", scriptpath);
+					// Will exit
+				}
 
 				case CFG_PARSE_ERROR:
+				{
 					LOGK(LOG_FATAL, "Parse error in configuration file %s", scriptpath);
+					// Will exit
+				}
 
 				default:
+				{
 					LOGK(LOG_FATAL, "Unknown error while opening/parsing configuration file %s", scriptpath);
+					// Will exit
+				}
 			}
 		}
 
@@ -1408,6 +1423,8 @@ int main(int argc, char * argv[])
 		{
 			void * f_load_modules(void * udata, const model_t * model, const model_module_t * module, const model_script_t * script)
 			{
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1484,6 +1501,9 @@ int main(int argc, char * argv[])
 		{
 			void * f_build_configs(void * udata, const model_t * model, const model_config_t * config, const model_script_t * script, const model_module_t * module)
 			{
+				unused(model);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1541,6 +1561,10 @@ int main(int argc, char * argv[])
 
 			void * f_build_blockinsts(void * udata, const model_t * model, const model_linkable_t * linkable, const model_blockinst_t * blockinst, const model_script_t * script)
 			{
+				unused(model);
+				unused(blockinst);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1562,6 +1586,10 @@ int main(int argc, char * argv[])
 
 			void * f_build_syscalls(void * udata, const model_t * model, const model_linkable_t * linkable, const model_syscall_t * syscall, const model_script_t * script)
 			{
+				unused(model);
+				unused(syscall);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1583,6 +1611,9 @@ int main(int argc, char * argv[])
 
 			void * f_build_rategroups(void * udata, const model_t * model, const model_linkable_t * linkable, const model_rategroup_t * rategroup, const model_script_t * script)
 			{
+				unused(rategroup);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1638,6 +1669,9 @@ int main(int argc, char * argv[])
 
 			void * f_build_links(void * udata, const model_t * model, const model_link_t * link, const model_linksymbol_t * out, const model_linksymbol_t * in, const model_script_t * script)
 			{
+				unused(model);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata != NULL)
@@ -1824,6 +1858,11 @@ int main(int argc, char * argv[])
 		{
 			void * f_create_blockinsts(void * udata, const model_t * model, const model_linkable_t * linkable, const model_blockinst_t * blockinst, const model_script_t * script)
 			{
+				unused(model);
+				unused(linkable);
+				unused(blockinst);
+				unused(script);
+
 				// Sanity check
 				{
 					if unlikely(udata == NULL)
@@ -1849,6 +1888,20 @@ int main(int argc, char * argv[])
 
 			void * f_create_rategroups(void * udata, const model_t * model, const model_linkable_t * linkable, const model_rategroup_t * rategroup, const model_script_t * script)
 			{
+				unused(model);
+				unused(linkable);
+				unused(rategroup);
+				unused(script);
+
+				// Sanity check
+				{
+					if unlikely(udata == NULL)
+					{
+						LOGK(LOG_FATAL, "Rategroup model userdata not set!");
+						// Will exit
+					}
+				}
+
 				rategroup_t * rg = udata;
 				LOGK(LOG_DEBUG, "Scheduling rategroup %s", rategroup_name(rg));
 
