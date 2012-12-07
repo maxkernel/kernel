@@ -12,7 +12,7 @@
 
 #define PACKET_LEN			25
 
-#define HOSTNAME_DEFAULT	"generic_killer_robot"
+#define HOSTNAME_DEFAULT	"max_robot"
 #define HOSTNAME_LEN		50
 
 static bool enable_discovery = false;

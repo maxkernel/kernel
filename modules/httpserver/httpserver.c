@@ -415,7 +415,7 @@ void http_destroy(httpcontext_t * ctx)
 	free(ctx);
 }
 
-static void http_preact()
+static void http_preactivate()
 {
 	if (
 			regcomp(&get_match, "^GET \\(.*\\) HTTP.*$", REG_NEWLINE) != 0 ||
@@ -432,4 +432,4 @@ module_name("HTTP Server");
 module_version(1,0,0);
 module_author("Andrew Klofas - andrew@maxkernel.com");
 module_description("Provides a simple (GET only) HTTP server. Intended to be used by other modules (not included directly)");
-module_onpreactivate(http_preact);
+module_onpreactivate(http_preactivate);

@@ -1,4 +1,4 @@
-MODULES		= console discovery netui httpserver service
+MODULES		= console discovery file netui httpserver service
 DEFINES		= -D_GNU_SOURCE -DMODULE -D$(RELEASE) -DRELEASE="\"$(RELEASE)\"" -DINSTALL="\"$(INSTALL)\""
 
 all:

@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 #define LOG1(level, format, ...) \
-	({ static bool __h = false; if (!__h) { LOG(level, format, ## __VA_ARGS__); __h = true; } })
+	({ static bool __h = false; if (!__h) { LOG(level, "[Only message] " format, ## __VA_ARGS__); __h = true; } })
 
 #define LOG_FATAL		LEVEL_FATAL
 #define LOG_ERR			LEVEL_ERROR

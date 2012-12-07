@@ -39,7 +39,7 @@ static void doubles_update(void * object)
 	output(clients, &numclients);
 }
 
-define_block(doubles, "Make a double array available as a service", doubles_new, "ss", "(1) Name of the service. (3) The description of the service");
+define_block(doubles, "Make a double array available as a service", doubles_new, "ss", "(1) Name of the service. (2) The description of the service");
 block_onupdate(doubles, doubles_update);
 block_input(doubles, array, T_ARRAY_DOUBLE, "Input data double array");
 block_output(doubles, clients, T_INTEGER, "Number of connected clients");

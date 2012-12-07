@@ -34,11 +34,9 @@ client_t * client_new(stream_t * stream, exception_t ** err)
 			{
 				client = testclient;
 				client_service(client) = NULL;
-				client_lastheartbeat(client) = 0;
 				client_inuse(client) = true;
 				client_locked(client) = false;
 				client_lastheartbeat(client) = kernel_elapsed();
-
 				break;
 			}
 		}
@@ -64,7 +62,7 @@ void client_destroy(client_t * client)
 		}
 	}
 
-	LOG(LOG_INFO, "DESTROY CLIENT!!!!");
+	//LOG(LOG_INFO, "DESTROY CLIENT!!!!");
 
 	mutex_lock(client_lock(client));
 	{
@@ -113,7 +111,7 @@ ssize_t client_control(client_t * client, void * buffer, size_t length)
 		case SC_GOODBYE:
 		{
 			// Indicate that the caller should disconnect
-			LOG(LOG_INFO, "GOODBYE");
+			//LOG(LOG_INFO, "GOODBYE");
 			return -1;
 		}
 
@@ -137,6 +135,8 @@ ssize_t client_control(client_t * client, void * buffer, size_t length)
 				// Can't subscribe when the client is locked
 				return -1;
 			}
+
+			//LOG(LOG_INFO, "SUBSCRIBE");
 
 			buffer += sizeof(uint8_t);
 			length -= sizeof(uint8_t);
@@ -180,7 +180,7 @@ ssize_t client_control(client_t * client, void * buffer, size_t length)
 				return -1;
 			}
 
-			LOG(LOG_INFO, "BEGIN!");
+			//LOG(LOG_INFO, "BEGIN!");
 
 			service_t * service = client_service(client);
 			if (service == NULL)

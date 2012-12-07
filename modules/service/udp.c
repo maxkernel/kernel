@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -18,8 +19,8 @@
 #define UDP_BODY_SIZE			(512 - UDP_HEADER_SIZE)
 
 
-int udp_port = DEFAULT_UDP_PORT;
-double udp_timeout = DEFAULT_NET_TIMEOUT;
+static int udp_port = DEFAULT_UDP_PORT;
+static double udp_timeout = DEFAULT_NET_TIMEOUT;
 
 module_config(udp_port, 'i', "UDP port to listen for service requests and send service data on");
 module_config(udp_timeout, 'd', "UDP timeout (in seconds) with no heartbeat before client is disconnect");
@@ -76,6 +77,11 @@ static inline bool udp_writepacket(int sock, struct sockaddr_in * addr, int64_t 
 	//LOG(LOG_INFO, "Write packet %u, R: %zu, W: %zd -> %s:%u %u", packetnum, read, wrote, addr2string(addr->sin_addr.s_addr).string, ntohs(addr->sin_port), addr->sin_family);
 
 	return read == wrote;
+}
+
+static size_t udp_streamdesc(const stream_t * stream, char * buffer, size_t length)
+{
+	return snprintf(buffer, length, "{ 'port': '%d', 'timeout': '%f' }", udp_port, udp_timeout);
 }
 
 static void udp_streamdestroy(stream_t * stream)
@@ -164,7 +170,7 @@ static void udp_clientheartbeat(client_t * client)
 static bool udp_clientcheck(client_t * client)
 {
 	// Return false if client hasn't heartbeat'd since more than DEFAULT_NET_TIMEOUT ago
-	return (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
+	return !((client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) < kernel_timestamp());
 }
 
 static void udp_clientdestroy(client_t * client)
@@ -319,7 +325,7 @@ bool udp_init(exception_t ** err)
 {
 	if (udp_port <= 0)
 	{
-		LOG(LOG_INFO, "Service udp stream disabled (invalid udp port configuration)");
+		LOG(LOG_WARN, "Service udp stream disabled (invalid udp port configuration)");
 		return true;
 	}
 
@@ -364,7 +370,7 @@ bool udp_init(exception_t ** err)
 		}
 	}
 
-	stream_t * stream = stream_new("udp", sizeof(udpstream_t), udp_streamdestroy, sizeof(udpclient_t), udp_clientsend, udp_clientheartbeat, udp_clientcheck, udp_clientdestroy, err);
+	stream_t * stream = stream_new("udp", sizeof(udpstream_t), udp_streamdesc, udp_streamdestroy, sizeof(udpclient_t), udp_clientsend, udp_clientheartbeat, udp_clientcheck, udp_clientdestroy, err);
 	if (stream == NULL || exception_check(err))
 	{
 		return false;

@@ -96,13 +96,13 @@ static int l_loadmodule(lua_State * L)
 	{
 		if (meta == NULL || exception_check(&e))
 		{
-			return luaL_error(L, "loadmodule failed (meta): %s", exception_message(e));
+			return luaL_error(L, "loadmeta failed (%s): %s", modulename, exception_message(e));
 		}
 
 		model_module_t * module = model_newmodule(env->model, env->script, meta, &e);
 		if (module == NULL || exception_check(&e))
 		{
-			return luaL_error(L, "loadmodule failed (module): %s", exception_message(e));
+			return luaL_error(L, "loadmodule failed (%s): %s", modulename, exception_message(e));
 		}
 
 		entry = lua_newuserdata(L, sizeof(entry_t));
@@ -494,6 +494,9 @@ bool interpret_lua(model_t * model, const char * path, const interpret_callbacks
 			return false;
 		}
 	}
+
+	string_t msg = string_new("Executing Lua script %s", path);
+	cbs->log(LEVEL_INFO, msg.string);
 
 	bool ret = true;
 	luaenv_t env = {

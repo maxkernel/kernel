@@ -39,7 +39,7 @@ static void bools_update(void * object)
 	output(clients, &numclients);
 }
 
-define_block(bools, "Make a boolean array available as a service", bools_new, "ss", "(1) Name of the service. (3) The description of the service");
+define_block(bools, "Make a boolean array available as a service", bools_new, "ss", "(1) Name of the service. (2) The description of the service");
 block_onupdate(bools, bools_update);
 block_input(bools, array, T_ARRAY_BOOLEAN, "Input data boolean array");
 block_output(bools, clients, T_INTEGER, "Number of connected clients");

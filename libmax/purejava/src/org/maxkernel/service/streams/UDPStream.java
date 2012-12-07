@@ -82,9 +82,6 @@ public class UDPStream implements Stream {
 					
 					if (timestamp != this.timestamp || size != this.size)
 					{
-						//int numpackets = (size + BODY_SIZE - 1) / BODY_SIZE;
-						//System.out.println("New frame "+this.numpackets+" / "+numpackets);
-						
 						// On a new data packet
 						clear();
 						this.code = code;
@@ -102,7 +99,6 @@ public class UDPStream implements Stream {
 					body.get(payload, offset, length);
 					
 					this.numpackets += 1;
-					//System.out.println("PACKET "+this.numpackets +" / "+ numpackets);
 					
 					return numpackets == this.numpackets;
 				}
@@ -212,17 +208,13 @@ public class UDPStream implements Stream {
 			
 			Selector selector = Selector.open();
 			
-			System.out.println("**** DEBUG (2) ::::::");
-			
 			try {
 				socket.register(selector, SelectionKey.OP_READ);
 				send(new byte[]{ Stream.LISTXML });
 				
 				do {
-					
-					//System.out.println("**** PACKET READ");
-					
 					if (selector.select(LIST_TIMEOUT) == 0) {
+						//System.out.println("*** HERE!");
 						throw new IOException("Could not read all services data!");
 					}
 					

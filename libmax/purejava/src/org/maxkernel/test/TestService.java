@@ -33,6 +33,56 @@ import org.maxkernel.service.streams.TCPStream;
 import org.maxkernel.service.streams.UDPStream;
 
 public class TestService {
+	
+	private static void streamGPS(ServiceClient client, Stream stream, Map<String, Service> services) throws Exception {
+		Service gps_service = services.get("gps");
+		stream.subscribe(gps_service);
+		
+		BlockingQueue<ServicePacket<byte[]>> gps_raw_queue = new LinkedBlockingQueue<>();
+		ServiceQueue<double[]> gps_queue = ServiceQueue.make(double[].class, gps_raw_queue);
+		client.begin(stream, gps_queue);
+		
+		// Loop over 10 packets
+		for (int i=0; i<10; i++) {
+			ServicePacket<double[]> gps_packet = gps_queue.take();
+			
+			long timestamp_us = gps_packet.getTimestamp();  // microsecond timestamp
+			double[] data = gps_packet.getData();
+			
+			Date sample_time = new Date(timestamp_us / 1000);
+			System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], data[1], sample_time));
+		}
+	}
+	
+	private static void streamVideo(ServiceClient client, Stream stream, Map<String, Service> services) throws Exception {
+		JFrame f = new JFrame();
+		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		f.setSize(320, 240);
+		
+		JLabel label = new JLabel("", SwingConstants.CENTER);
+		f.getContentPane().add(label);
+		f.setVisible(true);
+		//f.setExtendedState(JFrame.MAXIMIZED_BOTH);
+		
+		Service video_service = services.get("Camera video stream");
+		stream.subscribe(video_service);
+		
+		BlockingQueue<ServicePacket<byte[]>> video_raw_queue = new LinkedBlockingQueue<>();
+		ServiceQueue<BufferedImage> video_queue = ServiceQueue.make(BufferedImage.class, video_raw_queue);
+		client.begin(stream, video_queue);
+		
+		// Loop over x packets
+		for (int i=0; i<1000; i++) {
+			ServicePacket<BufferedImage> video_packet = video_queue.take();
+			
+			long timestamp_us = video_packet.getTimestamp();  // microsecond timestamp
+			BufferedImage data = video_packet.getData();
+			
+			label.setIcon(new ImageIcon(data));
+			Date sample_time = new Date(timestamp_us / 1000);
+			System.out.println(String.format("Frame: %d, Time: %s", i, sample_time));
+		}
+	}
 
 	public static void main(String[] args) throws Exception {
 		
@@ -46,10 +96,14 @@ public class TestService {
 		});
 		
 		// Create our TCPStream as before
-		Stream tcp_stream = new TCPStream(InetAddress.getByName("localhost")); // Replace with robot IP
+		Stream stream = new UDPStream(InetAddress.getByName("192.168.0.101")); // Replace with robot IP
 		
 		// Get the service named 'gps'
-		Map<String, Service> services = tcp_stream.listServices();
+		Map<String, Service> services = stream.listServices();
+		
+		
+		
+		/*
 		Service gps_service = services.get("network");  // TODO - check for null
 		
 		// Subscribe to the 'gps' service
@@ -78,8 +132,13 @@ public class TestService {
 			double[] data = gps_packet.getData();
 			
 			Date sample_time = new Date(timestamp_us / 1000);
-			System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], /*data[1]*/ 1.0, sample_time));
+			System.out.println(String.format("Lat: %f, Long: %f, Time: %s", data[0], /*data[1]* / 1.0, sample_time));
 		}
+		
+		*/
+		
+		streamVideo(client, stream, services);
+		stream.close();
 		
 		// Close the ServiceClient (will close all registered streams too)
 		client.close();

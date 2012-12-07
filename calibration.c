@@ -10,6 +10,9 @@
 #include <kernel.h>
 #include <kernel-priv.h>
 
+#define SQL_SELECT_CALIBRATION		"SELECT value FROM calibration WHERE domain%s AND name='%s' AND sig='%c' AND updated=(SELECT MAX(updated) FROM calibration WHERE domain%s AND name='%s' AND sig='%c');"
+#define SQL_INSERT_CALIBRATION		"INSERT INTO calibration VALUES (%s, '%s', '%c', '%s', DATETIME('NOW'), %s);"
+
 extern sqlite3 * database;
 extern calibration_t calibration;
 
@@ -18,11 +21,11 @@ static bool cal_getentry(const char * domain, const char * name, const char sig,
 	labels(done);
 
 	bool success = false;
-	sqlite3_stmt * stmt;
+	sqlite3_stmt * stmt = NULL;
 	const char * value = NULL;
 
 	string_t domain_query = (domain == NULL)? string_new(" IS NULL") : string_new("='%s'", domain);
-	string_t query = string_new("SELECT value FROM calibration WHERE domain%s AND name='%s' AND sig='%c' AND updated=(SELECT MAX(updated) FROM calibration WHERE domain%s AND name='%s' AND sig='%c');", domain_query.string, name, sig, domain_query.string, name, sig);
+	string_t query = string_new(SQL_SELECT_CALIBRATION, domain_query.string, name, sig, domain_query.string, name, sig);
 
 	if (sqlite3_prepare_v2(database, query.string, -1, &stmt, NULL) != SQLITE_OK)
 	{
@@ -55,7 +58,7 @@ static bool cal_setentry(const char * domain, const char * name, const char sig,
 {
 	string_t domain_query = (domain == NULL)? string_new("NULL") : string_new("'%s'", domain);
 	string_t comment_query = (comment == NULL)? string_new("NULL") : string_new("'%s'", comment);
-	string_t query = string_new("INSERT INTO calibration VALUES (%s, '%s', '%c', '%s', DATETIME('NOW'), %s);", domain_query.string, name, sig, value, comment_query.string);
+	string_t query = string_new(SQL_INSERT_CALIBRATION, domain_query.string, name, sig, value, comment_query.string);
 
 	char * sql_err = NULL;
 	if (sqlite3_exec(database, query.string, NULL, NULL, &sql_err) != SQLITE_OK)

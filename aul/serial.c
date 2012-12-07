@@ -36,8 +36,13 @@ bool serial_setattr(int fd, speed_t speed)
 	struct termios tp;
 	memset(&tp, 0, sizeof(struct termios));
 
+	tcgetattr(fd, &tp);
 	cfmakeraw(&tp);
 
+	tp.c_cflag |= CREAD;
+	tp.c_iflag |= IGNBRK;
+
+	// TODO - fix this piece of shit!
 #if 0
 	tp.c_cflag = speed|CS8|CREAD|CLOCAL;
 	tp.c_iflag = /*IGNBRK|*/IGNPAR;

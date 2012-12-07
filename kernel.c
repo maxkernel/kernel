@@ -774,12 +774,10 @@ int main(int argc, char * argv[])
 		}
 
 		// Ensure proper void pointer arithmetic
+		if (((void *)0 + (size_t)1) != (void *)1)
 		{
-			if (((void *)0 + (size_t)1) != (void *)1)
-			{
-				LOGK(LOG_FATAL, "Failed void pointer arithmetic runtime check!");
-				// Will exit
-			}
+			LOGK(LOG_FATAL, "Failed void pointer arithmetic runtime check!");
+			// Will exit
 		}
 
 		// Test for thread-local support

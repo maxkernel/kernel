@@ -7,10 +7,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -138,11 +141,12 @@ public class ServiceClient {
 	private static int HEARTBEAT_PERIOD		= 500;
 	private static int CHECK_PERIOD			= 500;
 	
-	private static int SELECTOR_TIMEOUT		= 100;
+	private static int SELECTOR_TIMEOUT		= 50;
 	
 	private Set<Stream> streams;
 	private Map<Stream, BlockingQueue<ServicePacket<byte[]>>> packets;
 	private List<DisconnectListener> listeners;
+	private Queue<Stream> addqueue;
 	private Selector selector;
 	
 	private ScheduledThreadPoolExecutor executor;
@@ -159,6 +163,7 @@ public class ServiceClient {
 		streams = new HashSet<Stream>();
 		packets = Collections.synchronizedMap(new HashMap<Stream, BlockingQueue<ServicePacket<byte[]>>>());
 		listeners = new ArrayList<>();
+		addqueue = new ConcurrentLinkedQueue<Stream>();
 		selector = Selector.open();
 		closeflag = false;
 		
@@ -183,8 +188,6 @@ public class ServiceClient {
 						} catch (IOException ex) {
 							closestream(stream);
 							
-							ex.printStackTrace();
-							
 						} catch (Exception ex) {
 							LOG.log(Level.WARNING, "Exception thrown while heartbeating stream", ex);
 							closestream(stream);
@@ -202,8 +205,8 @@ public class ServiceClient {
 				synchronized (streams) {
 					for (Stream stream : streams) {
 						if (!stream.checkIO()) {
-							System.out.println("CHECK FAIL");
 							closestream(stream);
+							
 						}
 					}
 				}
@@ -227,31 +230,41 @@ public class ServiceClient {
 					}
 					
 					Set<SelectionKey> keys = selector.selectedKeys();
-					if (keys.size() == 0) {
-						continue;
+					if (keys.size() > 0) {
+						for (SelectionKey key : keys) {
+							Stream stream = (Stream)key.attachment();
+							
+							try {
+								ServicePacket<byte[]> packet = stream.handleIO();
+								if (packet != null) {
+									BlockingQueue<ServicePacket<byte[]>> queue = packets.get(packet.getStream());
+									if (queue != null) {
+										queue.offer(packet);
+									}
+								}
+								
+							} catch (IOException ex) {
+								ex.printStackTrace();
+								
+								key.cancel();
+								closestream(stream);
+								
+							} catch (Exception ex) {
+								LOG.log(Level.WARNING, "Exception thrown while handling stream io", ex);
+								
+							}
+						}
 					}
 					
-					for (SelectionKey key : keys) {
-						Stream stream = (Stream)key.attachment();
+					while (addqueue.size() > 0) {
+						Stream newstream = addqueue.remove();
 						
 						try {
-							ServicePacket<byte[]> packet = stream.handleIO();
-							if (packet != null) {
-								BlockingQueue<ServicePacket<byte[]>> queue = packets.get(packet.getStream());
-								if (queue != null) {
-									queue.offer(packet);
-								}
-							}
+							newstream.begin(selector);
 							
 						} catch (IOException ex) {
-							ex.printStackTrace();
-							
-							key.cancel();
-							closestream(stream);
-							
-						} catch (Exception ex) {
-							LOG.log(Level.WARNING, "Exception thrown while handling stream io", ex);
-							
+							LOG.log(Level.WARNING, "Exception thrown while adding stream to selector", ex);
+							closestream(newstream);
 						}
 					}
 				}
@@ -350,7 +363,7 @@ public class ServiceClient {
 		}
 		
 		packets.put(stream, queue);
-		stream.begin(selector);
+		addqueue.add(stream);
 		selector.wakeup();
 	}
 	

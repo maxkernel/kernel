@@ -50,7 +50,12 @@ static bool stream_monitor(mainloop_t * loop, uint64_t nanoseconds, void * userd
 
 static ssize_t stream_kobjdesc(const kobject_t * object, char * buffer, size_t length)
 {
-	// TODO - add some description, maybe.
+	const stream_t * stream = (const stream_t *)object;
+	if (stream->info != NULL)
+	{
+		return stream->info(stream, buffer, length);
+	}
+
 	return 0;
 }
 
@@ -87,7 +92,7 @@ static void stream_kobjdestroy(kobject_t * object)
 	}
 }
 
-stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err)
+stream_t * stream_new(const char * name, size_t streamsize, streamdesc_f sdesc,streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err)
 {
 	// Sanity check
 	{
@@ -111,6 +116,7 @@ stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdes
 
 	stream_t * stream = kobj_new("Service Stream", name, stream_kobjdesc, stream_kobjdestroy, sizeof(stream_t) + streamsize);
 	stream->loop = streamloop;
+	stream->info = sdesc;
 	stream->destroyer = sdestroyer;
 	mutex_init(&stream->lock, M_RECURSIVE);
 	list_init(&stream->clients);

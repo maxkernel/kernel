@@ -43,6 +43,7 @@ typedef struct __service_t service_t;
 typedef struct __stream_t stream_t;
 typedef struct __client_t client_t;
 
+typedef size_t (*streamdesc_f)(const stream_t * stream, char * buffer, size_t length);
 typedef void (*streamdestroy_f)(stream_t * stream);
 typedef bool (*clientsend_f)(client_t * client, int64_t microtimestamp, const buffer_t * data);
 typedef void (*clientheartbeat_f)(client_t * client);
@@ -72,6 +73,7 @@ struct __stream_t
 	mainloop_t * loop;
 	mutex_t lock;
 
+	streamdesc_f info;
 	streamdestroy_f destroyer;
 
 	list_t clients;
@@ -111,7 +113,7 @@ void service_listxml(buffer_t * buffer);
 #define service_hasclients(s)	(!list_isempty(&(s)->clients))
 #define service_numclients(s)	(list_size(&(s)->clients))
 
-stream_t * stream_new(const char * name, size_t streamsize, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err);
+stream_t * stream_new(const char * name, size_t streamsize, streamdesc_f sdesc, streamdestroy_f sdestroyer, size_t clientsize, clientsend_f csender, clientheartbeat_f cheartbeater, clientcheck_f cchecker, clientdestroy_f cdestroyer, exception_t ** err);
 void stream_destroy(stream_t * stream);
 #define stream_mainloop(s)		((s)->loop)
 #define stream_data(s)			((void *)(s)->data)

@@ -265,7 +265,7 @@ void service_unsubscribe(client_t * client)
 
 static ssize_t service_kobjdesc(const kobject_t * object, char * buffer, size_t length)
 {
-	service_t * service = (service_t *)object;
+	const service_t * service = (const service_t *)object;
 	return snprintf(buffer, length, "{ 'name': '%s', 'format': '%s', 'description': '%s' }", service->name, service->format, service->desc);
 }
 

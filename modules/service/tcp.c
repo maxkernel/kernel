@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -13,8 +14,8 @@
 #include <service.h>
 
 
-int tcp_port = DEFAULT_TCP_PORT;
-double tcp_timeout = DEFAULT_NET_TIMEOUT;
+static int tcp_port = DEFAULT_TCP_PORT;
+static double tcp_timeout = DEFAULT_NET_TIMEOUT;
 
 module_config(tcp_port, 'i', "TCP port to listen for service requests and send service data on");
 module_config(tcp_timeout, 'd', "TCP timeout (in seconds) with no heartbeat before client is disconnect");
@@ -44,6 +45,11 @@ static inline string_t addr2string(uint32_t ip)
 	unsigned char a2 = (ip & 0x0000FF00) >> 8;
 	unsigned char a1 = ip & 0xFF;
 	return string_new("%d.%d.%d.%d", a1, a2, a3, a4);
+}
+
+static size_t tcp_streamdesc(const stream_t * stream, char * buffer, size_t length)
+{
+	return snprintf(buffer, length, "{ 'port': '%d', 'timeout': '%f' }", tcp_port, tcp_timeout);
 }
 
 static void tcp_streamdestroy(stream_t * stream)
@@ -135,7 +141,7 @@ static void tcp_clientheartbeat(client_t * client)
 static bool tcp_clientcheck(client_t * client)
 {
 	// Return false if client hasn't heartbeat'd since more than DEFAULT_NET_TIMEOUT ago
-	return !client_locked(client) || (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) > kernel_timestamp();
+	return !(client_locked(client) && (client_lastheartbeat(client) + DEFAULT_NET_TIMEOUT) < kernel_timestamp());
 }
 
 static void tcp_clientdestroy(client_t * client)
@@ -355,7 +361,7 @@ bool tcp_init(exception_t ** err)
 {
 	if (tcp_port <= 0)
 	{
-		LOG(LOG_INFO, "Service tcp stream disabled (invalid tcp port configuration)");
+		LOG(LOG_WARN, "Service tcp stream disabled (invalid tcp port configuration)");
 		return true;
 	}
 
@@ -365,7 +371,7 @@ bool tcp_init(exception_t ** err)
 		return false;
 	}
 
-	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientheartbeat, tcp_clientcheck, tcp_clientdestroy, err);
+	stream_t * stream = stream_new("tcp", sizeof(tcpstream_t), tcp_streamdesc, tcp_streamdestroy, sizeof(tcpclient_t), tcp_clientsend, tcp_clientheartbeat, tcp_clientcheck, tcp_clientdestroy, err);
 	if (stream == NULL || exception_check(err))
 	{
 		return false;

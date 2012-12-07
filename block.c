@@ -189,9 +189,6 @@ iterator_t block_ioitr(const block_t * block)
 				return blockio;
 			}
 		}
-
-		// Impossible to get here, but compiler might complain
-		return NULL;
 	}
 
 	void ioitr_free(const void * object, void * itrobject)
